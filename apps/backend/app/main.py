@@ -1,3 +1,6 @@
+import json
+import gspread
+from google.oauth2.service_account import Credentials
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
