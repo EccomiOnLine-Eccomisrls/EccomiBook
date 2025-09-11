@@ -95,3 +95,39 @@ def success():
 @app.get("/cancel", response_class=HTMLResponse)
 def cancel():
     return "<h1>Pagamento annullato ❌</h1>"
+
+from fastapi.responses import HTMLResponse
+
+@app.get("/test-checkout", response_class=HTMLResponse)
+def test_checkout_page():
+    return """
+<!doctype html>
+<html>
+  <head><meta charset="utf-8"><title>Test Checkout</title></head>
+  <body style="font-family:system-ui;margin:40px">
+    <h1>Test Stripe Checkout</h1>
+    <p>Crea una sessione “una tantum” da 9,90€ (test mode).</p>
+    <button id="go">Vai al checkout</button>
+    <script>
+      document.getElementById('go').onclick = async () => {
+        const res = await fetch('/checkout/session', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            mode: 'payment',
+            quantity: 1,
+            price_data: {
+              currency: 'eur',
+              unit_amount: 990,
+              product_name: 'EccomiBook - Test'
+            }
+          })
+        });
+        const data = await res.json();
+        if (data.checkout_url) window.location.href = data.checkout_url;
+        else alert('Errore: ' + JSON.stringify(data));
+      };
+    </script>
+  </body>
+</html>
+"""
