@@ -20,7 +20,12 @@ class Settings(BaseModel):
     SUCCESS_URL: str = os.getenv("SUCCESS_URL", "http://localhost:8000/success")
     CANCEL_URL: str = os.getenv("CANCEL_URL", "http://localhost:8000/cancel")
 
+    # Google Sheets
+    GOOGLE_SERVICE_ACCOUNT_JSON: str = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    SHEETS_SPREADSHEET_ID: str = os.getenv("SHEETS_SPREADSHEET_ID", "")
+    SHEETS_WORKSHEET_NAME: str = os.getenv("SHEETS_WORKSHEET_NAME", "")
+
     # DB
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./data.db")
-
+    
 settings = Settings()
