@@ -75,18 +75,22 @@ async def create_checkout_session(request: Request):
 async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
+
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
         )
     except Exception as e:
+        print("⚠️ Webhook error:", str(e))
         raise HTTPException(status_code=400, detail=str(e))
 
-    if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        print("Pagamento completato:", session)
+    # Log utile
+    print("✅ Webhook ricevuto:", event["type"])
+    if "data" in event:
+        print("👉 Data:", event["data"])
 
-    return {"status": "success"}
+    # Risposta al server Stripe
+    return {"status": "success", "event": event["type"]}
 
 @app.get("/success", response_class=HTMLResponse)
 def success():
