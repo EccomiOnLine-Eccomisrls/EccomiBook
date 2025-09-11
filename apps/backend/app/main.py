@@ -7,7 +7,7 @@ import stripe
 # DB
 from app.db import SessionLocal, Order, init_db
 
-# --- Google Sheets ---
+# Google Sheets
 import json
 import gspread
 from google.oauth2.service_account import Credentials
@@ -16,7 +16,7 @@ app = FastAPI(title=settings.APP_NAME)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: limita al dominio frontend in produzione
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,14 +33,8 @@ def on_startup():
 
 # ---------- Helper Google Sheets ----------
 def get_sheet():
-    """Restituisce la worksheet configurata o None se non configurato."""
-    if not (
-        settings.SHEETS_SPREADSHEET_ID
-        and settings.SHEETS_WORKSHEET_NAME
-        and settings.GOOGLE_SERVICE_ACCOUNT_JSON
-    ):
+    if not (settings.SHEETS_SPREADSHEET_ID and settings.SHEETS_WORKSHEET_NAME and settings.GOOGLE_SERVICE_ACCOUNT_JSON):
         return None
-
     info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_JSON)
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(info, scopes=scopes)
@@ -49,7 +43,6 @@ def get_sheet():
     return sh.worksheet(settings.SHEETS_WORKSHEET_NAME)
 
 def append_order_row(session: dict, event_id: str):
-    """Aggiunge una riga in Google Sheets evitando duplicati su session_id."""
     ws = get_sheet()
     if not ws:
         print("ℹ️ Google Sheets non configurato, salto append.")
@@ -58,7 +51,7 @@ def append_order_row(session: dict, event_id: str):
     # Evita duplicati: non reinserire la stessa sessione
     session_id = session.get("id")
     try:
-        ws.find(session_id)  # cerca il session_id ovunque
+        ws.find(session_id)  # cerca il session_id
         print("ℹ️ Session già presente su Sheets:", session_id)
         return
     except gspread.exceptions.CellNotFound:
@@ -71,15 +64,17 @@ def append_order_row(session: dict, event_id: str):
     payment_status = session.get("payment_status")
     status = session.get("status")
     mode = session.get("mode")
-    email = (session.get("customer_details") or {}).get("email")
-    name = (session.get("customer_details") or {}).get("name")
+    customer_details = session.get("customer_details") or {}
+    email = customer_details.get("email")
+    name = customer_details.get("name")
     success_url = session.get("success_url")
     cancel_url = session.get("cancel_url")
     livemode = bool(session.get("livemode", False))
 
-    # Campi opzionali/avanzati
+    # Items / price ids (opzionale: qui lasciamo vuoto)
     items_str = ""
     price_ids = ""
+
     metadata_json = json.dumps(session.get("metadata") or {}, ensure_ascii=False)
 
     created_iso = ""
@@ -183,36 +178,40 @@ async def stripe_webhook(request: Request):
         print("⚠️ Webhook error:", str(e))
         raise HTTPException(status_code=400, detail=str(e))
 
-    if event["type"] == "checkout.session.completed":
-        # Oggetto Stripe -> dict serializzabile
-        stripe_obj = event["data"]["object"]
-        try:
-            session_dict = stripe_obj.to_dict()
-        except AttributeError:
-            session_dict = json.loads(str(stripe_obj))  # fallback
+    # (1) LOG EVENTO
+    print("📦 Stripe event:", event.get("type"))
 
-        # --- Salva/aggiorna su DB ---
+    if event["type"] == "checkout.session.completed":
+        # Stripe ritorna StripeObject; convertiamolo in dict serializzabile
+        stripe_obj = event["data"]["object"]
+        session = (
+            stripe_obj
+            if isinstance(stripe_obj, dict)
+            else getattr(stripe_obj, "to_dict_recursive", lambda: dict(stripe_obj))()
+        )
+
+        # --- salva su DB ---
         db = SessionLocal()
         try:
-            order = db.query(Order).filter(Order.session_id == session_dict["id"]).one_or_none()
+            order = db.query(Order).filter(Order.session_id == session["id"]).one_or_none()
             if order is None:
                 order = Order(
-                    session_id=session_dict.get("id"),
-                    payment_intent=session_dict.get("payment_intent"),
-                    amount_total=session_dict.get("amount_total"),
-                    currency=(session_dict.get("currency") or (session_dict.get("amount_subtotal") and "eur")),
-                    email=(session_dict.get("customer_details") or {}).get("email"),
-                    status=session_dict.get("status"),
-                    raw=session_dict,  # dict JSON-friendly
+                    session_id=session.get("id"),
+                    payment_intent=session.get("payment_intent"),
+                    amount_total=session.get("amount_total"),
+                    currency=session.get("currency") or ("eur" if session.get("amount_subtotal") else None),
+                    email=(session.get("customer_details") or {}).get("email"),
+                    status=session.get("status"),
+                    raw=session,  # <-- ora è un dict
                 )
                 db.add(order)
             else:
-                order.payment_intent = session_dict.get("payment_intent")
-                order.amount_total = session_dict.get("amount_total")
-                order.currency = session_dict.get("currency") or order.currency
-                order.email = (session_dict.get("customer_details") or {}).get("email") or order.email
-                order.status = session_dict.get("status") or order.status
-                order.raw = session_dict
+                order.payment_intent = session.get("payment_intent")
+                order.amount_total = session.get("amount_total")
+                order.currency = session.get("currency") or order.currency
+                order.email = (session.get("customer_details") or {}).get("email") or order.email
+                order.status = session.get("status") or order.status
+                order.raw = session
 
             db.commit()
             print("✅ Ordine salvato:", order.session_id, order.status, order.amount_total)
@@ -223,9 +222,9 @@ async def stripe_webhook(request: Request):
         finally:
             db.close()
 
-        # --- Append su Google Sheets ---
+        # --- append su Google Sheets ---
         try:
-            append_order_row(session_dict, event_id=event.get("id", ""))
+            append_order_row(session, event_id=event.get("id", ""))
         except Exception as e:
             print("⚠️ Errore append su Google Sheets:", e)
 
@@ -294,5 +293,26 @@ def list_orders(limit: int = 20):
             }
             for r in rows
         ]
+    finally:
+        db.close()
+
+# ---------- DEBUG EXTRA ----------
+@app.get("/debug/sheets")
+def debug_sheets():
+    try:
+        ws = get_sheet()
+        if not ws:
+            return {"ok": False, "msg": "Sheets non configurato (controlla env: GOOGLE_SERVICE_ACCOUNT_JSON, SHEETS_SPREADSHEET_ID, SHEETS_WORKSHEET_NAME)"}
+        ws.append_row(["DEBUG", "now"], value_input_option="RAW")
+        return {"ok": True, "msg": "Append riuscito (riga DEBUG)"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@app.get("/debug/db")
+def debug_db():
+    db = SessionLocal()
+    try:
+        count = db.query(Order).count()
+        return {"ok": True, "orders_count": count, "db": settings.DATABASE_URL}
     finally:
         db.close()
