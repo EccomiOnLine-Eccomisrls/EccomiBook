@@ -4,14 +4,18 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TIMESTAMP
 from app.settings import settings
 
-# Engine: SQLite di default, Postgres se DATABASE_URL è impostato
 DATABASE_URL = settings.DATABASE_URL
 
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 
-engine = create_engine(DATABASE_URL, echo=False, future=True, connect_args=connect_args)
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    future=True,
+    connect_args=connect_args
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 class Base(DeclarativeBase):
@@ -27,7 +31,10 @@ class Order(Base):
     currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    # JSON compatibile: su SQLite usa TEXT per compatibilità
     raw: Mapped[dict | None] = mapped_column(JSON().with_variant(Text, "sqlite"), nullable=True)
+
     created_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
 
 def init_db() -> None:
