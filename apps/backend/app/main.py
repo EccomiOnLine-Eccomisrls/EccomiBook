@@ -3,33 +3,38 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from app.settings import settings
 import stripe
-import json
 
 # DB
 from app.db import SessionLocal, Order, init_db
 
 # Google Sheets
+import json
 import gspread
 from google.oauth2.service_account import Credentials
+
 
 app = FastAPI(title=settings.APP_NAME)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # TODO: limita al dominio frontend in produzione
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Stripe
 if settings.STRIPE_SECRET_KEY:
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
+
+# --- DB bootstrap ---
 @app.on_event("startup")
 def on_startup():
     init_db()
 
-# ---------------- Google Sheets helpers ----------------
+
+# ---------- Helper Google Sheets ----------
 def get_sheet():
     if not (settings.SHEETS_SPREADSHEET_ID and settings.SHEETS_WORKSHEET_NAME and settings.GOOGLE_SERVICE_ACCOUNT_JSON):
         return None
@@ -40,49 +45,66 @@ def get_sheet():
     sh = client.open_by_key(settings.SHEETS_SPREADSHEET_ID)
     return sh.worksheet(settings.SHEETS_WORKSHEET_NAME)
 
-def append_order_row(session_dict: dict, event_id: str):
+
+def append_order_row(session: dict, event_id: str):
     ws = get_sheet()
     if not ws:
         print("ℹ️ Google Sheets non configurato, salto append.")
         return
 
-    sid = session_dict.get("id") or ""
+    # Evita duplicati: non reinserire la stessa sessione
+    session_id = session.get("id")
     try:
-        ws.find(sid)
-        print("ℹ️ Session già presente su Sheets:", sid)
+        ws.find(session_id)  # cerca il session_id
+        print("ℹ️ Session già presente su Sheets:", session_id)
         return
     except gspread.exceptions.CellNotFound:
         pass
 
-    pi = session_dict.get("payment_intent")
-    amount_total = session_dict.get("amount_total")
-    currency = session_dict.get("currency")
-    payment_status = session_dict.get("payment_status")
-    status = session_dict.get("status")
-    mode = session_dict.get("mode")
-    customer = (session_dict.get("customer_details") or {})
-    email = customer.get("email")
-    name = customer.get("name")
-    success_url = session_dict.get("success_url")
-    cancel_url = session_dict.get("cancel_url")
-    livemode = bool(session_dict.get("livemode", False))
+    # Estrazioni utili
+    pi = session.get("payment_intent")
+    amount_total = session.get("amount_total")
+    currency = session.get("currency")
+    payment_status = session.get("payment_status")
+    status = session.get("status")
+    mode = session.get("mode")
+    email = (session.get("customer_details") or {}).get("email")
+    name = (session.get("customer_details") or {}).get("name")
+    success_url = session.get("success_url")
+    cancel_url = session.get("cancel_url")
+    livemode = bool(session.get("livemode", False))
 
-    metadata_json = json.dumps(session_dict.get("metadata") or {}, ensure_ascii=False)
+    metadata_json = json.dumps(session.get("metadata") or {}, ensure_ascii=False)
 
     created_iso = ""
-    if session_dict.get("created"):
+    if session.get("created"):
         from datetime import datetime, timezone
-        created_iso = datetime.fromtimestamp(session_dict["created"], tz=timezone.utc).isoformat()
+        created_iso = datetime.fromtimestamp(session["created"], tz=timezone.utc).isoformat()
 
     row = [
-        created_iso, event_id, sid, pi, mode, payment_status, status,
-        amount_total or "", currency or "", email or "", name or "",
-        "", "", str(livemode).lower(), metadata_json, success_url or "", cancel_url or "",
+        created_iso,            # created_at
+        event_id,               # event_id
+        session_id,             # session_id
+        pi,                     # payment_intent
+        mode,                   # mode
+        payment_status,         # payment_status
+        status,                 # status
+        amount_total or "",     # amount_total_cents
+        currency or "",         # currency
+        email or "",            # customer_email
+        name or "",             # customer_name
+        "",                     # items (non gestiti per ora)
+        "",                     # price_ids (non gestiti per ora)
+        str(livemode).lower(),  # livemode
+        metadata_json,          # metadata_json
+        success_url or "",      # success_url
+        cancel_url or "",       # cancel_url
     ]
     ws.append_row(row, value_input_option="RAW")
-    print("✅ Inserita riga su Sheets per session:", sid)
+    print("✅ Inserita riga su Sheets per session:", session_id)
 
-# ---------------- Routes base ----------------
+
+# ---------- ROUTES ----------
 @app.get("/health")
 def health():
     return {
@@ -92,11 +114,13 @@ def health():
         "db": settings.DATABASE_URL.split("://", 1)[0],
     }
 
+
 @app.get("/")
 def root():
     return {"message": "EccomiBook Backend up ✨"}
 
-# ---------------- Checkout ----------------
+
+# ---------- CHECKOUT ----------
 @app.post("/checkout/session")
 async def create_checkout_session(request: Request):
     if not settings.STRIPE_SECRET_KEY:
@@ -105,6 +129,8 @@ async def create_checkout_session(request: Request):
     payload = await request.json()
     quantity = int(payload.get("quantity", 1))
     mode = payload.get("mode", "payment")
+
+    # Price fisso da env se presente, altrimenti parametri dal client
     price_id = payload.get("price_id") or settings.STRIPE_PRICE_ID or None
 
     try:
@@ -114,11 +140,13 @@ async def create_checkout_session(request: Request):
             price_data = payload.get("price_data")
             if not price_data:
                 raise HTTPException(status_code=400, detail="price_data o price_id richiesto")
+
             currency = price_data.get("currency", "eur")
             unit_amount = price_data.get("unit_amount")
             product_name = price_data.get("product_name", "EccomiBook Product")
             if unit_amount is None:
                 raise HTTPException(status_code=400, detail="unit_amount mancante")
+
             line_items = [{
                 "price_data": {
                     "currency": currency,
@@ -139,12 +167,12 @@ async def create_checkout_session(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ---------------- Webhook ----------------
+
+# ---------- WEBHOOK ----------
 @app.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
-
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
@@ -154,45 +182,47 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
     if event["type"] == "checkout.session.completed":
-        session_obj = event["data"]["object"]   # StripeObject
-        # ⬇️ IMPORTANTISSIMO: convertiamo in dict serializzabile
-        if hasattr(session_obj, "to_dict_recursive"):
-            session_dict = session_obj.to_dict_recursive()
-        elif isinstance(session_obj, dict):
-            session_dict = session_obj
+        stripe_session = event["data"]["object"]
+
+        # 🔑 Convertiamo l’oggetto Stripe in dict serializzabile
+        if isinstance(stripe_session, dict):
+            session_dict = stripe_session
         else:
-            # fallback molto conservativo
-            session_dict = json.loads(json.dumps(session_obj, default=str))
+            session_dict = stripe_session.to_dict_recursive()
 
-        # --- salva su DB con context manager (chiude sempre la connessione) ---
-        from sqlalchemy import select
-        with SessionLocal() as db:
-            existing = db.execute(
-                select(Order).where(Order.session_id == session_dict.get("id"))
-            ).scalar_one_or_none()
-
-            if existing is None:
+        # --- salva su DB ---
+        db = SessionLocal()
+        try:
+            order = db.query(Order).filter(Order.session_id == session_dict["id"]).one_or_none()
+            if order is None:
                 order = Order(
-                    session_id=session_dict.get("id"),
+                    session_id=session_dict["id"],
                     payment_intent=session_dict.get("payment_intent"),
                     amount_total=session_dict.get("amount_total"),
-                    currency=session_dict.get("currency") or ("eur" if session_dict.get("amount_subtotal") else None),
-                    email=((session_dict.get("customer_details") or {}).get("email")),
+                    currency=session_dict.get("currency"),
+                    email=(session_dict.get("customer_details") or {}).get("email"),
                     status=session_dict.get("status"),
-                    raw=session_dict,   # ora è un dict serializzabile
+                    raw=session_dict,
                 )
                 db.add(order)
             else:
-                existing.payment_intent = session_dict.get("payment_intent")
-                existing.amount_total = session_dict.get("amount_total")
-                existing.currency = session_dict.get("currency") or existing.currency
-                existing.email = ((session_dict.get("customer_details") or {}).get("email")) or existing.email
-                existing.status = session_dict.get("status") or existing.status
-                existing.raw = session_dict
+                order.payment_intent = session_dict.get("payment_intent")
+                order.amount_total = session_dict.get("amount_total")
+                order.currency = session_dict.get("currency") or order.currency
+                order.email = (session_dict.get("customer_details") or {}).get("email") or order.email
+                order.status = session_dict.get("status") or order.status
+                order.raw = session_dict
 
             db.commit()
+            print("✅ Ordine salvato:", order.session_id, order.status, order.amount_total)
+        except Exception as e:
+            db.rollback()
+            print("❌ Errore salvataggio ordine:", e)
+            raise
+        finally:
+            db.close()
 
-        # --- append su Google Sheets (non blocca il webhook se fallisce) ---
+        # --- append su Google Sheets ---
         try:
             append_order_row(session_dict, event_id=event.get("id", ""))
         except Exception as e:
@@ -200,19 +230,59 @@ async def stripe_webhook(request: Request):
 
     return {"status": "success", "event": event["type"]}
 
-# ---------------- Pagine risultato ----------------
+
+# ---------- PAGINE DI RISULTATO ----------
 @app.get("/success", response_class=HTMLResponse)
 def success():
     return "<h1>Pagamento completato ✅</h1>"
+
 
 @app.get("/cancel", response_class=HTMLResponse)
 def cancel():
     return "<h1>Pagamento annullato ❌</h1>"
 
-# ---------------- API ispezione ----------------
+
+# ---------- PAGINA DI TEST ----------
+@app.get("/test-checkout", response_class=HTMLResponse)
+def test_checkout_page():
+    return """
+<!doctype html>
+<html>
+  <head><meta charset="utf-8"><title>Test Checkout</title></head>
+  <body style="font-family:system-ui;margin:40px">
+    <h1>Test Stripe Checkout</h1>
+    <p>Crea una sessione “una tantum” da 9,90€ (test mode).</p>
+    <button id="go">Vai al checkout</button>
+    <script>
+      document.getElementById('go').onclick = async () => {
+        const res = await fetch('/checkout/session', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            mode: 'payment',
+            quantity: 1,
+            price_data: {
+              currency: 'eur',
+              unit_amount: 990,
+              product_name: 'EccomiBook - Test'
+            }
+          })
+        });
+        const data = await res.json();
+        if (data.checkout_url) window.location.href = data.checkout_url;
+        else alert('Errore: ' + JSON.stringify(data));
+      };
+    </script>
+  </body>
+</html>
+"""
+
+
+# ---------- API di ispezione ----------
 @app.get("/orders")
 def list_orders(limit: int = 20):
-    with SessionLocal() as db:
+    db = SessionLocal()
+    try:
         rows = db.query(Order).order_by(Order.id.desc()).limit(limit).all()
         return [
             {
@@ -227,3 +297,5 @@ def list_orders(limit: int = 20):
             }
             for r in rows
         ]
+    finally:
+        db.close()
