@@ -12,8 +12,9 @@ import json
 import gspread
 from google.oauth2.service_account import Credentials
 
-
 app = FastAPI(title=settings.APP_NAME)
+
+print("✅ WEBHOOK HANDLER v2 loaded")  # marker nei log per conferma versione
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,7 +35,7 @@ def on_startup():
     init_db()
 
 
-# ---------- Helper Google Sheets ----------
+# ---------- Google Sheets Helper ----------
 def get_sheet():
     if not (settings.SHEETS_SPREADSHEET_ID and settings.SHEETS_WORKSHEET_NAME and settings.GOOGLE_SERVICE_ACCOUNT_JSON):
         return None
@@ -52,53 +53,32 @@ def append_order_row(session: dict, event_id: str):
         print("ℹ️ Google Sheets non configurato, salto append.")
         return
 
-    # Evita duplicati: non reinserire la stessa sessione
     session_id = session.get("id")
     try:
-        ws.find(session_id)  # cerca il session_id
+        ws.find(session_id)
         print("ℹ️ Session già presente su Sheets:", session_id)
         return
     except gspread.exceptions.CellNotFound:
         pass
 
-    # Estrazioni utili
-    pi = session.get("payment_intent")
-    amount_total = session.get("amount_total")
-    currency = session.get("currency")
-    payment_status = session.get("payment_status")
-    status = session.get("status")
-    mode = session.get("mode")
-    email = (session.get("customer_details") or {}).get("email")
-    name = (session.get("customer_details") or {}).get("name")
-    success_url = session.get("success_url")
-    cancel_url = session.get("cancel_url")
-    livemode = bool(session.get("livemode", False))
-
-    metadata_json = json.dumps(session.get("metadata") or {}, ensure_ascii=False)
-
-    created_iso = ""
-    if session.get("created"):
-        from datetime import datetime, timezone
-        created_iso = datetime.fromtimestamp(session["created"], tz=timezone.utc).isoformat()
-
     row = [
-        created_iso,            # created_at
-        event_id,               # event_id
-        session_id,             # session_id
-        pi,                     # payment_intent
-        mode,                   # mode
-        payment_status,         # payment_status
-        status,                 # status
-        amount_total or "",     # amount_total_cents
-        currency or "",         # currency
-        email or "",            # customer_email
-        name or "",             # customer_name
-        "",                     # items (non gestiti per ora)
-        "",                     # price_ids (non gestiti per ora)
-        str(livemode).lower(),  # livemode
-        metadata_json,          # metadata_json
-        success_url or "",      # success_url
-        cancel_url or "",       # cancel_url
+        session.get("created"),
+        event_id,
+        session.get("id"),
+        session.get("payment_intent"),
+        session.get("mode"),
+        session.get("payment_status"),
+        session.get("status"),
+        session.get("amount_total") or "",
+        session.get("currency") or "",
+        (session.get("customer_details") or {}).get("email") or "",
+        (session.get("customer_details") or {}).get("name") or "",
+        "",  # items (opzionale)
+        "",  # price_ids (opzionale)
+        str(bool(session.get("livemode", False))).lower(),
+        json.dumps(session.get("metadata") or {}, ensure_ascii=False),
+        session.get("success_url") or "",
+        session.get("cancel_url") or "",
     ]
     ws.append_row(row, value_input_option="RAW")
     print("✅ Inserita riga su Sheets per session:", session_id)
@@ -130,7 +110,6 @@ async def create_checkout_session(request: Request):
     quantity = int(payload.get("quantity", 1))
     mode = payload.get("mode", "payment")
 
-    # Price fisso da env se presente, altrimenti parametri dal client
     price_id = payload.get("price_id") or settings.STRIPE_PRICE_ID or None
 
     try:
@@ -182,13 +161,10 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
     if event["type"] == "checkout.session.completed":
-        stripe_session = event["data"]["object"]
+        session = event["data"]["object"]
 
-        # 🔑 Convertiamo l’oggetto Stripe in dict serializzabile
-        if isinstance(stripe_session, dict):
-            session_dict = stripe_session
-        else:
-            session_dict = stripe_session.to_dict_recursive()
+        # 🔑 Converti in dict puro
+        session_dict = dict(session)
 
         # --- salva su DB ---
         db = SessionLocal()
@@ -199,7 +175,7 @@ async def stripe_webhook(request: Request):
                     session_id=session_dict["id"],
                     payment_intent=session_dict.get("payment_intent"),
                     amount_total=session_dict.get("amount_total"),
-                    currency=session_dict.get("currency"),
+                    currency=session_dict.get("currency") or "eur",
                     email=(session_dict.get("customer_details") or {}).get("email"),
                     status=session_dict.get("status"),
                     raw=session_dict,
