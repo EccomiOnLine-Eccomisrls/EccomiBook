@@ -1,25 +1,28 @@
-from fastapi import FastAPI, HTTPException, Request, Query
+# apps/backend/app/main.py
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from app.settings import settings
-import stripe
-import json
+from uuid import uuid4
 import time
-import uuid
-
-# DB
-from app.db import SessionLocal, Order, init_db
+import json
+import stripe
 
 # Google Sheets
 import gspread
 from google.oauth2.service_account import Credentials
 
+from app.settings import settings
+
+# DB
+from app.db import SessionLocal, Order, init_db
+
 app = FastAPI(title=settings.APP_NAME)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # TODO: limita al dominio frontend in produzione
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,11 +36,16 @@ if settings.STRIPE_SECRET_KEY:
 @app.on_event("startup")
 def on_startup():
     init_db()
-    print("✅ APP STARTED | ENV:", settings.APP_ENV)
+    print("✅ WEBHOOK HANDLER v2 loaded")
 
 # ---------- Helper Google Sheets ----------
 def get_sheet():
-    if not (settings.SHEETS_SPREADSHEET_ID and settings.SHEETS_WORKSHEET_NAME and settings.GOOGLE_SERVICE_ACCOUNT_JSON):
+    """Ritorna l'oggetto Worksheet o None se non configurato."""
+    if not (
+        settings.SHEETS_SPREADSHEET_ID
+        and settings.SHEETS_WORKSHEET_NAME
+        and settings.GOOGLE_SERVICE_ACCOUNT_JSON
+    ):
         return None
     info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_JSON)
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -52,9 +60,10 @@ def append_order_row(session: dict, event_id: str):
         print("ℹ️ Google Sheets non configurato, salto append.")
         return
 
-    session_id = session.get("id") or session.get("session_id")
+    # Evita duplicati su session_id
+    session_id = session.get("id")
     try:
-        ws.find(str(session_id))
+        ws.find(session_id)
         print("ℹ️ Session già presente su Sheets:", session_id)
         return
     except gspread.exceptions.CellNotFound:
@@ -82,86 +91,26 @@ def append_order_row(session: dict, event_id: str):
         created_iso = datetime.fromtimestamp(session["created"], tz=timezone.utc).isoformat()
 
     row = [
-        created_iso,            # 1. created_at
-        event_id,               # 2. event_id
-        session_id,             # 3. session_id
-        pi,                     # 4. payment_intent
-        mode,                   # 5. mode
-        payment_status,         # 6. payment_status
-        status,                 # 7. status
-        amount_total or "",     # 8. amount_total_cents
-        currency or "",         # 9. currency
-        email or "",            # 10. customer_email
-        name or "",             # 11. customer_name
-        items_str,              # 12. items
-        price_ids,              # 13. price_ids
-        str(livemode).lower(),  # 14. livemode
-        metadata_json,          # 15. metadata_json
-        success_url or "",      # 16. success_url
-        cancel_url or "",       # 17. cancel_url
+        created_iso,            # created_at
+        event_id,               # event_id
+        session_id,             # session_id
+        pi,                     # payment_intent
+        mode,                   # mode
+        payment_status,         # payment_status
+        status,                 # status
+        amount_total or "",     # amount_total_cents
+        currency or "",         # currency
+        email or "",            # customer_email
+        name or "",             # customer_name
+        items_str,              # items
+        price_ids,              # price_ids
+        str(livemode).lower(),  # livemode
+        metadata_json,          # metadata_json
+        success_url or "",      # success_url
+        cancel_url or "",       # cancel_url
     ]
     ws.append_row(row, value_input_option="RAW")
     print("✅ Inserita riga su Sheets per session:", session_id)
-
-# ---------- Utility ----------
-def stripe_obj_to_dict(obj):
-    # Converte lo StripeObject in dict serializzabile per salvarlo in JSON
-    try:
-        return obj.to_dict_recursive()  # disponibile sulle versioni moderne
-    except Exception:
-        try:
-            return json.loads(str(obj))
-        except Exception:
-            return dict(obj) if isinstance(obj, dict) else {"_raw": str(obj)}
-
-def save_order_and_sheet(session_obj: dict | object, event_id: str):
-    """Salva su DB e appende su Google Sheets."""
-    session_dict = stripe_obj_to_dict(session_obj)
-
-    # campi "comodi"
-    session_id = session_dict.get("id") or session_dict.get("session_id")
-    payment_intent = session_dict.get("payment_intent")
-    amount_total = session_dict.get("amount_total")
-    currency = session_dict.get("currency") or ("eur" if amount_total else None)
-    email = (session_dict.get("customer_details") or {}).get("email")
-    status = session_dict.get("status")
-
-    db = SessionLocal()
-    try:
-        order = db.query(Order).filter(Order.session_id == session_id).one_or_none()
-        if order is None:
-            order = Order(
-                session_id=session_id,
-                payment_intent=payment_intent,
-                amount_total=amount_total,
-                currency=currency,
-                email=email,
-                status=status,
-                raw=session_dict,
-            )
-            db.add(order)
-        else:
-            order.payment_intent = payment_intent
-            order.amount_total = amount_total
-            order.currency = currency or order.currency
-            order.email = email or order.email
-            order.status = status or order.status
-            order.raw = session_dict
-
-        db.commit()
-        print("✅ Ordine salvato:", order.session_id, order.status, order.amount_total)
-    except Exception as e:
-        db.rollback()
-        print("❌ Errore salvataggio ordine:", e)
-        raise
-    finally:
-        db.close()
-
-    # Sheets (best-effort)
-    try:
-        append_order_row(session_dict, event_id=event_id)
-    except Exception as e:
-        print("⚠️ Errore append su Google Sheets:", e)
 
 # ---------- MODELLI ----------
 class DevSimulatedCheckout(BaseModel):
@@ -193,6 +142,7 @@ async def create_checkout_session(request: Request):
     quantity = int(payload.get("quantity", 1))
     mode = payload.get("mode", "payment")
 
+    # Price fisso da env se presente, altrimenti parametri dal client
     price_id = payload.get("price_id") or settings.STRIPE_PRICE_ID or None
 
     try:
@@ -243,54 +193,119 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
     if event["type"] == "checkout.session.completed":
-        session_obj = event["data"]["object"]
-        save_order_and_sheet(session_obj, event_id=event.get("id", ""))
+        session = event["data"]["object"]
 
-    return {"status": "success", "event": event["type"]}
+        db = SessionLocal()
+        try:
+            order = db.query(Order).filter(Order.session_id == session["id"]).one_or_none()
+            if order is None:
+                order = Order(
+                    session_id=session["id"],
+                    payment_intent=session.get("payment_intent"),
+                    amount_total=session.get("amount_total"),
+                    currency=session.get("currency"),
+                    email=(session.get("customer_details") or {}).get("email"),
+                    status=session.get("status"),
+                    raw=session,  # <-- dict; in DB è JSON
+                )
+                db.add(order)
+            else:
+                order.payment_intent = session.get("payment_intent")
+                order.amount_total = session.get("amount_total")
+                order.currency = session.get("currency") or order.currency
+                order.email = (session.get("customer_details") or {}).get("email") or order.email
+                order.status = session.get("status") or order.status
+                order.raw = session
 
-# ---------- DEV: simulate checkout (abilitato anche in prod con token) ----------
+            db.commit()
+            print("✅ Ordine salvato:", order.session_id, order.status, order.amount_total)
+        except Exception as e:
+            db.rollback()
+            print("❌ Errore salvataggio ordine:", e)
+            raise HTTPException(status_code=500, detail=f"DB error: {e}")
+        finally:
+            db.close()
+
+        # Append su Google Sheets (best effort)
+        try:
+            append_order_row(session, event_id=event.get("id", ""))
+        except Exception as e:
+            print("⚠️ Errore append su Google Sheets:", e)
+
+    return {"status": "success", "event": event.get("type")}
+
+# ---------- DEV: SIMULAZIONE CHECKOUT (Swagger) ----------
 @app.post("/dev/simulate-checkout")
-async def dev_simulate_checkout(
-    body: DevSimulatedCheckout,
-    token: str = Query(..., description="Your DEV_WEBHOOK_TOKEN"),
-):
-    if not settings.DEV_WEBHOOK_TOKEN:
-        raise HTTPException(status_code=500, detail="DEV_WEBHOOK_TOKEN non configurato")
+async def dev_simulate_checkout(payload: DevSimulatedCheckout, token: str):
     if token != settings.DEV_WEBHOOK_TOKEN:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        raise HTTPException(status_code=403, detail="Token non valido")
 
-    # crea un finto 'checkout.session' compatibile
-    sid = "cs_sim_" + uuid.uuid4().hex[:32]
-    pi = "pi_sim_" + uuid.uuid4().hex[:24]
-    now = int(time.time())
+    # Crea una session finta come Stripe
+    session_id = f"cs_sim_{uuid4().hex[:24]}"
+    payment_intent = f"pi_sim_{uuid4().hex[:24]}"
 
-    session_like = {
-        "id": sid,
+    session = {
+        "id": session_id,
         "object": "checkout.session",
-        "payment_intent": pi,
-        "amount_total": body.amount_total,
-        "currency": body.currency or "eur",
+        "payment_intent": payment_intent,
+        "amount_total": payload.amount_total,
+        "currency": payload.currency,
         "payment_status": "paid",
         "status": "complete",
         "mode": "payment",
-        "customer_details": body.customer_details or {"email": "test@example.com", "name": "Sim User"},
+        "customer_details": payload.customer_details or {},
         "success_url": settings.SUCCESS_URL,
         "cancel_url": settings.CANCEL_URL,
         "livemode": False,
-        "created": now,
+        "created": int(time.time()),
         "metadata": {},
     }
 
-    event_id = "evt_sim_" + uuid.uuid4().hex[:24]
-    save_order_and_sheet(session_like, event_id=event_id)
-
-    return {
-        "ok": True,
-        "event_id": event_id,
-        "session_id": sid,
-        "amount_total": body.amount_total,
-        "currency": body.currency,
+    event = {
+        "id": f"evt_sim_{uuid4().hex[:24]}",
+        "type": "checkout.session.completed",
+        "data": {"object": session},
     }
+
+    # Salva su DB (stesso flusso del webhook)
+    db = SessionLocal()
+    try:
+        order = db.query(Order).filter(Order.session_id == session["id"]).one_or_none()
+        if order is None:
+            order = Order(
+                session_id=session["id"],
+                payment_intent=session.get("payment_intent"),
+                amount_total=session.get("amount_total"),
+                currency=session.get("currency"),
+                email=(session.get("customer_details") or {}).get("email"),
+                status=session.get("status"),
+                raw=session,
+            )
+            db.add(order)
+        else:
+            order.payment_intent = session.get("payment_intent")
+            order.amount_total = session.get("amount_total")
+            order.currency = session.get("currency") or order.currency
+            order.email = (session.get("customer_details") or {}).get("email") or order.email
+            order.status = session.get("status") or order.status
+            order.raw = session
+
+        db.commit()
+        print("✅ (SIM) Ordine salvato:", order.session_id, order.status, order.amount_total)
+    except Exception as e:
+        db.rollback()
+        print("❌ (SIM) Errore salvataggio ordine:", e)
+        raise HTTPException(status_code=500, detail=f"DB error: {e}")
+    finally:
+        db.close()
+
+    # Append su Google Sheets (best effort)
+    try:
+        append_order_row(session, event_id=event["id"])
+    except Exception as e:
+        print("⚠️ (SIM) Errore append su Google Sheets:", e)
+
+    return {"ok": True, "event_id": event["id"], "session_id": session_id}
 
 # ---------- PAGINE DI RISULTATO ----------
 @app.get("/success", response_class=HTMLResponse)
@@ -300,6 +315,41 @@ def success():
 @app.get("/cancel", response_class=HTMLResponse)
 def cancel():
     return "<h1>Pagamento annullato ❌</h1>"
+
+# ---------- PAGINA DI TEST ----------
+@app.get("/test-checkout", response_class=HTMLResponse)
+def test_checkout_page():
+    return """
+<!doctype html>
+<html>
+  <head><meta charset="utf-8"><title>Test Checkout</title></head>
+  <body style="font-family:system-ui;margin:40px">
+    <h1>Test Stripe Checkout</h1>
+    <p>Crea una sessione “una tantum” da 9,90€ (test mode).</p>
+    <button id="go">Vai al checkout</button>
+    <script>
+      document.getElementById('go').onclick = async () => {
+        const res = await fetch('/checkout/session', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            mode: 'payment',
+            quantity: 1,
+            price_data: {
+              currency: 'eur',
+              unit_amount: 990,
+              product_name: 'EccomiBook - Test'
+            }
+          })
+        });
+        const data = await res.json();
+        if (data.checkout_url) window.location.href = data.checkout_url;
+        else alert('Errore: ' + JSON.stringify(data));
+      };
+    </script>
+  </body>
+</html>
+"""
 
 # ---------- API di ispezione ----------
 @app.get("/orders")
