@@ -296,6 +296,27 @@ async def dev_simulate_checkout(
 
     return {"status": "ok", "session_id": fake_session["id"]}
 
+# ---------- DEBUG SHEETS ----------
+@app.get("/dev/check-sheets")
+def check_sheets(token: str):
+    # usa lo stesso token che hai in Render -> DEV_WEBHOOK_TOKEN
+    if token != settings.DEV_WEBHOOK_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        ws = get_sheet()  # prende il foglio usando SHEETS_SPREADSHEET_ID e SHEETS_WORKSHEET_NAME
+        if not ws:
+            raise Exception("Foglio non trovato (controlla SHEETS_SPREADSHEET_ID e SHEETS_WORKSHEET_NAME)")
+        return {
+            "status": "ok",
+            "title": ws.title,
+            "rows": ws.row_count,
+            "cols": ws.col_count,
+            "first_row": ws.row_values(1)  # intestazioni
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sheets error: {e}")
+
 # ----- Pagine risultato -----
 
 @app.get("/success", response_class=HTMLResponse)
