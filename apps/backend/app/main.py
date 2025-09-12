@@ -1,23 +1,27 @@
-from fastapi import FastAPI, HTTPException, Request
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from typing import Optional, Any, Dict
+
+from fastapi import FastAPI, HTTPException, Request, Body, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from app.settings import settings
+
 import stripe
-import os
-import json
-
-# DB
-from app.db import SessionLocal, Order, init_db
-
-# Google Sheets
 import gspread
 from google.oauth2.service_account import Credentials
 
+from app.settings import settings
+from app.db import SessionLocal, Order, init_db
+
+
+# ---------- App ----------
 app = FastAPI(title=settings.APP_NAME)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: limita al dominio frontend in produzione
+    allow_origins=["*"],              # limita al dominio frontend in produzione
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,17 +31,36 @@ app.add_middleware(
 if settings.STRIPE_SECRET_KEY:
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
-print("✅ APP BOOT")
 
-# --- DB bootstrap ---
+# ---------- Startup: crea tabelle ----------
 @app.on_event("startup")
-def on_startup():
+def on_startup() -> None:
     init_db()
-    print("✅ DB INIT DONE")
+    print("✅ APP STARTED - DB ready")
 
-# ---------- Helper Google Sheets ----------
+
+# ---------- Helpers ----------
+def stripe_obj_to_dict(obj: Any) -> Dict[str, Any]:
+    """
+    Converte in dict gli oggetti Stripe (evita l'errore sqlite 'type Session not supported').
+    """
+    try:
+        return obj.to_dict_recursive()  # Stripe v10
+    except Exception:
+        try:
+            return json.loads(obj.to_json())
+        except Exception:
+            # Fallback molto difensivo
+            return json.loads(json.dumps(obj, default=str))
+
+
+# --- Google Sheets ---
 def get_sheet():
-    if not (settings.SHEETS_SPREADSHEET_ID and settings.SHEETS_WORKSHEET_NAME and settings.GOOGLE_SERVICE_ACCOUNT_JSON):
+    if not (
+        settings.SHEETS_SPREADSHEET_ID
+        and settings.SHEETS_WORKSHEET_NAME
+        and settings.GOOGLE_SERVICE_ACCOUNT_JSON
+    ):
         return None
     info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_JSON)
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -46,105 +69,54 @@ def get_sheet():
     sh = client.open_by_key(settings.SHEETS_SPREADSHEET_ID)
     return sh.worksheet(settings.SHEETS_WORKSHEET_NAME)
 
-def append_order_row(session: dict, event_id: str):
+
+def append_order_row(session: dict, event_id: str) -> None:
     ws = get_sheet()
     if not ws:
         print("ℹ️ Google Sheets non configurato, salto append.")
         return
 
-    # Evita duplicati: non reinserire la stessa sessione
-    session_id = session.get("id")
+    sid = session.get("id") or session.get("session_id")
+    if not sid:
+        print("ℹ️ Session senza id, salto append.")
+        return
+
+    # evita duplicati
     try:
-        ws.find(session_id)
-        print("ℹ️ Session già presente su Sheets:", session_id)
+        ws.find(str(sid))
+        print("ℹ️ Session già presente su Sheets:", sid)
         return
     except gspread.exceptions.CellNotFound:
         pass
 
-    pi = session.get("payment_intent")
-    amount_total = session.get("amount_total")
-    currency = session.get("currency")
-    payment_status = session.get("payment_status")
-    status = session.get("status")
-    mode = session.get("mode")
-    email = (session.get("customer_details") or {}).get("email")
-    name = (session.get("customer_details") or {}).get("name")
-    success_url = session.get("success_url")
-    cancel_url = session.get("cancel_url")
-    livemode = bool(session.get("livemode", False))
-
-    items_str = ""
-    price_ids = ""
-    metadata_json = json.dumps(session.get("metadata") or {}, ensure_ascii=False)
-
     created_iso = ""
     if session.get("created"):
-        from datetime import datetime, timezone
         created_iso = datetime.fromtimestamp(session["created"], tz=timezone.utc).isoformat()
 
     row = [
-        created_iso,            # created_at
-        event_id,               # event_id
-        session_id,             # session_id
-        pi,                     # payment_intent
-        mode,                   # mode
-        payment_status,         # payment_status
-        status,                 # status
-        amount_total or "",     # amount_total_cents
-        currency or "",         # currency
-        email or "",            # customer_email
-        name or "",             # customer_name
-        items_str,              # items
-        price_ids,              # price_ids
-        str(livemode).lower(),  # livemode
-        metadata_json,          # metadata_json
-        success_url or "",      # success_url
-        cancel_url or "",       # cancel_url
+        created_iso,                              # 1  created_at
+        event_id,                                 # 2  event_id
+        sid,                                      # 3  session_id
+        session.get("payment_intent") or "",      # 4  payment_intent
+        session.get("mode") or "",                # 5  mode
+        session.get("payment_status") or "",      # 6  payment_status
+        session.get("status") or "",              # 7  status
+        session.get("amount_total") or "",        # 8  amount_total_cents
+        session.get("currency") or "",            # 9  currency
+        (session.get("customer_details") or {}).get("email") or "",  # 10 email
+        (session.get("customer_details") or {}).get("name") or "",   # 11 name
+        "",                                       # 12 items (placeholder)
+        "",                                       # 13 price_ids (placeholder)
+        str(bool(session.get("livemode", False))).lower(),           # 14 livemode
+        json.dumps(session.get("metadata") or {}, ensure_ascii=False),  # 15 metadata_json
+        session.get("success_url") or "",         # 16 success_url
+        session.get("cancel_url") or "",          # 17 cancel_url
     ]
     ws.append_row(row, value_input_option="RAW")
-    print("✅ Inserita riga su Sheets per session:", session_id)
+    print("✅ Inserita riga su Sheets per session:", sid)
 
-# ---------- HANDLER RIUTILIZZABILE (DB + Sheets) ----------
-def _handle_checkout_completed(session_dict: dict, event_id: str = "evt_unknown"):
-    # --- salva su DB ---
-    db = SessionLocal()
-    try:
-        order = db.query(Order).filter(Order.session_id == session_dict["id"]).one_or_none()
-        if order is None:
-            order = Order(
-                session_id=session_dict["id"],
-                payment_intent=session_dict.get("payment_intent"),
-                amount_total=session_dict.get("amount_total"),
-                currency=session_dict.get("currency") or "eur",
-                email=(session_dict.get("customer_details") or {}).get("email"),
-                status=session_dict.get("status"),
-                raw=session_dict,  # <-- dict puro (non oggetto Stripe)
-            )
-            db.add(order)
-        else:
-            order.payment_intent = session_dict.get("payment_intent")
-            order.amount_total = session_dict.get("amount_total")
-            order.currency = session_dict.get("currency") or order.currency
-            order.email = (session_dict.get("customer_details") or {}).get("email") or order.email
-            order.status = session_dict.get("status") or order.status
-            order.raw = session_dict
 
-        db.commit()
-        print("✅ Ordine salvato:", order.session_id, order.status, order.amount_total)
-    except Exception as e:
-        db.rollback()
-        print("❌ Errore salvataggio ordine:", e)
-        raise
-    finally:
-        db.close()
-
-    # --- append su Google Sheets ---
-    try:
-        append_order_row(session_dict, event_id=event_id)
-    except Exception as e:
-        print("⚠️ Errore append su Google Sheets:", e)
-
-# ---------- ROUTES ----------
+# ---------- Health / Root ----------
 @app.get("/health")
 def health():
     return {
@@ -154,9 +126,11 @@ def health():
         "db": settings.DATABASE_URL.split("://", 1)[0],
     }
 
+
 @app.get("/")
 def root():
     return {"message": "EccomiBook Backend up ✨"}
+
 
 # ---------- CHECKOUT ----------
 @app.post("/checkout/session")
@@ -177,7 +151,6 @@ async def create_checkout_session(request: Request):
             price_data = payload.get("price_data")
             if not price_data:
                 raise HTTPException(status_code=400, detail="price_data o price_id richiesto")
-
             currency = price_data.get("currency", "eur")
             unit_amount = price_data.get("unit_amount")
             product_name = price_data.get("product_name", "EccomiBook Product")
@@ -204,90 +177,77 @@ async def create_checkout_session(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ---------- WEBHOOK (usa il payload grezzo per avere un dict puro) ----------
+
+# ---------- WEBHOOK ----------
 @app.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
-    payload_bytes = await request.body()
+    payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
-
     try:
         event = stripe.Webhook.construct_event(
-            payload_bytes, sig_header, settings.STRIPE_WEBHOOK_SECRET
+            payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
         )
     except Exception as e:
         print("⚠️ Webhook error:", str(e))
         raise HTTPException(status_code=400, detail=str(e))
 
-    # payload come dict puro, per salvare 'raw' senza oggetti Stripe
-    try:
-        event_dict = json.loads(payload_bytes.decode("utf-8"))
-    except Exception:
-        event_dict = {}
-
     if event["type"] == "checkout.session.completed":
-        # dict puro della sessione, compatibile con JSON SQLAlchemy
-        session_dict = (event_dict.get("data") or {}).get("object") or {}
-        if not session_dict:
-            # fallback: converti oggetto Stripe in dict
-            stripe_obj = event["data"]["object"]
-            try:
-                session_dict = json.loads(stripe_obj.to_json())  # disponibile sulle versioni recenti
-            except Exception:
-                session_dict = {
-                    "id": stripe_obj.get("id"),
-                    "payment_intent": stripe_obj.get("payment_intent"),
-                    "amount_total": stripe_obj.get("amount_total"),
-                    "currency": stripe_obj.get("currency"),
-                    "status": stripe_obj.get("status"),
-                    "payment_status": stripe_obj.get("payment_status"),
-                    "mode": stripe_obj.get("mode"),
-                    "customer_details": (stripe_obj.get("customer_details") or {}),
-                    "livemode": stripe_obj.get("livemode"),
-                    "metadata": stripe_obj.get("metadata") or {},
-                    "success_url": stripe_obj.get("success_url"),
-                    "cancel_url": stripe_obj.get("cancel_url"),
-                }
+        session_obj = event["data"]["object"]
+        session_dict = stripe_obj_to_dict(session_obj)  # <-- FIX principale
 
-        _handle_checkout_completed(session_dict, event_id=event["id"])
+        # --- salva su DB ---
+        db = SessionLocal()
+        try:
+            order = db.query(Order).filter(Order.session_id == session_dict["id"]).one_or_none()
+            if order is None:
+                order = Order(
+                    session_id=session_dict["id"],
+                    payment_intent=session_dict.get("payment_intent"),
+                    amount_total=session_dict.get("amount_total"),
+                    currency=session_dict.get("currency")
+                             or (session_dict.get("amount_subtotal") and "eur"),
+                    email=(session_dict.get("customer_details") or {}).get("email"),
+                    status=session_dict.get("status") or session_dict.get("payment_status"),
+                    raw=session_dict,   # <-- ora è un dict serializzabile
+                )
+                db.add(order)
+            else:
+                order.payment_intent = session_dict.get("payment_intent")
+                order.amount_total = session_dict.get("amount_total")
+                order.currency = session_dict.get("currency") or order.currency
+                order.email = (session_dict.get("customer_details") or {}).get("email") or order.email
+                order.status = session_dict.get("status") or order.status
+                order.raw = session_dict
+            db.commit()
+            print("✅ Ordine salvato:", order.session_id, order.status, order.amount_total)
+        except Exception as e:
+            db.rollback()
+            print("❌ Errore salvataggio ordine:", e)
+            raise
+        finally:
+            db.close()
+
+        # --- Sheets ---
+        try:
+            append_order_row(session_dict, event_id=event.get("id", ""))
+        except Exception as e:
+            print("⚠️ Errore append su Google Sheets:", e)
 
     return {"status": "success", "event": event["type"]}
 
-# ---------- ENDPOINT DI SIMULAZIONE DEV (per test rapidi) ----------
-@app.post("/dev/simulate-checkout")
-async def dev_simulate_checkout(request: Request):
-    token = request.query_params.get("token") or ""
-    if token != settings.DEV_WEBHOOK_TOKEN and token != os.getenv("DEV_WEBHOOK_TOKEN", ""):
-        raise HTTPException(status_code=401, detail="Unauthorized")
 
-    body = await request.json()
-    import uuid
-    session_dict = {
-        "id": body.get("id", "cs_test_simulated_" + uuid.uuid4().hex[:12]),
-        "payment_intent": body.get("payment_intent", "pi_test_" + uuid.uuid4().hex[:8]),
-        "amount_total": body.get("amount_total", 990),
-        "currency": body.get("currency", "eur"),
-        "status": body.get("status", "complete"),
-        "payment_status": body.get("payment_status", "paid"),
-        "mode": body.get("mode", "payment"),
-        "customer_details": body.get("customer_details", {"email": "demo@example.com", "name": "Demo User"}),
-        "livemode": False,
-        "metadata": body.get("metadata", {}),
-        "success_url": body.get("success_url", settings.SUCCESS_URL),
-        "cancel_url": body.get("cancel_url", settings.CANCEL_URL),
-    }
-    _handle_checkout_completed(session_dict, event_id="evt_dev_simulated")
-    return {"ok": True, "session_id": session_dict["id"]}
-
-# ---------- PAGINE DI RISULTATO ----------
+# ---------- Pagine risultato ----------
 @app.get("/success", response_class=HTMLResponse)
 def success():
     return "<h1>Pagamento completato ✅</h1>"
+
 
 @app.get("/cancel", response_class=HTMLResponse)
 def cancel():
     return "<h1>Pagamento annullato ❌</h1>"
 
-# ---------- PAGINA DI TEST ----------
+
+# ---------- Pagina test ----------
 @app.get("/test-checkout", response_class=HTMLResponse)
 def test_checkout_page():
     return """
@@ -322,6 +282,7 @@ def test_checkout_page():
 </html>
 """
 
+
 # ---------- API di ispezione ----------
 @app.get("/orders")
 def list_orders(limit: int = 20):
@@ -343,3 +304,77 @@ def list_orders(limit: int = 20):
         ]
     finally:
         db.close()
+
+
+# ---------- Dev: Simula checkout.session.completed ----------
+from pydantic import BaseModel
+
+class DevSimulatedCheckout(BaseModel):
+    amount_total: int = 990
+    currency: str = "eur"
+    customer_details: Optional[dict] = None
+
+@app.post("/dev/simulate-checkout")
+def dev_simulate_checkout(
+    payload: DevSimulatedCheckout = Body(...),
+    token: str = Query("", description="Dev token"),
+):
+    """
+    Solo per test in locale/staging: crea un finto evento checkout.session.completed
+    passa ?token=<DEV_WEBHOOK_TOKEN>
+    """
+    if settings.APP_ENV == "production":
+        raise HTTPException(status_code=403, detail="Disabled in production")
+
+    if not token or token != settings.DEV_WEBHOOK_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # componi un finto 'session'
+    now_ts = int(datetime.now(tz=timezone.utc).timestamp())
+    fake_session = {
+        "id": f"cs_dev_{now_ts}",
+        "payment_intent": f"pi_dev_{now_ts}",
+        "amount_total": payload.amount_total,
+        "currency": payload.currency,
+        "status": "complete",
+        "payment_status": "paid",
+        "mode": "payment",
+        "livemode": False,
+        "created": now_ts,
+        "customer_details": payload.customer_details or {
+            "email": "dev@example.com",
+            "name": "Dev User",
+        },
+        "success_url": settings.SUCCESS_URL,
+        "cancel_url": settings.CANCEL_URL,
+        "metadata": {},
+    }
+
+    # salva come se fosse arrivato dal webhook
+    db = SessionLocal()
+    try:
+        order = Order(
+            session_id=fake_session["id"],
+            payment_intent=fake_session["payment_intent"],
+            amount_total=fake_session["amount_total"],
+            currency=fake_session["currency"],
+            email=(fake_session["customer_details"] or {}).get("email"),
+            status=fake_session["status"],
+            raw=fake_session,
+        )
+        db.add(order)
+        db.commit()
+        print("✅ [DEV] Ordine simulato salvato:", order.session_id)
+    except Exception as e:
+        db.rollback()
+        print("❌ [DEV] Errore salvataggio ordine simulato:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+    try:
+        append_order_row(fake_session, event_id=f"evt_dev_{now_ts}")
+    except Exception as e:
+        print("⚠️ [DEV] Errore append Sheets simulato:", e)
+
+    return {"ok": True, "session_id": fake_session["id"]}
