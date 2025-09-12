@@ -1,13 +1,19 @@
+# app/main.py  — VERSIONE SOLO GOOGLE SHEETS (niente DB)
+
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from app.settings import settings
+from typing import Any, Dict, List
 import json
-import time
+import os
+
+from app.settings import settings
 
 # Stripe
 import stripe
+if settings.STRIPE_SECRET_KEY:
+    stripe.api_key = settings.STRIPE_SECRET_KEY
 
 # Google Sheets
 import gspread
@@ -17,48 +23,40 @@ app = FastAPI(title=settings.APP_NAME)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # in produzione puoi limitarlo al tuo dominio
+    allow_origins=["*"],          # in prod puoi restringere
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ---------- Stripe bootstrap ----------
-if settings.STRIPE_SECRET_KEY:
-    stripe.api_key = settings.STRIPE_SECRET_KEY
-
-
 # ---------- Google Sheets helpers ----------
-SHEETS_HEADERS = [
-    "created_at",         # A
-    "event_id",           # B
-    "session_id",         # C
-    "payment_intent",     # D
-    "mode",               # E
-    "payment_status",     # F
-    "status",             # G
-    "amount_total_cents", # H
-    "currency",           # I
-    "customer_email",     # J
-    "customer_name",      # K
-    "items",              # L
-    "price_ids",          # M
-    "livemode",           # N
-    "metadata_json",      # O
-    "success_url",        # P
-    "cancel_url",         # Q
+
+HEADERS = [
+    "created_at",       # A
+    "event_id",         # B
+    "session_id",       # C
+    "payment_intent",   # D
+    "mode",             # E
+    "payment_status",   # F
+    "status",           # G
+    "amount_total",     # H (cents)
+    "currency",         # I
+    "customer_email",   # J
+    "customer_name",    # K
+    "items",            # L (string)
+    "price_ids",        # M (string)
+    "livemode",         # N (true/false)
+    "metadata_json",    # O (string JSON)
+    "success_url",      # P
+    "cancel_url",       # Q
 ]
 
 def get_sheet():
     """
-    Restituisce la worksheet configurata (o None se non configurata).
-    Assicurati che:
-    - SHEETS_SPREADSHEET_ID sia corretto
-    - SHEETS_WORKSHEET_NAME esista (es. 'Foglio1')
-    - Hai condiviso il foglio con l'email del service account
+    Ritorna il worksheet pronto. Se manca la configurazione, lancia 500.
     """
     if not (settings.SHEETS_SPREADSHEET_ID and settings.SHEETS_WORKSHEET_NAME and settings.GOOGLE_SERVICE_ACCOUNT_JSON):
-        return None
+        raise HTTPException(status_code=500, detail="Google Sheets non configurato")
     info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_JSON)
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(info, scopes=scopes)
@@ -66,133 +64,125 @@ def get_sheet():
     sh = client.open_by_key(settings.SHEETS_SPREADSHEET_ID)
     ws = sh.worksheet(settings.SHEETS_WORKSHEET_NAME)
 
-    # Verifica/inizializza header
-    values = ws.get_values("A1:Q1")
-    if not values or values[0] != SHEETS_HEADERS:
-        ws.update("A1", [SHEETS_HEADERS])
-
+    # Assicura intestazioni in riga 1
+    first_row = ws.row_values(1)
+    if [h.strip().lower() for h in first_row] != HEADERS:
+        ws.resize(rows=1)  # cancella eventuali header sbagliati
+        ws.update("A1:Q1", [HEADERS])
     return ws
-
 
 def append_order_row(session: dict, event_id: str):
     """
-    Aggiunge una riga su Google Sheets. Evita duplicati per session_id.
+    Aggiunge una riga su Sheets, evitando duplicati per session_id.
     """
     ws = get_sheet()
-    if not ws:
-        print("ℹ️ Google Sheets non configurato, salto append.")
-        return
 
     session_id = session.get("id") or session.get("session_id")
     if not session_id:
-        print("⚠️ Session senza id, salto append.")
+        print("⚠️ Nessun session_id, salto append.")
         return
 
     # Evita duplicati
     try:
-        ws.find(session_id)
+        ws.find(str(session_id))
         print("ℹ️ Session già presente su Sheets:", session_id)
         return
     except gspread.exceptions.CellNotFound:
         pass
 
-    # Campi utili
     pi = session.get("payment_intent")
     amount_total = session.get("amount_total")
     currency = session.get("currency")
     payment_status = session.get("payment_status")
     status = session.get("status")
-    mode = session.get("mode")
+    mode = session.get("mode") or "payment"
     email = (session.get("customer_details") or {}).get("email")
     name = (session.get("customer_details") or {}).get("name")
-    success_url = session.get("success_url")
-    cancel_url = session.get("cancel_url")
+    success_url = session.get("success_url") or settings.SUCCESS_URL
+    cancel_url = session.get("cancel_url") or settings.CANCEL_URL
     livemode = bool(session.get("livemode", False))
-
-    items_str = ""
-    price_ids = ""
     metadata_json = json.dumps(session.get("metadata") or {}, ensure_ascii=False)
 
-    # created_at ISO
+    # created_at in ISO
     created_iso = ""
     if session.get("created"):
         from datetime import datetime, timezone
-        created_iso = datetime.fromtimestamp(session["created"], tz=timezone.utc).isoformat()
+        created_iso = datetime.fromtimestamp(int(session["created"]), tz=timezone.utc).isoformat()
+
+    # (per ora non estraiamo items/price_ids in dettaglio)
+    items_str = ""
+    price_ids = ""
 
     row = [
-        created_iso,            # created_at
-        event_id,               # event_id
-        session_id,             # session_id
-        pi,                     # payment_intent
-        mode,                   # mode
-        payment_status,         # payment_status
-        status,                 # status
-        amount_total or "",     # amount_total_cents
-        currency or "",         # currency
-        email or "",            # customer_email
-        name or "",             # customer_name
-        items_str,              # items
-        price_ids,              # price_ids
-        str(livemode).lower(),  # livemode
-        metadata_json,          # metadata_json
-        success_url or "",      # success_url
-        cancel_url or "",       # cancel_url
+        created_iso,            # 1. created_at
+        event_id,               # 2. event_id
+        session_id,             # 3. session_id
+        pi,                     # 4. payment_intent
+        mode,                   # 5. mode
+        payment_status,         # 6. payment_status
+        status,                 # 7. status
+        amount_total or "",     # 8. amount_total
+        currency or "",         # 9. currency
+        email or "",            # 10. customer_email
+        name or "",             # 11. customer_name
+        items_str,              # 12. items
+        price_ids,              # 13. price_ids
+        str(livemode).lower(),  # 14. livemode
+        metadata_json,          # 15. metadata_json
+        success_url or "",      # 16. success_url
+        cancel_url or "",       # 17. cancel_url
     ]
     ws.append_row(row, value_input_option="RAW")
     print("✅ Inserita riga su Sheets per session:", session_id)
 
-
-def read_orders_from_sheet(limit: int = 20):
+def sheet_rows_to_objects(values: List[List[str]]) -> List[Dict[str, Any]]:
     """
-    Legge le ultime `limit` righe dal foglio e le restituisce come JSON, mappando con gli header.
+    Converte le righe del foglio (A:Q) in oggetti dict con chiavi HEADERS.
     """
-    ws = get_sheet()
-    if not ws:
-        return []
+    out: List[Dict[str, Any]] = []
+    for r in values:
+        # pad o tronca a 17 colonne
+        row = (r + [""] * 17)[:17]
+        obj = {HEADERS[i]: row[i] for i in range(17)}
+        out.append(obj)
+    return out
 
-    all_values = ws.get_all_values()
-    if not all_values or len(all_values) <= 1:
-        return []
+# ---------- MODELLI ----------
 
-    headers = all_values[0]
-    rows = all_values[1:]
-    # prendi le ultime `limit`
-    rows = rows[-limit:]
-    results = []
-    for r in rows:
-        obj = {}
-        for i, h in enumerate(headers):
-            obj[h] = r[i] if i < len(r) else ""
-        results.append(obj)
-    # Ordine decrescente per created_at (ultimo in alto)
-    results.reverse()
-    return results
-
-
-# ---------- MODELS ----------
 class DevSimulatedCheckout(BaseModel):
     amount_total: int = 990
     currency: str = "eur"
-    customer_details: dict | None = None
-
+    customer_details: Dict[str, Any] | None = None
 
 # ---------- ROUTES ----------
+
+@app.on_event("startup")
+def on_startup():
+    print(f"✅ APP STARTED | ENV: {settings.APP_ENV}")
+
 @app.get("/health")
 def health():
+    # nessun DB, solo stato app e Sheets
+    ok = True
+    sheets = "ok"
+    try:
+        _ = get_sheet()
+    except Exception as e:
+        sheets = f"error: {e}"
+        ok = False
     return {
-        "status": "ok",
+        "status": "ok" if ok else "degraded",
         "service": settings.APP_NAME,
         "env": settings.APP_ENV,
-        "sheets": bool(settings.SHEETS_SPREADSHEET_ID and settings.SHEETS_WORKSHEET_NAME and settings.GOOGLE_SERVICE_ACCOUNT_JSON),
+        "sheets": sheets,
     }
-
 
 @app.get("/")
 def root():
-    return {"message": "EccomiBook Backend up ✨"}
+    return {"message": "EccomiBook Backend (solo Google Sheets) ✨"}
 
+# ----- Checkout (crea la sessione Stripe e reindirizza) -----
 
-# ---------- CHECKOUT ----------
 @app.post("/checkout/session")
 async def create_checkout_session(request: Request):
     if not settings.STRIPE_SECRET_KEY:
@@ -201,6 +191,8 @@ async def create_checkout_session(request: Request):
     payload = await request.json()
     quantity = int(payload.get("quantity", 1))
     mode = payload.get("mode", "payment")
+
+    # Price fisso da env se presente, altrimenti parametri dal client
     price_id = payload.get("price_id") or settings.STRIPE_PRICE_ID or None
 
     try:
@@ -237,10 +229,13 @@ async def create_checkout_session(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ----- Webhook Stripe → scrive su Google Sheets -----
 
-# ---------- WEBHOOK ----------
 @app.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
+    if not settings.STRIPE_WEBHOOK_SECRET:
+        raise HTTPException(status_code=500, detail="Webhook secret mancante")
+
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
     try:
@@ -252,18 +247,57 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
     if event["type"] == "checkout.session.completed":
-        # Stripe fornisce StripeObject; qui lo uso già come dict serializzabile
         session = event["data"]["object"]
-        # append su Google Sheets (niente DB)
         try:
             append_order_row(session, event_id=event.get("id", ""))
         except Exception as e:
             print("⚠️ Errore append su Google Sheets:", e)
-
+            # non rompiamo il webhook: rispondiamo comunque 200
     return {"status": "success", "event": event["type"]}
 
+# ----- Endpoint di simulazione (senza Stripe) -----
 
-# ---------- PAGINE DI RISULTATO ----------
+@app.post("/dev/simulate-checkout")
+async def dev_simulate_checkout(
+    body: DevSimulatedCheckout,
+    token: str = Query(..., description="DEV_WEBHOOK_TOKEN"),
+):
+    if not settings.DEV_WEBHOOK_TOKEN or token != settings.DEV_WEBHOOK_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # costruiamo un finto "checkout.session"
+    from datetime import datetime, timezone
+    import time
+    now_ts = int(time.time())
+
+    fake_session = {
+        "id": f"cs_sim_{now_ts}",
+        "object": "checkout.session",
+        "payment_intent": f"pi_sim_{now_ts}",
+        "amount_total": body.amount_total,
+        "currency": body.currency,
+        "customer_details": body.customer_details or {},
+        "status": "complete",
+        "payment_status": "paid",
+        "mode": "payment",
+        "success_url": settings.SUCCESS_URL,
+        "cancel_url": settings.CANCEL_URL,
+        "livemode": False,
+        "created": now_ts,
+        "metadata": {},
+    }
+    # “event” finto
+    fake_event_id = f"evt_sim_{now_ts}"
+
+    try:
+        append_order_row(fake_session, event_id=fake_event_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sheets error: {e}")
+
+    return {"status": "ok", "session_id": fake_session["id"]}
+
+# ----- Pagine risultato -----
+
 @app.get("/success", response_class=HTMLResponse)
 def success():
     return "<h1>Pagamento completato ✅</h1>"
@@ -272,8 +306,8 @@ def success():
 def cancel():
     return "<h1>Pagamento annullato ❌</h1>"
 
+# ----- Pagina test checkout -----
 
-# ---------- PAGINA DI TEST ----------
 @app.get("/test-checkout", response_class=HTMLResponse)
 def test_checkout_page():
     return """
@@ -308,43 +342,24 @@ def test_checkout_page():
 </html>
 """
 
+# ----- API ispezione ordini (legge da Sheets) -----
 
-# ---------- API di ispezione basata su Sheets ----------
 @app.get("/orders")
-def list_orders(limit: int = Query(20, ge=1, le=200)):
+def list_orders(limit: int = 20):
     """
-    Restituisce gli ultimi ordini letti dal Google Sheet.
+    Legge le ultime `limit` righe dal Google Sheet e restituisce un array di oggetti.
     """
-    try:
-        return read_orders_from_sheet(limit=limit)
-    except Exception as e:
-        print("⚠️ Errore lettura orders da Sheets:", e)
+    ws = get_sheet()
+    # tutte le righe (A2:Q) → prendiamo solo le ultime `limit`
+    values = ws.get_all_values()
+    if not values or len(values) <= 1:
         return []
 
-
-# ---------- DEV: Simulazione checkout per testare Sheets senza Stripe ----------
-@app.post("/dev/simulate-checkout")
-async def dev_simulate_checkout(body: DevSimulatedCheckout, token: str = Query("")):
-    if token != settings.DEV_WEBHOOK_TOKEN:
-        raise HTTPException(status_code=403, detail="Token non valido")
-
-    now = int(time.time())
-    fake_session = {
-        "id": f"cs_sim_{now}",
-        "object": "checkout.session",
-        "payment_intent": f"pi_sim_{now}",
-        "amount_total": body.amount_total,
-        "currency": body.currency,
-        "payment_status": "paid",
-        "status": "complete",
-        "mode": "payment",
-        "customer_details": body.customer_details or {"email": "prova@example.com", "name": "Test User"},
-        "success_url": settings.SUCCESS_URL,
-        "cancel_url": settings.CANCEL_URL,
-        "livemode": False,
-        "created": now,
-        "metadata": {},
-    }
-
-    append_order_row(fake_session, event_id=f"evt_sim_{now}")
-    return {"ok": True, "session_id": fake_session["id"]}
+    data_rows = values[1:]  # salta header
+    # ultime N (in ordine decrescente di inserimento)
+    data_rows = data_rows[-limit:]
+    objs = sheet_rows_to_objects(data_rows)
+    # aggiunge un id incrementale locale per comodità
+    for i, o in enumerate(objs, 1):
+        o["id"] = i
+    return objs
