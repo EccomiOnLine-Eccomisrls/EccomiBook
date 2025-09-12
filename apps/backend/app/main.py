@@ -6,7 +6,6 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Any, Dict, List
 import json
-import os
 
 from app.settings import settings
 
@@ -51,6 +50,26 @@ HEADERS = [
 ]
 
 # ---------------------- Helpers Google Sheets (con diagnostica) ----------------------
+def _authorize_client():
+    """Restituisce un client gspread autorizzato con scopes corretti."""
+    if not settings.GOOGLE_SERVICE_ACCOUNT_JSON:
+        raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON mancante")
+    try:
+        info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_JSON)
+    except Exception as e:
+        raise RuntimeError(f"JSON credenziali non valido: {repr(e)}")
+
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    try:
+        creds = Credentials.from_service_account_info(info, scopes=scopes)
+        return gspread.authorize(creds)
+    except Exception as e:
+        raise RuntimeError(f"Auth fallita: {repr(e)}")
+
+
 def get_sheet():
     """
     Ritorna il worksheet pronto. Se qualcosa va storto, solleva 500 con dettaglio esplicito.
@@ -60,25 +79,8 @@ def get_sheet():
             raise RuntimeError("SHEETS_SPREADSHEET_ID mancante")
         if not settings.SHEETS_WORKSHEET_NAME:
             raise RuntimeError("SHEETS_WORKSHEET_NAME mancante")
-        if not settings.GOOGLE_SERVICE_ACCOUNT_JSON:
-            raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON mancante")
 
-        # 1) Parse credenziali
-        try:
-            info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_JSON)
-        except Exception as e:
-            raise RuntimeError(f"JSON credenziali non valido: {repr(e)}")
-
-        # 2) Auth
-        try:
-            scopes = [
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive",
-            ]
-            creds = Credentials.from_service_account_info(info, scopes=scopes)
-            client = gspread.authorize(creds)
-        except Exception as e:
-            raise RuntimeError(f"Auth fallita: {repr(e)}")
+        client = _authorize_client()
 
         # 3) Apri spreadsheet
         try:
@@ -102,6 +104,7 @@ def get_sheet():
         # 5) Assicura intestazioni
         try:
             first_row = ws.row_values(1)
+            # normalizza a lower per confronto
             if [h.strip().lower() for h in first_row] != HEADERS:
                 ws.resize(rows=1)  # reset header
                 ws.update("A1:Q1", [HEADERS])
@@ -309,7 +312,6 @@ async def dev_simulate_checkout(
     if not settings.DEV_WEBHOOK_TOKEN or token != settings.DEV_WEBHOOK_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    from datetime import datetime, timezone
     import time
     now_ts = int(time.time())
 
@@ -363,13 +365,7 @@ def list_worksheets(token: str):
     if token != settings.DEV_WEBHOOK_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_JSON)
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive",
-        ]
-        creds = Credentials.from_service_account_info(info, scopes=scopes)
-        client = gspread.authorize(creds)
+        client = _authorize_client()
         sh = client.open_by_key(settings.SHEETS_SPREADSHEET_ID)
         tabs = [w.title for w in sh.worksheets()]
         return {"status": "ok", "tabs": tabs}
@@ -389,15 +385,9 @@ def check_sheets_steps(token: str):
             bool(settings.GOOGLE_SERVICE_ACCOUNT_JSON),
         ])
 
-        info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_JSON)
+        # JSON + auth
+        client = _authorize_client()
         out["json_ok"] = True
-
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive",
-        ]
-        creds = Credentials.from_service_account_info(info, scopes=scopes)
-        client = gspread.authorize(creds)
         out["auth_ok"] = True
 
         sh = client.open_by_key(settings.SHEETS_SPREADSHEET_ID)
