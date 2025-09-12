@@ -71,7 +71,10 @@ def get_sheet():
 
         # 2) Auth
         try:
-            scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+            scopes = [
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive",
+            ]
             creds = Credentials.from_service_account_info(info, scopes=scopes)
             client = gspread.authorize(creds)
         except Exception as e:
