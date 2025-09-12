@@ -364,7 +364,10 @@ def list_worksheets(token: str):
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_JSON)
-        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
         creds = Credentials.from_service_account_info(info, scopes=scopes)
         client = gspread.authorize(creds)
         sh = client.open_by_key(settings.SHEETS_SPREADSHEET_ID)
@@ -389,7 +392,10 @@ def check_sheets_steps(token: str):
         info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_JSON)
         out["json_ok"] = True
 
-        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
         creds = Credentials.from_service_account_info(info, scopes=scopes)
         client = gspread.authorize(creds)
         out["auth_ok"] = True
