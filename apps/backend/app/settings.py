@@ -28,7 +28,7 @@ class Settings(BaseModel):
     # DB
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./data.db")
 
-    # Dev test endpoint
-    DEV_WEBHOOK_TOKEN: str = os.getenv("DEV_WEBHOOK_TOKEN", "")
+    # Dev tools
+    DEV_WEBHOOK_TOKEN: str = os.getenv("DEV_WEBHOOK_TOKEN", "")  # es. pwr_9f2c0fbd82a1a4c7
 
 settings = Settings()
