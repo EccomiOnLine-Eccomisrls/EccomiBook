@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Any, Dict, List
 import json
+import time
 
 from app.settings import settings
 
@@ -118,9 +119,10 @@ def get_sheet():
         raise HTTPException(status_code=500, detail=f"Sheets error: {e}")
 
 
-def append_order_row(session: dict, event_id: str):
+def append_order_row(session: dict, event_id: str, allow_duplicate: bool = False):
     """
-    Aggiunge una riga su Sheets, evitando duplicati per session_id.
+    Aggiunge una riga su Sheets.
+    Se allow_duplicate=True, salta il controllo duplicati su session_id.
     """
     ws = get_sheet()
 
@@ -129,13 +131,14 @@ def append_order_row(session: dict, event_id: str):
         print("⚠️ Nessun session_id, salto append.")
         return
 
-    # Evita duplicati
-    try:
-        ws.find(str(session_id))
-        print("ℹ️ Session già presente su Sheets:", session_id)
-        return
-    except gspread.exceptions.CellNotFound:
-        pass
+    # Evita duplicati (se non forzato)
+    if not allow_duplicate:
+        try:
+            ws.find(str(session_id))
+            print("ℹ️ Session già presente su Sheets:", session_id)
+            return
+        except gspread.exceptions.CellNotFound:
+            pass
 
     pi = session.get("payment_intent")
     amount_total = session.get("amount_total")
@@ -180,7 +183,9 @@ def append_order_row(session: dict, event_id: str):
         cancel_url or "",       # 17. cancel_url
     ]
     ws.append_row(row, value_input_option="RAW")
-    print("✅ Inserita riga su Sheets per session:", session_id)
+    # log indice ultima riga
+    last_row_idx = len(ws.get_all_values())
+    print(f"✅ Inserita riga su Sheets alla riga {last_row_idx} per session: {session_id}")
 
 
 def sheet_rows_to_objects(values: List[List[str]]) -> List[Dict[str, Any]]:
@@ -308,11 +313,11 @@ async def stripe_webhook(request: Request):
 async def dev_simulate_checkout(
     body: DevSimulatedCheckout,
     token: str = Query(..., description="DEV_WEBHOOK_TOKEN"),
+    force: bool = Query(False, description="Se true, forza l'append anche se duplicato"),
 ):
     if not settings.DEV_WEBHOOK_TOKEN or token != settings.DEV_WEBHOOK_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    import time
     now_ts = int(time.time())
 
     fake_session = {
@@ -334,7 +339,7 @@ async def dev_simulate_checkout(
     fake_event_id = f"evt_sim_{now_ts}"
 
     try:
-        append_order_row(fake_session, event_id=fake_event_id)
+        append_order_row(fake_session, event_id=fake_event_id, allow_duplicate=force)
     except Exception as e:
         # Ora l'errore è dettagliato
         raise HTTPException(status_code=500, detail=f"Sheets error: {e}")
@@ -402,6 +407,33 @@ def check_sheets_steps(token: str):
     except Exception as e:
         out["error"] = repr(e)
         raise HTTPException(status_code=500, detail=out)
+
+
+# ---------- Endpoint test: forza sempre una riga ----------
+from datetime import datetime, timezone
+
+@app.get("/dev/append-test")
+def dev_append_test(token: str):
+    if token != settings.DEV_WEBHOOK_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    now_ts = int(time.time())
+    fake_session = {
+        "id": f"manual_{now_ts}",
+        "payment_intent": "",
+        "amount_total": 1234,
+        "currency": "eur",
+        "customer_details": {"email": "debug@example.com", "name": "Debug"},
+        "status": "complete",
+        "payment_status": "paid",
+        "mode": "payment",
+        "success_url": settings.SUCCESS_URL,
+        "cancel_url": settings.CANCEL_URL,
+        "livemode": False,
+        "created": now_ts,
+        "metadata": {"note": "dev_append_test"},
+    }
+    append_order_row(fake_session, event_id="evt_debug", allow_duplicate=True)
+    return {"status": "ok", "note": "riga forzata scritta"}
 
 
 # ---------- Pagine risultato ----------
