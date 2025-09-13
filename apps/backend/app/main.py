@@ -1,4 +1,4 @@
-# app/main.py — SOLO GOOGLE SHEETS (niente DB)
+# app/main.py — SOLO GOOGLE SHEETS (no DB)
 
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,12 +10,12 @@ import time
 
 from app.settings import settings
 
-# -------- Stripe (opzionale: serve per /checkout/session e /webhook/stripe) --------
+# ---------- Stripe (opzionale: usato da /checkout/session e /webhook/stripe) ----------
 import stripe
 if settings.STRIPE_SECRET_KEY:
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
-# -------- Google Sheets --------
+# ---------- Google Sheets ----------
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -23,13 +23,13 @@ app = FastAPI(title=settings.APP_NAME)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # restringi in produzione se vuoi
+    allow_origins=["*"],     # restringi se vuoi
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ---------------------- Costante intestazioni Sheets ----------------------
+# ---------- Intestazioni Google Sheet ----------
 HEADERS = [
     "created_at",       # A
     "event_id",         # B
@@ -50,9 +50,8 @@ HEADERS = [
     "cancel_url",       # Q
 ]
 
-# ---------------------- Helpers Google Sheets (con diagnostica) ----------------------
+# ---------- Helpers Google Sheets ----------
 def _authorize_client():
-    """Restituisce un client gspread autorizzato con scopes corretti."""
     if not settings.GOOGLE_SERVICE_ACCOUNT_JSON:
         raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON mancante")
     try:
@@ -72,9 +71,7 @@ def _authorize_client():
 
 
 def get_sheet():
-    """
-    Ritorna il worksheet pronto. Se qualcosa va storto, solleva 500 con dettaglio esplicito.
-    """
+    """Apre lo spreadsheet e il worksheet configurati; assicura gli header."""
     try:
         if not settings.SHEETS_SPREADSHEET_ID:
             raise RuntimeError("SHEETS_SPREADSHEET_ID mancante")
@@ -83,13 +80,13 @@ def get_sheet():
 
         client = _authorize_client()
 
-        # 3) Apri spreadsheet
+        # Spreadsheet
         try:
             sh = client.open_by_key(settings.SHEETS_SPREADSHEET_ID)
         except Exception as e:
             raise RuntimeError(f"Apertura spreadsheet fallita (ID?): {repr(e)}")
 
-        # 4) Apri worksheet/tab
+        # Worksheet
         try:
             ws = sh.worksheet(settings.SHEETS_WORKSHEET_NAME)
         except Exception as e:
@@ -102,12 +99,11 @@ def get_sheet():
                 f"Tab disponibili: {tabs} | err={repr(e)}"
             )
 
-        # 5) Assicura intestazioni
+        # Header
         try:
             first_row = ws.row_values(1)
-            # normalizza a lower per confronto
             if [h.strip().lower() for h in first_row] != HEADERS:
-                ws.resize(rows=1)  # reset header
+                ws.resize(rows=1)  # reset
                 ws.update("A1:Q1", [HEADERS])
         except Exception as e:
             raise RuntimeError(f"Update header fallito: {repr(e)}")
@@ -115,15 +111,11 @@ def get_sheet():
         return ws
 
     except Exception as e:
-        # Propaga come HTTP 500 con dettaglio utile
         raise HTTPException(status_code=500, detail=f"Sheets error: {e}")
 
 
-def append_order_row(session: dict, event_id: str, allow_duplicate: bool = False):
-    """
-    Aggiunge una riga su Sheets.
-    Se allow_duplicate=True, salta il controllo duplicati su session_id.
-    """
+def append_order_row(session: dict, event_id: str):
+    """Aggiunge una riga su Sheets; evita duplicati per session_id."""
     ws = get_sheet()
 
     session_id = session.get("id") or session.get("session_id")
@@ -131,14 +123,13 @@ def append_order_row(session: dict, event_id: str, allow_duplicate: bool = False
         print("⚠️ Nessun session_id, salto append.")
         return
 
-    # Evita duplicati (se non forzato)
-    if not allow_duplicate:
-        try:
-            ws.find(str(session_id))
-            print("ℹ️ Session già presente su Sheets:", session_id)
-            return
-        except gspread.exceptions.CellNotFound:
-            pass
+    # evita duplicati
+    try:
+        ws.find(str(session_id))
+        print("ℹ️ Session già presente su Sheets:", session_id)
+        return
+    except gspread.exceptions.CellNotFound:
+        pass
 
     pi = session.get("payment_intent")
     amount_total = session.get("amount_total")
@@ -153,90 +144,80 @@ def append_order_row(session: dict, event_id: str, allow_duplicate: bool = False
     livemode = bool(session.get("livemode", False))
     metadata_json = json.dumps(session.get("metadata") or {}, ensure_ascii=False)
 
-    # created_at ISO
     created_iso = ""
     if session.get("created"):
         from datetime import datetime, timezone
         created_iso = datetime.fromtimestamp(int(session["created"]), tz=timezone.utc).isoformat()
 
-    # (per ora non estraiamo items/price_ids in dettaglio)
+    # (non estraiamo items/price_ids in dettaglio per ora)
     items_str = ""
     price_ids = ""
 
     row = [
-        created_iso,            # 1. created_at
-        event_id,               # 2. event_id
-        session_id,             # 3. session_id
-        pi,                     # 4. payment_intent
-        mode,                   # 5. mode
-        payment_status,         # 6. payment_status
-        status,                 # 7. status
-        amount_total or "",     # 8. amount_total
-        currency or "",         # 9. currency
-        email or "",            # 10. customer_email
-        name or "",             # 11. customer_name
-        items_str,              # 12. items
-        price_ids,              # 13. price_ids
-        str(livemode).lower(),  # 14. livemode
-        metadata_json,          # 15. metadata_json
-        success_url or "",      # 16. success_url
-        cancel_url or "",       # 17. cancel_url
+        created_iso,            # A
+        event_id,               # B
+        session_id,             # C
+        pi,                     # D
+        mode,                   # E
+        payment_status,         # F
+        status,                 # G
+        amount_total or "",     # H
+        currency or "",         # I
+        email or "",            # J
+        name or "",             # K
+        items_str,              # L
+        price_ids,              # M
+        str(livemode).lower(),  # N
+        metadata_json,          # O
+        success_url or "",      # P
+        cancel_url or "",       # Q
     ]
     ws.append_row(row, value_input_option="RAW")
-    # log indice ultima riga
-    last_row_idx = len(ws.get_all_values())
-    print(f"✅ Inserita riga su Sheets alla riga {last_row_idx} per session: {session_id}")
+    print("✅ Inserita riga su Sheets per session:", session_id)
 
 
 def sheet_rows_to_objects(values: List[List[str]]) -> List[Dict[str, Any]]:
-    """
-    Converte le righe del foglio (A:Q) in oggetti dict con chiavi HEADERS.
-    """
+    """Converte righe (A:Q) in oggetti con chiavi HEADERS."""
     out: List[Dict[str, Any]] = []
     for r in values:
-        row = (r + [""] * 17)[:17]  # pad/trim a 17 colonne
+        row = (r + [""] * 17)[:17]
         obj = {HEADERS[i]: row[i] for i in range(17)}
         out.append(obj)
     return out
 
 
-# ---------------------- Modelli ----------------------
+# ---------- Modelli richieste ----------
 class DevSimulatedCheckout(BaseModel):
     amount_total: int = 990
     currency: str = "eur"
     customer_details: Dict[str, Any] | None = None
 
 
-# ---------------------- Routes ----------------------
+# ---------- Lifecycle ----------
 @app.on_event("startup")
 def on_startup():
     print(f"✅ APP STARTED | ENV: {settings.APP_ENV}")
 
 
-@app.get("/health")
-def health():
-    # Stato app e Sheets
-    ok = True
-    sheets = "ok"
-    try:
-        _ = get_sheet()
-    except Exception as e:
-        sheets = f"error: {e}"
-        ok = False
-    return {
-        "status": "ok" if ok else "degraded",
-        "service": settings.APP_NAME,
-        "env": settings.APP_ENV,
-        "sheets": sheets,
-    }
-
-
+# ---------- Routes ----------
 @app.get("/")
 def root():
     return {"message": "EccomiBook Backend (solo Google Sheets) ✨"}
 
 
-# ---------- Checkout (crea la sessione Stripe e reindirizza) ----------
+@app.get("/health")
+def health():
+    status = "ok"
+    try:
+        _ = get_sheet()
+        sheets = "ok"
+    except Exception as e:
+        sheets = f"error: {e}"
+        status = "degraded"
+    return {"status": status, "service": settings.APP_NAME, "env": settings.APP_ENV, "sheets": sheets}
+
+
+# --- Crea sessione di checkout Stripe (facoltativo) ---
 @app.post("/checkout/session")
 async def create_checkout_session(request: Request):
     if not settings.STRIPE_SECRET_KEY:
@@ -251,10 +232,7 @@ async def create_checkout_session(request: Request):
         if price_id:
             line_items = [{"price": price_id, "quantity": quantity}]
         else:
-            price_data = payload.get("price_data")
-            if not price_data:
-                raise HTTPException(status_code=400, detail="price_data o price_id richiesto")
-
+            price_data = payload.get("price_data") or {}
             currency = price_data.get("currency", "eur")
             unit_amount = price_data.get("unit_amount")
             product_name = price_data.get("product_name", "EccomiBook Product")
@@ -282,7 +260,7 @@ async def create_checkout_session(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---------- Webhook Stripe → scrive su Google Sheets ----------
+# --- Webhook Stripe -> scrive su Google Sheets ---
 @app.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
     if not settings.STRIPE_WEBHOOK_SECRET:
@@ -291,9 +269,7 @@ async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
-        )
+        event = stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
     except Exception as e:
         print("⚠️ Webhook error:", str(e))
         raise HTTPException(status_code=400, detail=str(e))
@@ -303,23 +279,21 @@ async def stripe_webhook(request: Request):
         try:
             append_order_row(session, event_id=event.get("id", ""))
         except Exception as e:
+            # non rompiamo il webhook
             print("⚠️ Errore append su Google Sheets:", e)
-            # non rompiamo il webhook: rispondiamo comunque 200
     return {"status": "success", "event": event["type"]}
 
 
-# ---------- Endpoint di simulazione (senza Stripe) ----------
+# --- Endpoint di simulazione (senza Stripe) — utile per test veloci ---
 @app.post("/dev/simulate-checkout")
 async def dev_simulate_checkout(
     body: DevSimulatedCheckout,
     token: str = Query(..., description="DEV_WEBHOOK_TOKEN"),
-    force: bool = Query(False, description="Se true, forza l'append anche se duplicato"),
 ):
     if not settings.DEV_WEBHOOK_TOKEN or token != settings.DEV_WEBHOOK_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     now_ts = int(time.time())
-
     fake_session = {
         "id": f"cs_sim_{now_ts}",
         "object": "checkout.session",
@@ -339,104 +313,14 @@ async def dev_simulate_checkout(
     fake_event_id = f"evt_sim_{now_ts}"
 
     try:
-        append_order_row(fake_session, event_id=fake_event_id, allow_duplicate=force)
+        append_order_row(fake_session, event_id=fake_event_id)
     except Exception as e:
-        # Ora l'errore è dettagliato
         raise HTTPException(status_code=500, detail=f"Sheets error: {e}")
 
     return {"status": "ok", "session_id": fake_session["id"]}
 
 
-# ---------- DEBUG SHEETS ----------
-@app.get("/dev/check-sheets")
-def check_sheets(token: str):
-    if token != settings.DEV_WEBHOOK_TOKEN:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    try:
-        ws = get_sheet()
-        return {
-            "status": "ok",
-            "title": ws.title,
-            "rows": ws.row_count,
-            "cols": ws.col_count,
-            "first_row": ws.row_values(1),
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Sheets error: {e}")
-
-
-@app.get("/dev/list-worksheets")
-def list_worksheets(token: str):
-    if token != settings.DEV_WEBHOOK_TOKEN:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    try:
-        client = _authorize_client()
-        sh = client.open_by_key(settings.SHEETS_SPREADSHEET_ID)
-        tabs = [w.title for w in sh.worksheets()]
-        return {"status": "ok", "tabs": tabs}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Sheets error: {repr(e)}")
-
-
-@app.get("/dev/check-sheets-steps")
-def check_sheets_steps(token: str):
-    if token != settings.DEV_WEBHOOK_TOKEN:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    out: Dict[str, Any] = {}
-    try:
-        out["has_env"] = all([
-            bool(settings.SHEETS_SPREADSHEET_ID),
-            bool(settings.SHEETS_WORKSHEET_NAME),
-            bool(settings.GOOGLE_SERVICE_ACCOUNT_JSON),
-        ])
-
-        # JSON + auth
-        client = _authorize_client()
-        out["json_ok"] = True
-        out["auth_ok"] = True
-
-        sh = client.open_by_key(settings.SHEETS_SPREADSHEET_ID)
-        out["open_ok"] = True
-        out["spreadsheet_title"] = sh.title
-        out["tabs"] = [w.title for w in sh.worksheets()]
-
-        ws = sh.worksheet(settings.SHEETS_WORKSHEET_NAME)
-        out["worksheet_ok"] = True
-        out["first_row"] = ws.row_values(1)
-        return out
-    except Exception as e:
-        out["error"] = repr(e)
-        raise HTTPException(status_code=500, detail=out)
-
-
-# ---------- Endpoint test: forza sempre una riga ----------
-from datetime import datetime, timezone
-
-@app.get("/dev/append-test")
-def dev_append_test(token: str):
-    if token != settings.DEV_WEBHOOK_TOKEN:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    now_ts = int(time.time())
-    fake_session = {
-        "id": f"manual_{now_ts}",
-        "payment_intent": "",
-        "amount_total": 1234,
-        "currency": "eur",
-        "customer_details": {"email": "debug@example.com", "name": "Debug"},
-        "status": "complete",
-        "payment_status": "paid",
-        "mode": "payment",
-        "success_url": settings.SUCCESS_URL,
-        "cancel_url": settings.CANCEL_URL,
-        "livemode": False,
-        "created": now_ts,
-        "metadata": {"note": "dev_append_test"},
-    }
-    append_order_row(fake_session, event_id="evt_debug", allow_duplicate=True)
-    return {"status": "ok", "note": "riga forzata scritta"}
-
-
-# ---------- Pagine risultato ----------
+# --- Pagine risultato semplici ---
 @app.get("/success", response_class=HTMLResponse)
 def success():
     return "<h1>Pagamento completato ✅</h1>"
@@ -446,55 +330,14 @@ def cancel():
     return "<h1>Pagamento annullato ❌</h1>"
 
 
-# ---------- Pagina test checkout ----------
-@app.get("/test-checkout", response_class=HTMLResponse)
-def test_checkout_page():
-    return """
-<!doctype html>
-<html>
-  <head><meta charset="utf-8"><title>Test Checkout</title></head>
-  <body style="font-family:system-ui;margin:40px">
-    <h1>Test Stripe Checkout</h1>
-    <p>Crea una sessione “una tantum” da 9,90€ (test mode).</p>
-    <button id="go">Vai al checkout</button>
-    <script>
-      document.getElementById('go').onclick = async () => {
-        const res = await fetch('/checkout/session', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({
-            mode: 'payment',
-            quantity: 1,
-            price_data: {
-              currency: 'eur',
-              unit_amount: 990,
-              product_name: 'EccomiBook - Test'
-            }
-          })
-        });
-        const data = await res.json();
-        if (data.checkout_url) window.location.href = data.checkout_url;
-        else alert('Errore: ' + JSON.stringify(data));
-      };
-    </script>
-  </body>
-</html>
-"""
-
-
-# ---------- API lettura ordini (da Sheets) ----------
+# --- API lettura ordini (da Sheets) ---
 @app.get("/orders")
 def list_orders(limit: int = 20):
-    """
-    Legge le ultime `limit` righe dal Google Sheet e restituisce un array di oggetti.
-    """
     ws = get_sheet()
     values = ws.get_all_values()
     if not values or len(values) <= 1:
         return []
-
-    data_rows = values[1:]          # salta header
-    data_rows = data_rows[-limit:]  # ultime N
+    data_rows = values[1:][-limit:]  # ultime N (salta header)
     objs = sheet_rows_to_objects(data_rows)
     for i, o in enumerate(objs, 1):
         o["id"] = i
