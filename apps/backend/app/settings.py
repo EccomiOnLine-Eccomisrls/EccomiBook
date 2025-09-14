@@ -1,10 +1,10 @@
-# app/settings.py
-import os
-from pydantic import BaseModel
+from pydantic import BaseSettings
+from pathlib import Path
 
-class Settings(BaseModel):
-    APP_NAME: str = os.getenv("APP_NAME", "EccomiBook Backend")
-    APP_ENV: str = os.getenv("APP_ENV", "production")
-    OWNER_API_KEY: str = os.getenv("OWNER_API_KEY", "dev_owner_key")  # X-API-Key
+class Settings(BaseSettings):
+    APP_ENV: str = "production"
+    APP_NAME: str = "EccomiBook Backend"
+    OWNER_API_KEY: str = ""                 # ← imposta su Render (X-API-Key)
+    DATA_DIR: str = str(Path("./data"))     # dove salviamo i file (books.json, export)
 
 settings = Settings()
