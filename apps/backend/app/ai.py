@@ -1,12 +1,40 @@
-# app/ai.py
-from .models import Chapter
-from .storage import new_id
+from typing import List
+from textwrap import dedent
 
-BLURB = ("In questo capitolo esploriamo l'idea principale con esempi concreti. "
-         "Tono chiaro e scorrevole, utile per il lettore. ")
+def generate_outline(title: str, chapters: int, language: str) -> List[str]:
+    """Bozza finta ma carina; sostituiscila con il tuo LLM quando vuoi."""
+    base = [
+        "Introduzione",
+        "Contesto e obiettivi",
+        "I protagonisti",
+        "Sfide iniziali",
+        "Strategie e metodi",
+        "Sviluppi e colpi di scena",
+        "Approfondimenti",
+        "Risultati e impatto",
+        "Conclusioni",
+        "Prossimi passi"
+    ]
+    if chapters <= len(base):
+        return base[:chapters]
+    # se vuoi più capitoli, duplica pattern
+    extra = [f"Appendice {i}" for i in range(1, chapters - len(base) + 1)]
+    return base + extra
 
-def generate_chapter(title_hint: str | None, words: int = 600, want_image: bool = True) -> Chapter:
-    title = title_hint or "Capitolo"
-    text = (f"# {title}\n\n" + BLURB) * max(1, words // 80)
-    image_url = "https://picsum.photos/seed/eccomibook/1024/640" if want_image else None
-    return Chapter(id=new_id("ch"), title=title, text=text, image_url=image_url)
+def generate_chapter_md(title: str, prompt: str | None, language: str) -> str:
+    p = prompt or ""
+    return dedent(f"""
+    **{title}**
+
+    {("Istruzioni: " + p + "\\n\\n") if p else ""}Testo generato in stile narrativo.
+    - Paragrafi ordinati
+    - Qualche elenco puntato
+    - Finale con take-away
+
+    _Questo capitolo è un segnaposto: collega qui il tuo modello AI per contenuti reali._
+    """).strip()
+
+def generate_image_urls(n: int, hd: bool) -> List[str]:
+    # placeholder (potrai sostituire con il tuo generatore immagini)
+    quality = "hd" if hd else "base"
+    return [f"https://placehold.co/800x500?text=img_{i+1}+{quality}" for i in range(max(0, n))]
