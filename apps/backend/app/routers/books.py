@@ -1,58 +1,84 @@
-# app/routers/books.py
-from fastapi import APIRouter, HTTPException, Depends, Response
-from io import BytesIO
-from zipfile import ZipFile, ZIP_DEFLATED
-from ..models import Book, Chapter, CreateBookInput, GenerateChapterInput, ExportFormat, PLAN_CAPS
-from ..storage import store, new_id
-from ..routers.auth import get_current_user, UserCtx
-from ..ai import generate_chapter
+from fastapi import APIRouter, HTTPException, Path
+from fastapi.responses import FileResponse
+from typing import List
+from app import storage
+from app.models import (
+    Book, Chapter, BookList,
+    CreateBookReq, GenerateOutlineReq,
+    GenerateChapterReq, EditChapterReq, ExportReq
+)
+from app import ai
 
-router = APIRouter(prefix="/api", tags=["EccomiBook"])
+router = APIRouter()
 
-@router.get("/caps")
-def caps(user: UserCtx = Depends(get_current_user)):
-    return PLAN_CAPS[user.plan]
-
-@router.get("/books")
-def list_books(user: UserCtx = Depends(get_current_user)):
-    return store.list_books()
+# ---------- BOOKS ----------
+@router.get("/books", response_model=BookList)
+def list_books():
+    return BookList(items=storage.list_books())
 
 @router.post("/books", response_model=Book)
-def create_book(body: CreateBookInput, user: UserCtx = Depends(get_current_user)):
-    caps = PLAN_CAPS[user.plan]
-    if caps["max_books"] is not None and len(store.list_books()) >= caps["max_books"]:
-        raise HTTPException(status_code=403, detail="Limite libri raggiunto per il tuo piano.")
-    b = Book(id=new_id("bk"), title=body.title, synopsis=body.synopsis, genre=body.genre, language=body.language, plan=user.plan)
-    return store.create_book(b)
-
-@router.get("/books/{book_id}", response_model=Book)
-def get_book(book_id: str, user: UserCtx = Depends(get_current_user)):
-    b = store.get_book(book_id)
-    if not b: raise HTTPException(404, "Book not found")
+def create_book(body: CreateBookReq):
+    b = storage.create_book(body.title, body.genre, body.language, body.plan)
     return b
 
-@router.delete("/books/{book_id}")
-def delete_book(book_id: str, user: UserCtx = Depends(get_current_user)):
-    ok = store.delete_book(book_id)
-    if not ok: raise HTTPException(404, "Book not found")
-    return {"ok": True}
+@router.get("/books/{book_id}", response_model=Book)
+def get_book(book_id: str = Path(...)):
+    b = storage.get_book(book_id)
+    if not b:
+        raise HTTPException(status_code=404, detail="book not found")
+    return b
+
+@router.post("/books/{book_id}/outline", response_model=Book)
+def generate_outline(book_id: str, body: GenerateOutlineReq):
+    b = storage.get_book(book_id)
+    if not b: raise HTTPException(status_code=404, detail="book not found")
+    b.outline = ai.generate_outline(b.title, body.chapters, b.language)
+    storage.save_book(b)
+    return b
+
+# ---------- CHAPTERS ----------
+@router.get("/books/{book_id}/chapters", response_model=List[Chapter])
+def list_chapters(book_id: str):
+    b = storage.get_book(book_id)
+    if not b: raise HTTPException(status_code=404, detail="book not found")
+    return b.chapters
 
 @router.post("/books/{book_id}/chapters", response_model=Chapter)
-def add_chapter(book_id: str, body: GenerateChapterInput, user: UserCtx = Depends(get_current_user)):
-    b = store.get_book(book_id)
-    if not b: raise HTTPException(404, "Book not found")
-    ch = generate_chapter(body.title_hint, body.words, body.want_image and PLAN_CAPS[user.plan]["images_hd"])
-    return store.add_chapter(book_id, ch)
+def add_chapter(book_id: str, body: GenerateChapterReq):
+    b = storage.get_book(book_id)
+    if not b: raise HTTPException(status_code=404, detail="book not found")
 
-@router.get("/books/{book_id}/export")
-def export_zip(book_id: str, fmt: ExportFormat = ExportFormat.ZIP_MARKDOWN, user: UserCtx = Depends(get_current_user)):
-    b = store.get_book(book_id)
-    if not b: raise HTTPException(404, "Book not found")
-    buf = BytesIO()
-    with ZipFile(buf, "w", ZIP_DEFLATED) as z:
-        z.writestr("README.txt", f"Titolo: {b.title}\nLingua: {b.language}\nCapitoli: {len(b.chapters)}")
-        for i, ch in enumerate(b.chapters, 1):
-            z.writestr(f"chapters/{i:02d}_{ch.title.replace(' ', '_')}.md", f"# {ch.title}\n\n{ch.text}\n")
-    buf.seek(0)
-    headers = {"Content-Disposition": f'attachment; filename="{b.title.replace(" ", "_")}.zip"'}
-    return Response(content=buf.read(), media_type="application/zip", headers=headers)
+    # titolo default: outline[chapter_index] se presente
+    title = None
+    if 0 <= body.chapter_index < len(b.outline):
+        title = b.outline[body.chapter_index]
+    if not title:
+        title = f"Capitolo {body.chapter_index + 1}"
+
+    md = ai.generate_chapter_md(title, body.prompt, b.language)
+    imgs = ai.generate_image_urls(body.images, body.hd_images)
+
+    ch = storage.add_chapter(book_id, title, md, imgs)
+    return ch
+
+@router.patch("/books/{book_id}/chapters/{chapter_id}", response_model=Chapter)
+def edit_chapter(book_id: str, chapter_id: str, body: EditChapterReq):
+    ch = storage.update_chapter(book_id, chapter_id, body.title, body.content_md)
+    return ch
+
+# ---------- EXPORT ----------
+@router.post("/books/{book_id}/export")
+def export_book(book_id: str, body: ExportReq):
+    b = storage.get_book(book_id)
+    if not b: raise HTTPException(status_code=404, detail="book not found")
+
+    if body.fmt == "json":
+        path = storage.export_book_json(b)
+        media = "application/json"
+        filename = f"{b.id}.json"
+    else:
+        path = storage.export_book_mdzip(b)
+        media = "application/zip"
+        filename = f"{b.id}.zip"
+
+    return FileResponse(path, media_type=media, filename=filename)
