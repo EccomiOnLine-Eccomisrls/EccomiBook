@@ -1,34 +1,10 @@
-from pydantic import BaseModel
-from dotenv import load_dotenv
+# app/settings.py
 import os
-
-load_dotenv()
+from pydantic import BaseModel
 
 class Settings(BaseModel):
-    APP_NAME: str = "EccomiBook Backend"
-    APP_ENV: str = os.getenv("APP_ENV", "local")
-    APP_HOST: str = os.getenv("APP_HOST", "0.0.0.0")
-    APP_PORT: int = int(os.getenv("APP_PORT", "8000"))
-
-    # Stripe
-    STRIPE_PUBLIC_KEY: str = os.getenv("STRIPE_PUBLIC_KEY", "")
-    STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
-    STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-    STRIPE_PRICE_ID: str = os.getenv("STRIPE_PRICE_ID", "")
-
-    # Redirect
-    SUCCESS_URL: str = os.getenv("SUCCESS_URL", "http://localhost:8000/success")
-    CANCEL_URL: str = os.getenv("CANCEL_URL", "http://localhost:8000/cancel")
-
-    # Google Sheets
-    GOOGLE_SERVICE_ACCOUNT_JSON: str = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
-    SHEETS_SPREADSHEET_ID: str = os.getenv("SHEETS_SPREADSHEET_ID", "")
-    SHEETS_WORKSHEET_NAME: str = os.getenv("SHEETS_WORKSHEET_NAME", "")
-
-    # DB
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./data.db")
-
-    # Dev tools
-    DEV_WEBHOOK_TOKEN: str = os.getenv("DEV_WEBHOOK_TOKEN", "")  # es. pwr_9f2c0fbd82a1a4c7
+    APP_NAME: str = os.getenv("APP_NAME", "EccomiBook Backend")
+    APP_ENV: str = os.getenv("APP_ENV", "production")
+    OWNER_API_KEY: str = os.getenv("OWNER_API_KEY", "dev_owner_key")  # X-API-Key
 
 settings = Settings()
