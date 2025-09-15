@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles  # <<< AGGIUNTO
 from pathlib import Path
 
 from .settings import get_settings
@@ -15,6 +16,10 @@ app = FastAPI(
     openapi_url="/openapi.json",
     docs_url="/",
 )
+
+# <<< AGGIUNTO: monta i PDF generati
+Path("storage/chapters").mkdir(parents=True, exist_ok=True)
+app.mount("/static/chapters", StaticFiles(directory="storage/chapters"), name="chapters")
 
 # CORS (aperto: adatta se vuoi restringere)
 app.add_middleware(
