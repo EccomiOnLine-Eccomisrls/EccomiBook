@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Header, HTTPException, Request, Body, Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from ..models import BookCreate, ChapterCreate, BookOut, ChapterOut
 from ..settings import get_settings
-from .. import storage
 
 router = APIRouter()
 
@@ -14,17 +13,13 @@ def _auth_or_403(x_api_key: str | None):
         raise HTTPException(status_code=403, detail="Chiave API non valida")
 
 
-@router.get("/books", summary="List Books", response_model=list[BookOut])
+@router.get("/books", summary="List Books", response_model=List[BookOut])
 def list_books(request: Request):
     books: Dict[str, Dict[str, Any]] = request.app.state.books
     return [BookOut(**b) for b in books.values()]
 
 
-@router.post(
-    "/books",
-    summary="Create Book",
-    response_model=BookOut,
-)
+@router.post("/books", summary="Create Book", response_model=BookOut)
 def create_book(
     request: Request,
     payload: BookCreate = Body(...),
@@ -33,7 +28,7 @@ def create_book(
     _auth_or_403(x_api_key)
     books: Dict[str, Dict[str, Any]] = request.app.state.books
 
-    # ID semplice
+    # ID incrementale semplice
     request.app.state.counters["books"] += 1
     num = request.app.state.counters["books"]
     book_id = f"book_{num:07x}"
@@ -45,6 +40,7 @@ def create_book(
         "language": payload.language,
         "genre": payload.genre,
         "description": payload.description,
+        "abstract": payload.abstract or None,
         "plan": payload.plan,
         "chapters": [],
     }
@@ -68,7 +64,6 @@ def add_chapter(
     if book_id not in books:
         raise HTTPException(status_code=404, detail="Libro non trovato")
 
-    # id capitolo
     idx = len(books[book_id]["chapters"]) + 1
     ch_id = f"ch_{idx:08x}"
 
