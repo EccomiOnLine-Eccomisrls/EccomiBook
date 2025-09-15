@@ -1,133 +1,62 @@
-from fastapi import FastAPI, HTTPException, Request, Query
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-import os, time
+from pathlib import Path
 
-from apps.backend.app import storage
+from .settings import get_settings
+from . import storage
+from .routers import books as books_router
+from .routers import generate as generate_router
+from .routers import auth as auth_router
 
-app = FastAPI(title="EccomiBook Backend")
+app = FastAPI(
+    title="EccomiBook Backend",
+    version="0.1.0",
+    openapi_url="/openapi.json",
+    docs_url="/",
+)
 
+# CORS (aperto: adatta se vuoi restringere)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # restringi in prod
-    allow_credentials=True,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ---------- Startup ----------
+
 @app.on_event("startup")
-def on_startup():
+def on_startup() -> None:
+    # directory persistente/sicura per i file export
     storage.ensure_dirs()
-    print(f"✅ APP STARTED | ENV: {os.getenv('APP_ENV','production')} | STORAGE_DIR={storage.DEFAULT_DIR}")
+    # piccolo DB in memoria
+    app.state.books = {}  # {book_id: {...}}
+    # plan counters ecc. se serviranno
+    app.state.counters = {"books": 0}
+    settings = get_settings()
+    print(f"✅ APP STARTED | ENV: {settings.environment}")
 
-# ---------- Health & Root ----------
-@app.get("/")
-def root():
-    return {"message": "EccomiBook Backend"}
 
-@app.get("/health")
+@app.get("/health", tags=["default"])
 def health():
-    try:
-        storage.ensure_dirs()
-        ok = True
-    except Exception as e:
-        ok = False
-    return {"status": "ok" if ok else "degraded", "env": os.getenv("APP_ENV","production"), "service": "EccomiBook Backend"}
+    return {"ok": True}
 
-# ---------- Schemi ----------
-class BookCreate(BaseModel):
-    title: str
-    topic: Optional[str] = ""
-    genre: Optional[str] = ""
-    language: Optional[str] = "it"
 
-class ChapterCreate(BaseModel):
-    title: str
-    prompt: Optional[str] = ""
-    outline: Optional[str] = ""
-    text: Optional[str] = ""   # opzionale: se vuoto, ne mettiamo uno placeholder
+@app.get("/test", tags=["default"])
+def test_page():
+    return {"ok": True, "msg": "test"}
 
-# ---------- Books ----------
-@app.get("/books")
-def list_books():
-    return storage.list_books()
 
-@app.post("/books")
-def create_book(body: BookCreate):
-    book = storage.create_book(
-        title=body.title,
-        topic=body.topic or "",
-        genre=body.genre or "",
-        language=body.language or "it",
-    )
-    return {"ok": True, "book": book}
-
-@app.get("/books/{book_id}")
-def get_book(book_id: str):
-    book = storage.get_book(book_id)
-    if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
-    return book
-
-# ---------- Chapters ----------
-@app.get("/books/{book_id}/chapters")
-def list_book_chapters(book_id: str):
-    try:
-        chapters = storage.list_chapters(book_id)
-        return {"book_id": book_id, "chapters": chapters}
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Book not found")
-
-@app.post("/books/{book_id}/chapters")
-def add_chapter(book_id: str, body: ChapterCreate):
-    try:
-        ch = storage.add_chapter(
-            book_id=book_id,
-            title=body.title,
-            prompt=body.prompt or "",
-            outline=body.outline or "",
-            text=body.text or "",
-        )
-        return {"ok": True, "book_id": book_id, "chapter": ch}
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Book not found")
-
-@app.get("/books/{book_id}/chapters/{chapter_id}")
-def get_chapter(book_id: str, chapter_id: str):
-    ch = storage.get_chapter(book_id, chapter_id)
-    if not ch:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-    return ch
-
-# ---------- Export ----------
-@app.post("/generate/export/book/{book_id}")
-def generate_export(book_id: str, format: str = Query("pdf", pattern="^(pdf)$")):
-    book = storage.get_book(book_id)
-    if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
-
-    if format != "pdf":
-        raise HTTPException(status_code=400, detail="Only pdf is supported right now")
-
-    path = storage.generate_pdf_for_book(book)
-    filename = os.path.basename(path)
-    url = f"/downloads/{filename}"
-    return {
-        "ok": True,
-        "book_id": book_id,
-        "format": format,
-        "file_name": filename,
-        "url": url,
-        "chapters": len(book.get("chapters", [])),
-        "generated_at": int(time.time()),
-    }
-
-@app.get("/downloads/{filename}")
-def downloads(filename: str):
-    p = storage.exported_file_path(filename)
-    if not p:
+# Download file esportati
+@app.get("/downloads/{filename}", tags=["default"], summary="Download File")
+def download_file(filename: str):
+    file_path = storage.file_path(filename)
+    if not file_path.exists():
         raise HTTPException(status_code=404, detail="File non trovato")
-    return FileResponse(p, media_type="application/pdf", filename=filename)
+    return FileResponse(file_path)
+
+
+# Routers
+app.include_router(auth_router.router, tags=["default"])      # solo per header spec
+app.include_router(books_router.router, tags=["default"])     # /books, /books/{id}/chapters
+app.include_router(generate_router.router, tags=["default"])  # /generate/chapter, /generate/export/book/{id}
