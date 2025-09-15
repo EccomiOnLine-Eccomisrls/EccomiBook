@@ -1,27 +1,40 @@
-# app/storage.py
-from __future__ import annotations
-from typing import Dict, Any, List
-from datetime import datetime
-import uuid
+from datetime import date
+from collections import defaultdict
 
-# ATTENZIONE: in-memory → si azzera a ogni deploy/restart.
-DB: Dict[str, Any] = {
-    "books": {},        # book_id -> book dict
-    "chapters": {},     # chap_id -> chapter dict
-    "limits": {},       # api_key -> contatori giornalieri
-}
+# user -> (yyyymm -> n_books)
+_books_month_counter = defaultdict(int)
+_books_month_bucket  = defaultdict(lambda: date.today().strftime("%Y%m"))
 
+# user -> (yyyymmdd -> n_chapters)
+_chapters_day_counter = defaultdict(int)
+_chapters_day_bucket  = defaultdict(lambda: date.today().strftime("%Y%m%d"))
 
-def new_id(prefix: str) -> str:
-    return f"{prefix}_{uuid.uuid4().hex[:12]}"
+def inc_book(user_id: str) -> int:
+    key_bucket = _books_month_bucket[user_id]
+    today_bucket = date.today().strftime("%Y%m")
+    if key_bucket != today_bucket:
+        _books_month_bucket[user_id] = today_bucket
+        _books_month_counter[user_id] = 0
+    _books_month_counter[user_id] += 1
+    return _books_month_counter[user_id]
 
+def get_books_this_month(user_id: str) -> int:
+    key_bucket = _books_month_bucket[user_id]
+    if key_bucket != date.today().strftime("%Y%m"):
+        return 0
+    return _books_month_counter[user_id]
 
-def now_iso() -> str:
-    return datetime.utcnow().isoformat(timespec="seconds") + "Z"
+def inc_chapter(user_id: str) -> int:
+    key_bucket = _chapters_day_bucket[user_id]
+    today_bucket = date.today().strftime("%Y%m%d")
+    if key_bucket != today_bucket:
+        _chapters_day_bucket[user_id] = today_bucket
+        _chapters_day_counter[user_id] = 0
+    _chapters_day_counter[user_id] += 1
+    return _chapters_day_counter[user_id]
 
-
-def reset_daily_if_needed(counter: dict):
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    if counter.get("date") != today:
-        counter["date"] = today
-        counter["chapters_today"] = 0
+def get_chapters_today(user_id: str) -> int:
+    key_bucket = _chapters_day_bucket[user_id]
+    if key_bucket != date.today().strftime("%Y%m%d"):
+        return 0
+    return _chapters_day_counter[user_id]
