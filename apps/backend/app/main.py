@@ -1,41 +1,43 @@
-from fastapi import FastAPI, Request, HTTPException
+# app/main.py
+from fastapi import FastAPI, Depends, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse
+
 from app.settings import settings
-from app.routers import books as books_router
-import os
+from app.models import Plan
+from app.routers import books, generate
+
 
 app = FastAPI(title=settings.APP_NAME)
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
-    allow_methods=["*"], allow_headers=["*"],
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# --- API-Key very light (solo per rotte /v1/*) ---
-@app.middleware("http")
-async def api_key_guard(request: Request, call_next):
-    if request.url.path.startswith("/v1/"):
-        expected = settings.OWNER_API_KEY.strip()
-        if expected:
-            provided = request.headers.get("X-API-Key", "").strip()
-            if provided != expected:
-                raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
-    return await call_next(request)
+
+# --- Auth owner per endpoint admin futuri ---
+def require_owner(x_api_key: str | None = Header(default=None, alias="X-API-Key")):
+    if not settings.OWNER_API_KEY:
+        raise HTTPException(status_code=500, detail="OWNER_API_KEY non configurato")
+    if x_api_key != settings.OWNER_API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized (owner)")
+    return True
+
 
 @app.get("/")
 def root():
-    return {"message": "EccomiBook – core API attive ✨", "docs": "/docs"}
+    return {"message": "EccomiBook Backend"}
+
 
 @app.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "env": settings.APP_ENV,
-        "storage_dir": settings.DATA_DIR,
-    }
+    return {"status": "ok", "env": settings.APP_ENV, "service": settings.APP_NAME}
 
-# Routers (tutto il programma vive sotto /v1)
-app.include_router(books_router.router, prefix="/v1", tags=["books"])
+
+# Routers core
+app.include_router(books.router)
+app.include_router(generate.router)
