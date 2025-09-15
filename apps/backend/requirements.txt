@@ -1,6 +1,7 @@
 fastapi>=0.110
 uvicorn[standard]>=0.22
 pydantic>=2.8
+pydantic-settings>=2.4
 python-dotenv
 requests
 reportlab
