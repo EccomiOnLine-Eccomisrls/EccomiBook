@@ -1,26 +1,51 @@
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import Literal, Optional
 
 
-class ChapterCreate(BaseModel):
-    title: str
-    outline: str
-    prompt: Optional[str] = None
-
-
-class ChapterOut(ChapterCreate):
-    id: str
+Plan = Literal["start", "growth", "pro", "owner_full"]
 
 
 class BookCreate(BaseModel):
     title: str
-    author: Optional[str] = None
-    language: Optional[str] = "it"
-    genre: Optional[str] = None
-    description: Optional[str] = None
+    author: str
+    language: str
+    genre: str
+    description: str = ""
+    plan: Plan = "owner_full"
 
 
-class BookOut(BookCreate):
+class ChapterCreate(BaseModel):
+    title: str
+    prompt: str
+    outline: Optional[str] = None
+
+
+class BookOut(BaseModel):
     id: str
-    plan: str
-    chapters: List[ChapterOut] = []
+    title: str
+    author: str
+    language: str
+    genre: str
+    description: str = ""
+    plan: Plan = "owner_full"
+    chapters: list["ChapterOut"] = []
+
+
+class ChapterOut(BaseModel):
+    id: str
+    title: str
+    prompt: str | None = None
+    outline: str | None = None
+
+
+class GenChapterIn(BaseModel):
+    title: str = Field(..., description="Titolo del capitolo")
+    prompt: str | None = Field(default=None, description="Prompt testuale")
+    outline: str | None = Field(default=None, description="Outline riassuntiva")
+    book_id: str | None = Field(default=None, description="Se presente, aggiunge il capitolo al libro")
+
+
+class GenChapterOut(BaseModel):
+    chapter_id: str | None
+    title: str
+    content: str
