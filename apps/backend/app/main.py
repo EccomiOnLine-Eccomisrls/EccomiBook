@@ -6,9 +6,10 @@ from reportlab.pdfgen import canvas
 
 app = FastAPI()
 
-# --- memoria in RAM ---
+# --- Memoria temporanea in RAM ---
 books = {}
 
+# Schemi dati
 class BookCreate(BaseModel):
     title: str
     author: str
@@ -20,6 +21,7 @@ class ChapterCreate(BaseModel):
     title: str
     content: str
 
+# --- Endpoint ---
 @app.post("/books")
 def create_book(book: BookCreate):
     book_id = f"book_{len(books)+1}"
@@ -39,7 +41,7 @@ def export_book(book_id: str, format: str = "pdf"):
     if book_id not in books:
         raise HTTPException(404, "Libro non trovato")
 
-    # Percorso file
+    # Percorso file (Render consente /tmp)
     file_name = f"{book_id}.pdf"
     file_path = f"/tmp/{file_name}"
 
@@ -57,7 +59,7 @@ def export_book(book_id: str, format: str = "pdf"):
         y -= 40
     c.save()
 
-    # URL pubblico (endpoint sotto)
+    # URL di download (serve sotto)
     url = f"https://eccomibook-backend.onrender.com/downloads/{file_name}"
 
     return {
