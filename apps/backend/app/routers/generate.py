@@ -19,6 +19,10 @@ def _auth_or_403(x_api_key: str | None):
         raise HTTPException(status_code=403, detail="Chiave API non valida")
 
 
+# -------------------------------
+# Helpers: capitolo singolo (PDF)
+# -------------------------------
+
 def _draw_footer_page_number(c: canvas.Canvas, page_num: int, left_margin: float, bottom_margin: float):
     """Scrive il numero pagina nel footer (es. 'Pag. 1')."""
     footer_text = f"Pag. {page_num}"
@@ -99,6 +103,76 @@ def _render_chapter_pdf(
     c.save()
 
 
+# --------------------------------------
+# Helpers: export libro intero (unico PDF)
+# --------------------------------------
+
+def _render_book_pdf(
+    output_path: Path,
+    *,
+    book_title: str,
+    author: str | None,
+    chapters: list[dict],
+):
+    """Crea un PDF libro unico con pagina titolo e capitoli (usa outline o prompt come contenuto)."""
+    width, height = A4
+    left_margin = 2.2 * cm
+    right_margin = 2.2 * cm
+    top_margin = 2.2 * cm
+    bottom_margin = 2.2 * cm
+    line_h = 14
+
+    c = canvas.Canvas(str(output_path), pagesize=A4)
+
+    # --- Pagina del titolo ---
+    c.setFont("Helvetica-Bold", 22)
+    c.drawCentredString(width / 2, height - 5 * cm, book_title)
+    if author:
+        c.setFont("Helvetica-Oblique", 14)
+        c.drawCentredString(width / 2, height - 6 * cm, f"di {author}")
+    c.showPage()
+
+    # --- Capitoli ---
+    for ch in chapters:
+        title = (ch.get("title") or "").strip() or "Capitolo"
+        content = (ch.get("outline") or ch.get("prompt") or "").strip() or "(contenuto non disponibile)"
+
+        # Titolo capitolo
+        y = height - top_margin
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(left_margin, y, title)
+        y -= 0.8 * cm
+
+        # Corpo
+        c.setFont("Helvetica", 12)
+        lines = []
+        for para in content.split("\n"):
+            para = para.strip()
+            if not para:
+                lines.append("")
+                continue
+            lines.extend(wrap(para, width=95))
+
+        for line in lines:
+            if y <= bottom_margin:
+                c.showPage()
+                y = height - top_margin
+                c.setFont("Helvetica", 12)
+            if line == "":
+                y -= line_h
+            else:
+                c.drawString(left_margin, y, line)
+                y -= line_h
+
+        c.showPage()
+
+    c.save()
+
+
+# -------------------------------
+# Routes
+# -------------------------------
+
 @router.post(
     "/generate/chapter",
     summary="Generate Chapter",
@@ -147,3 +221,59 @@ def generate_chapter(
         page_numbers=bool(payload.page_numbers),
         pdf_url=pdf_url,
     )
+
+
+@router.post(
+    "/generate/export/book/{book_id}",
+    summary="Export entire book as a single PDF",
+    tags=["default"],
+)
+def export_book_pdf(
+    request: Request,
+    book_id: str,
+    x_api_key: str | None = Header(default=None),
+):
+    _auth_or_403(x_api_key)
+
+    # Recupera libro dal piccolo DB in memoria
+    app_state = request.app.state
+    books_db = getattr(app_state, "books", {})
+    book = books_db.get(book_id)
+
+    if not book:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+
+    # Estraggo dati minimi
+    book_title = book.get("title") or f"Libro {book_id}"
+    author = book.get("author")
+    chapters = book.get("chapters") or []  # atteso elenco di dict con title/prompt/outline
+
+    if not chapters:
+        raise HTTPException(status_code=400, detail="Nessun capitolo presente nel libro")
+
+    # Path export
+    books_dir = Path("storage") / "books"
+    books_dir.mkdir(parents=True, exist_ok=True)
+    pdf_filename = f"{book_id}.pdf"
+    pdf_path = books_dir / pdf_filename
+
+    # Render PDF unico
+    _render_book_pdf(
+        pdf_path,
+        book_title=book_title,
+        author=author,
+        chapters=chapters,
+    )
+
+    # Link di download tramite la route /downloads/{filename}
+    # NB: la tua /downloads/{filename} usa storage.file_path(filename),
+    # quindi passiamo "books/<file>.pdf" come 'filename' dinamico.
+    download_url = f"/downloads/books/{pdf_filename}"
+
+    return {
+        "book_id": book_id,
+        "title": book_title,
+        "author": author,
+        "chapters_count": len(chapters),
+        "download_url": download_url,
+    }
