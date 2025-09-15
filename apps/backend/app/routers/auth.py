@@ -1,13 +1,19 @@
-# app/routers/auth.py
-from fastapi import Depends, Header
-from ..settings import settings
-from ..models import Plan
+from fastapi import APIRouter, Header
+from ..settings import get_settings
 
-class UserCtx:
-    def __init__(self, plan: Plan):
-        self.plan = plan
+router = APIRouter()
 
-def get_current_user(x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> UserCtx:
-    if x_api_key and x_api_key == settings.OWNER_API_KEY:
-        return UserCtx(plan=Plan.OWNER_FULL)
-    return UserCtx(plan=Plan.START)
+
+@router.get("/health", include_in_schema=False)
+def _health_alias():
+    return {"ok": True}
+
+
+@router.get("/root", include_in_schema=False)
+def _root_alias():
+    return {"ok": True}
+
+
+@router.get("/_whoami", summary="Test Page")
+def whoami(x_api_key: str | None = Header(default=None)):
+    return {"x_api_key": x_api_key, "expected": get_settings().x_api_key}
