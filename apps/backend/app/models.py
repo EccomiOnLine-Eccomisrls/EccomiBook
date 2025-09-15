@@ -1,38 +1,29 @@
+from pydantic import BaseModel, Field
+from typing import List, Optional
 from enum import Enum
 
 class Plan(str, Enum):
     OWNER_FULL = "owner_full"
-    START      = "start"
-    GROWTH     = "growth"
     PRO        = "pro"
+    GROWTH     = "growth"
+    START      = "start"
 
-PLAN_CAPS = {
-    Plan.OWNER_FULL: dict(
-        max_books_per_month=None,     # illimitati
-        max_chapters_per_day=None,    # illimitati
-        images_hd=True,
-        export_pdf=True, export_epub=True, export_docx=True,
-        priority="highest",
-    ),
-    Plan.START: dict(
-        max_books_per_month=1,
-        max_chapters_per_day=10,
-        images_hd=False,
-        export_pdf=True, export_epub=False, export_docx=False,
-        priority="normal",
-    ),
-    Plan.GROWTH: dict(
-        max_books_per_month=5,
-        max_chapters_per_day=50,
-        images_hd=True,
-        export_pdf=True, export_epub=True, export_docx=False,
-        priority="high",
-    ),
-    Plan.PRO: dict(
-        max_books_per_month=None,     # “Illimitati”
-        max_chapters_per_day=200,
-        images_hd=True,
-        export_pdf=True, export_epub=True, export_docx=True,
-        priority="max",
-    ),
-}
+class ChapterCreate(BaseModel):
+    title: str = Field(..., description="Titolo del capitolo")
+    outline: str = Field("", description="Breve outline/indice del capitolo")
+    prompt: str = Field(..., description="Prompt per la generazione del capitolo")
+
+class ChapterOut(ChapterCreate):
+    id: str
+
+class BookCreate(BaseModel):
+    title: str
+    author: str = "Eccomi Online"
+    language: str = "it"
+    genre: str = "Saggio"
+    description: str = ""
+
+class BookOut(BookCreate):
+    id: str
+    plan: Plan
+    chapters: List[ChapterOut] = []
