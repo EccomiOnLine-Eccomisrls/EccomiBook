@@ -3,6 +3,4 @@ uvicorn[standard]>=0.22
 pydantic>=2.8
 python-dotenv
 requests
-stripe
-gspread
-google-auth
+reportlab
