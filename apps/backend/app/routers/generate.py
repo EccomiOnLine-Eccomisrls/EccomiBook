@@ -1,17 +1,16 @@
-from fastapi import APIRouter, Header, HTTPException, Request, Body, Query
-from typing import Dict, Any, Literal, List
+# apps/backend/routes/generate.py (estratto)
+from fastapi import APIRouter, Header, HTTPException, Request, Body
 from pathlib import Path
-import time
-
-# reportlab (impaginazione con Paragraph per evitare frasi spezzate)
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from textwrap import wrap
+import time
+import uuid
 
 from ..models import GenChapterIn, GenChapterOut
 from ..settings import get_settings
-from .. import storage
+from .. import storage  # se non lo usi, puoi rimuoverlo
 
 router = APIRouter()
 
@@ -22,7 +21,98 @@ def _auth_or_403(x_api_key: str | None):
         raise HTTPException(status_code=403, detail="Chiave API non valida")
 
 
-@router.post("/generate/chapter", summary="Generate Chapter", response_model=GenChapterOut)
+def _draw_footer_page_number(c: canvas.Canvas, page_num: int, left_margin: float, bottom_margin: float):
+    """Scrive il numero pagina nel footer (es. 'Pag. 1')."""
+    footer_text = f"Pag. {page_num}"
+    c.setFont("Helvetica", 9)
+    c.drawString(left_margin, bottom_margin - 0.5 * cm, footer_text)
+
+
+def _render_chapter_pdf(
+    output_path: Path,
+    *,
+    title: str,
+    content: str,
+    abstract: str | None,
+    page_numbers: bool,
+):
+    """Crea un PDF A4 con titolo, (eventuale) abstract e contenuto con word-wrap & salto pagina."""
+    width, height = A4
+    left_margin = 2.2 * cm
+    right_margin = 2.2 * cm
+    top_margin = 2.2 * cm
+    bottom_margin = 2.2 * cm
+
+    usable_width = width - left_margin - right_margin
+    line_height_title = 16
+    line_height_body = 13
+
+    c = canvas.Canvas(str(output_path), pagesize=A4)
+
+    page_num = 1
+
+    # --- Header: Titolo ---
+    y = height - top_margin
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(left_margin, y, title)
+    y -= 1.0 * cm  # spazio dopo titolo
+
+    # --- Abstract (opzionale) ---
+    if abstract:
+        c.setFont("Helvetica-Oblique", 11)
+        abstract_lines = wrap(abstract, width=90)  # wrap "blando" per corsivo
+        for line in abstract_lines:
+            if y <= bottom_margin:
+                if page_numbers:
+                    _draw_footer_page_number(c, page_num, left_margin, bottom_margin)
+                c.showPage()
+                page_num += 1
+                y = height - top_margin
+                c.setFont("Helvetica-Oblique", 11)
+            c.drawString(left_margin, y, line)
+            y -= line_height_body
+        # separatore
+        y -= 0.5 * cm
+
+    # --- Contenuto ---
+    c.setFont("Helvetica", 12)
+
+    # Wrap del contenuto su una larghezza ragionevole (approssimazione monospace)
+    # Per maggiore precisione potresti misurare con stringWidth, ma per MVP va bene.
+    body_lines = []
+    for para in content.split("\n"):
+        para = para.strip()
+        if not para:
+            body_lines.append("")  # riga vuota
+            continue
+        body_lines.extend(wrap(para, width=95))  # ~95 char per riga a Helvetica 12 su A4 con margini dati
+
+    for line in body_lines:
+        if y <= bottom_margin:
+            if page_numbers:
+                _draw_footer_page_number(c, page_num, left_margin, bottom_margin)
+            c.showPage()
+            page_num += 1
+            y = height - top_margin
+            c.setFont("Helvetica", 12)
+        if line == "":
+            y -= line_height_body  # riga vuota = salto
+        else:
+            c.drawString(left_margin, y, line)
+            y -= line_height_body
+
+    # footer ultima pagina
+    if page_numbers:
+        _draw_footer_page_number(c, page_num, left_margin, bottom_margin)
+
+    c.save()
+
+
+@router.post(
+    "/generate/chapter",
+    summary="Generate Chapter",
+    response_model=GenChapterOut,
+)
 def generate_chapter(
     request: Request,
     payload: GenChapterIn = Body(...),
@@ -30,128 +120,42 @@ def generate_chapter(
 ):
     _auth_or_403(x_api_key)
 
-    # mock “AI”: crea testo semplice usando prompt/outline
-    txt_lines: List[str] = []
-    txt_lines.append(f"# {payload.title}".strip())
-    if payload.outline:
-        txt_lines.append("")
-        txt_lines.append(f"Outline: {payload.outline}")
-    if payload.prompt:
-        txt_lines.append("")
-        txt_lines.append(payload.prompt)
+    # 1) Recupero input
+    title = payload.title
+    # Se non hai ancora la generazione AI del contenuto, usa outline/prompt come base.
+    base_content = payload.outline or payload.prompt or ""
+    if not base_content:
+        base_content = "Contenuto capitolo non fornito. (MVP placeholder)"
 
-    content = "\n".join(txt_lines)
+    # Abstract: lo prendiamo dall'input se c’è; in alternativa potresti generarlo.
+    abstract = payload.abstract
 
-    # opzionale: allega al libro
-    if payload.book_id:
-        books: Dict[str, Dict[str, Any]] = request.app.state.books
-        book_id = payload.book_id
-        if book_id not in books:
-            raise HTTPException(status_code=404, detail="Libro non trovato")
-        idx = len(books[book_id]["chapters"]) + 1
-        ch_id = f"ch_{idx:08x}"
-        books[book_id]["chapters"].append(
-            {"id": ch_id, "title": payload.title, "prompt": payload.prompt or "", "outline": payload.outline or ""}
-        )
-        return GenChapterOut(chapter_id=ch_id, title=payload.title, content=content)
+    # 2) ID & path PDF
+    chapter_id = f"ch_{uuid.uuid4().hex[:8]}"
+    output_dir = Path("storage") / "chapters"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    pdf_path = output_dir / f"{chapter_id}.pdf"
 
-    return GenChapterOut(chapter_id=None, title=payload.title, content=content)
+    # 3) Render PDF con numerazione on/off
+    _render_chapter_pdf(
+        pdf_path,
+        title=title,
+        content=base_content,
+        abstract=abstract,
+        page_numbers=bool(payload.page_numbers),
+    )
 
+    # 4) URL pubblico/servito
+    # Adatta questa logica alla tua infrastruttura (Nginx/StaticFiles/Cloud storage).
+    # Se già esiste un tuo modulo `storage`, puoi salvarlo lì e ottenere l’URL.
+    # Per MVP locale:
+    pdf_url = f"/static/chapters/{chapter_id}.pdf"  # esponi 'storage/chapters' come /static/chapters
 
-@router.get("/generate/export/book/{book_id}", summary="Export Book")
-def export_book(
-    request: Request,
-    book_id: str,
-    format: Literal["pdf", "docx", "epub"] = Query("pdf"),
-    page_numbers: bool = Query(True, description="Se True aggiunge la numerazione di pagina"),
-    x_api_key: str | None = Header(default=None),
-):
-    """
-    Genera un file del libro (PDF reale; DOCX/EPUB placeholder per MVP).
-    - Niente frasi spezzate: il testo è unito e impaginato con Paragraph.
-    - Abstract opzionale se presente nel libro.
-    - Numeri di pagina facoltativi (page_numbers=true/false).
-    """
-    _auth_or_403(x_api_key)
-    books: Dict[str, Dict[str, Any]] = request.app.state.books
-    if book_id not in books:
-        raise HTTPException(status_code=404, detail="Libro non trovato")
-
-    book = books[book_id]
-    filename = f"{book_id}.{format}"
-
-    if format == "pdf":
-        out_path: Path = storage.file_path(filename)
-
-        doc = SimpleDocTemplate(
-            str(out_path),
-            pagesize=A4,
-            leftMargin=2 * cm,
-            rightMargin=2 * cm,
-            topMargin=2 * cm,
-            bottomMargin=2 * cm,
-            title=book["title"],
-            author=book["author"],
-        )
-
-        styles = getSampleStyleSheet()
-        styles.add(ParagraphStyle(name="TitleBig", parent=styles["Title"], fontSize=20, leading=24, spaceAfter=8))
-        styles.add(ParagraphStyle(name="Meta", parent=styles["Normal"], fontSize=9, textColor="#444444", spaceAfter=14))
-        styles.add(ParagraphStyle(name="H1", parent=styles["Heading1"], fontSize=14, leading=18, spaceBefore=12, spaceAfter=6))
-        styles.add(ParagraphStyle(name="Body", parent=styles["Normal"], fontSize=11, leading=15))
-
-        def _number_canvas(canv, doc_):
-            canv.saveState()
-            canv.setFont("Helvetica", 9)
-            canv.drawRightString(A4[0] - 2 * cm, 1.2 * cm, f"{doc_.page}")
-            canv.restoreState()
-
-        story: List = []
-        # Titolo
-        story.append(Paragraph(book["title"], styles["TitleBig"]))
-        meta = f"Autore: {book['author']}  •  Lingua: {book['language']}  •  Genere: {book['genre']}"
-        story.append(Paragraph(meta, styles["Meta"]))
-
-        # Abstract (se presente)
-        abstract = (book.get("abstract") or "").strip()
-        if abstract:
-            story.append(Paragraph("<b>Abstract</b>", styles["H1"]))
-            story.append(Paragraph(abstract.replace("\n", "<br/>"), styles["Body"]))
-            story.append(Spacer(1, 12))
-
-        # Descrizione (se diversa da abstract)
-        descr = (book.get("description") or "").strip()
-        if descr and descr != abstract:
-            story.append(Paragraph("<b>Descrizione</b>", styles["H1"]))
-            story.append(Paragraph(descr.replace("\n", "<br/>"), styles["Body"]))
-            story.append(Spacer(1, 12))
-
-        # Capitoli
-        for i, ch in enumerate(book.get("chapters", []), start=1):
-            title = ch.get("title") or f"Capitolo {i}"
-            body = (ch.get("outline") or ch.get("prompt") or "").strip()
-
-            story.append(Paragraph(f"{i}. {title}", styles["H1"]))
-            if body:
-                story.append(Paragraph(body.replace("\n", "<br/>"), styles["Body"]))
-            story.append(Spacer(1, 10))
-
-        if page_numbers:
-            doc.build(story, onFirstPage=_number_canvas, onLaterPages=_number_canvas)
-        else:
-            doc.build(story)
-
-    else:
-        # placeholder per mvp
-        storage.file_path(filename).write_text(f"{format.upper()} export placeholder for {book_id}\n")
-
-    url = storage.public_url(filename)
-    return {
-        "ok": True,
-        "book_id": book_id,
-        "format": format,
-        "file_name": filename,
-        "url": url,
-        "chapters": len(book.get("chapters", [])),
-        "generated_at": int(time.time()),
-    }
+    # 5) Output coerente con lo schema
+    return GenChapterOut(
+        chapter_id=chapter_id,
+        title=title,
+        content=base_content,
+        abstract=abstract,
+        page_numbers=bool(payload.page_numbers),
+    )
