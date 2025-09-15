@@ -1,11 +1,9 @@
-# apps/backend/routes/generate.py (estratto)
 from fastapi import APIRouter, Header, HTTPException, Request, Body
 from pathlib import Path
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
 from textwrap import wrap
-import time
 import uuid
 
 from ..models import GenChapterIn, GenChapterOut
@@ -43,8 +41,6 @@ def _render_chapter_pdf(
     top_margin = 2.2 * cm
     bottom_margin = 2.2 * cm
 
-    usable_width = width - left_margin - right_margin
-    line_height_title = 16
     line_height_body = 13
 
     c = canvas.Canvas(str(output_path), pagesize=A4)
@@ -60,7 +56,7 @@ def _render_chapter_pdf(
     # --- Abstract (opzionale) ---
     if abstract:
         c.setFont("Helvetica-Oblique", 11)
-        abstract_lines = wrap(abstract, width=90)  # wrap "blando" per corsivo
+        abstract_lines = wrap(abstract, width=90)
         for line in abstract_lines:
             if y <= bottom_margin:
                 if page_numbers:
@@ -71,21 +67,17 @@ def _render_chapter_pdf(
                 c.setFont("Helvetica-Oblique", 11)
             c.drawString(left_margin, y, line)
             y -= line_height_body
-        # separatore
         y -= 0.5 * cm
 
     # --- Contenuto ---
     c.setFont("Helvetica", 12)
-
-    # Wrap del contenuto su una larghezza ragionevole (approssimazione monospace)
-    # Per maggiore precisione potresti misurare con stringWidth, ma per MVP va bene.
     body_lines = []
     for para in content.split("\n"):
         para = para.strip()
         if not para:
-            body_lines.append("")  # riga vuota
+            body_lines.append("")
             continue
-        body_lines.extend(wrap(para, width=95))  # ~95 char per riga a Helvetica 12 su A4 con margini dati
+        body_lines.extend(wrap(para, width=95))
 
     for line in body_lines:
         if y <= bottom_margin:
@@ -96,12 +88,11 @@ def _render_chapter_pdf(
             y = height - top_margin
             c.setFont("Helvetica", 12)
         if line == "":
-            y -= line_height_body  # riga vuota = salto
+            y -= line_height_body
         else:
             c.drawString(left_margin, y, line)
             y -= line_height_body
 
-    # footer ultima pagina
     if page_numbers:
         _draw_footer_page_number(c, page_num, left_margin, bottom_margin)
 
@@ -122,12 +113,10 @@ def generate_chapter(
 
     # 1) Recupero input
     title = payload.title
-    # Se non hai ancora la generazione AI del contenuto, usa outline/prompt come base.
     base_content = payload.outline or payload.prompt or ""
     if not base_content:
         base_content = "Contenuto capitolo non fornito. (MVP placeholder)"
 
-    # Abstract: lo prendiamo dall'input se c’è; in alternativa potresti generarlo.
     abstract = payload.abstract
 
     # 2) ID & path PDF
@@ -136,7 +125,7 @@ def generate_chapter(
     output_dir.mkdir(parents=True, exist_ok=True)
     pdf_path = output_dir / f"{chapter_id}.pdf"
 
-    # 3) Render PDF con numerazione on/off
+    # 3) Render PDF
     _render_chapter_pdf(
         pdf_path,
         title=title,
@@ -145,18 +134,16 @@ def generate_chapter(
         page_numbers=bool(payload.page_numbers),
     )
 
-    # 4) URL pubblico/servito
-    # Adatta questa logica alla tua infrastruttura (Nginx/StaticFiles/Cloud storage).
-    # Se già esiste un tuo modulo `storage`, puoi salvarlo lì e ottenere l’URL.
-    # Per MVP locale:
-    pdf_url = f"/static/chapters/{chapter_id}.pdf"  # esponi 'storage/chapters' come /static/chapters
+    # 4) URL pubblico/servito (assoluto)
+    base_url = str(request.base_url).rstrip("/")
+    pdf_url = f"{base_url}/static/chapters/{chapter_id}.pdf"
 
-    # 5) Output coerente con lo schema (incluso link al PDF)
-return GenChapterOut(
-    chapter_id=chapter_id,
-    title=title,
-    content=base_content,
-    abstract=abstract,
-    page_numbers=bool(payload.page_numbers),
-    pdf_url=f"/static/chapters/{chapter_id}.pdf",
-)
+    # 5) Output coerente con lo schema
+    return GenChapterOut(
+        chapter_id=chapter_id,
+        title=title,
+        content=base_content,
+        abstract=abstract,
+        page_numbers=bool(payload.page_numbers),
+        pdf_url=pdf_url,
+    )
