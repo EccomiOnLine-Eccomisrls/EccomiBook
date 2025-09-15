@@ -53,16 +53,48 @@ class BookOut(BaseModel):
 # - page_numbers: abilita/disabilita la numerazione pagine nel PDF
 
 class GenChapterIn(BaseModel):
-    title: str = Field(..., description="Titolo del capitolo da generare", example="Capitolo 1: L’inizio")
-    prompt: Optional[str] = Field("", description="Brief per guidare la generazione del capitolo", example="Tono epico, introduce protagonista e setting.")
-    outline: Optional[str] = Field("", description="Outline opzionale del capitolo", example="1) Scena iniziale 2) Contrasto 3) Chiusura")
-    book_id: Optional[str] = Field(None, description="ID del libro a cui associare il capitolo (se esiste)", example="bk_987654")
-    abstract: Optional[str] = Field(None, description="Riassunto breve del capitolo (facoltativo)", example="Il protagonista scopre il richiamo all’avventura.")
+    title: str = Field(
+        ...,
+        description="Titolo del capitolo da generare",
+        example="Capitolo 1: L’inizio"
+    )
+    prompt: Optional[str] = Field(
+        "",
+        description="Brief per guidare la generazione del capitolo",
+        example="Racconta l’incipit della storia in tono avventuroso."
+    )
+    outline: Optional[str] = Field(
+        "",
+        description="Outline opzionale del capitolo",
+        example="1) Scena iniziale\n2) Piccolo conflitto\n3) Hook finale"
+    )
+    book_id: Optional[str] = Field(
+        None,
+        description="ID del libro a cui associare il capitolo (se esiste)",
+        example="bk_987654"
+    )
+    abstract: Optional[str] = Field(
+        None,
+        description="Riassunto breve del capitolo (facoltativo)",
+        example="Il protagonista sente la chiamata all’avventura."
+    )
     page_numbers: bool = Field(
         default=True,
         description="Se True, il PDF generato includerà la numerazione delle pagine",
         example=True
     )
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "title": "Capitolo 1: L’inizio",
+                "prompt": "Racconta l’incipit della storia in tono avventuroso.",
+                "outline": "1) Scena iniziale\n2) Piccolo conflitto\n3) Hook finale",
+                "book_id": "bk_987654",
+                "abstract": "Il protagonista sente la chiamata all’avventura.",
+                "page_numbers": True
+            }
+        }
 
 
 class GenChapterOut(BaseModel):
