@@ -1,72 +1,110 @@
-from fastapi import APIRouter, Depends, HTTPException, Path
-from typing import List
-from app.ai import (
-    current_caps,
-    ensure_can_create_book,
-    ensure_can_add_chapter,
+from fastapi import APIRouter, Header, HTTPException, Request, Body, Path
+from typing import Dict, Any
+
+from ..models import BookCreate, ChapterCreate, BookOut, ChapterOut
+from ..settings import get_settings
+from .. import storage
+
+router = APIRouter()
+
+
+def _auth_or_403(x_api_key: str | None):
+    settings = get_settings()
+    if settings.x_api_key and x_api_key != settings.x_api_key:
+        raise HTTPException(status_code=403, detail="Chiave API non valida")
+
+
+@router.get("/books", summary="List Books", response_model=list[BookOut])
+def list_books(request: Request):
+    books: Dict[str, Dict[str, Any]] = request.app.state.books
+    return [BookOut(**b) for b in books.values()]
+
+
+@router.post(
+    "/books",
+    summary="Create Book",
+    response_model=BookOut,
 )
-from app.models import BookCreate, BookOut, ChapterCreate, ChapterOut
-from app import storage
-
-router = APIRouter(prefix="", tags=["Books"])
-
-
-@router.get("/books", response_model=List[BookOut])
-def list_books():
-    """Elenco libri in memoria."""
-    return storage.list_books()
-
-
-@router.post("/books", response_model=BookOut)
-def create_book(body: BookCreate, caps=Depends(current_caps)):
-    """
-    Crea un nuovo libro.
-    - Applica i limiti del piano (libri/mese).
-    - Incrementa il contatore libri all’avvenuta creazione.
-    """
-    ensure_can_create_book(caps)
-    book = storage.create_book(body)
-    # contatore “consumo” piano
-    storage.inc_book(caps.user_id)
-    return book
-
-
-@router.post("/books/{book_id}/chapters", response_model=ChapterOut)
-def add_chapter(
-    book_id: str = Path(..., description="ID del libro"),
-    body: ChapterCreate = ...,
-    caps=Depends(current_caps),
+def create_book(
+    request: Request,
+    payload: BookCreate = Body(...),
+    x_api_key: str | None = Header(default=None),
 ):
-    """
-    Aggiunge un capitolo a un libro.
-    - Applica i limiti del piano (capitoli/giorno).
-    - Incrementa il contatore capitoli all’avvenuta creazione.
-    """
-    # verifica che il libro esista
-    if not storage.get_book(book_id):
+    _auth_or_403(x_api_key)
+    books: Dict[str, Dict[str, Any]] = request.app.state.books
+
+    # ID semplice
+    request.app.state.counters["books"] += 1
+    num = request.app.state.counters["books"]
+    book_id = f"book_{num:07x}"
+
+    book: Dict[str, Any] = {
+        "id": book_id,
+        "title": payload.title,
+        "author": payload.author,
+        "language": payload.language,
+        "genre": payload.genre,
+        "description": payload.description,
+        "plan": payload.plan,
+        "chapters": [],
+    }
+    books[book_id] = book
+    return BookOut(**book)
+
+
+@router.post(
+    "/books/{book_id}/chapters",
+    summary="Add Chapter",
+    response_model=ChapterOut,
+)
+def add_chapter(
+    request: Request,
+    book_id: str = Path(..., description="ID del libro"),
+    payload: ChapterCreate = Body(...),
+    x_api_key: str | None = Header(default=None),
+):
+    _auth_or_403(x_api_key)
+    books: Dict[str, Dict[str, Any]] = request.app.state.books
+    if book_id not in books:
         raise HTTPException(status_code=404, detail="Libro non trovato")
 
-    ensure_can_add_chapter(caps)
-    ch = storage.add_chapter(book_id, body)
-    storage.inc_chapter(caps.user_id)
-    return ch
+    # id capitolo
+    idx = len(books[book_id]["chapters"]) + 1
+    ch_id = f"ch_{idx:08x}"
+
+    chapter = {
+        "id": ch_id,
+        "title": payload.title,
+        "prompt": payload.prompt,
+        "outline": payload.outline or "",
+    }
+    books[book_id]["chapters"].append(chapter)
+    return ChapterOut(**chapter)
 
 
-@router.put("/books/{book_id}/chapters/{chapter_id}", response_model=ChapterOut)
+@router.put(
+    "/books/{book_id}/chapters/{chapter_id}",
+    summary="Update Chapter",
+    response_model=ChapterOut,
+)
 def update_chapter(
+    request: Request,
     book_id: str,
     chapter_id: str,
-    body: ChapterCreate,
-    caps=Depends(current_caps),
+    payload: ChapterCreate = Body(...),
+    x_api_key: str | None = Header(default=None),
 ):
-    """
-    Aggiorna titolo/prompt/outline di un capitolo esistente.
-    (Non consuma il limite perché è editing.)
-    """
-    if not storage.get_book(book_id):
+    _auth_or_403(x_api_key)
+    books: Dict[str, Dict[str, Any]] = request.app.state.books
+    if book_id not in books:
         raise HTTPException(status_code=404, detail="Libro non trovato")
 
-    ch = storage.update_chapter(book_id, chapter_id, body)
-    if not ch:
-        raise HTTPException(status_code=404, detail="Capitolo non trovato")
-    return ch
+    chapters = books[book_id]["chapters"]
+    for ch in chapters:
+        if ch["id"] == chapter_id:
+            ch["title"] = payload.title
+            ch["prompt"] = payload.prompt
+            ch["outline"] = payload.outline or ch.get("outline", "")
+            return ChapterOut(**ch)
+
+    raise HTTPException(status_code=404, detail="Capitolo non trovato")
