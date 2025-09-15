@@ -1,48 +1,42 @@
 # apps/backend/app/main.py
 from __future__ import annotations
-from fastapi import FastAPI, HTTPException, Request, Query
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
-import os, io, datetime
 
+from fastapi import FastAPI, HTTPException, Header, Request, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from pydantic import BaseModel, Field
+from typing import Dict, List, Optional
+import os
+import time
+import uuid
+
+# (a) import storage (usa /tmp/eccomibook come base) 
+from app import storage
+
+# --- PDF utilities (ReportLab) ---
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
 
-from . import storage
-
 APP_NAME = os.getenv("APP_NAME", "EccomiBook Backend")
-OWNER_API_KEY = os.getenv("OWNER_API_KEY", "")  # se presente → owner_full
-STORAGE_DIR = os.getenv("STORAGE_DIR", "/data/eccomibook")
+APP_ENV = os.getenv("APP_ENV", "production")
+OWNER_API_KEY = os.getenv("OWNER_API_KEY", "owner_full_key")  # chiave "tutto aperto"
 
-app = FastAPI(title=APP_NAME, version="0.2.0")
+app = FastAPI(title=APP_NAME, version="0.1.0")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
-    allow_methods=["*"], allow_headers=["*"],
+    allow_origins=["*"],  # restringi in prod se vuoi
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# --------- MODELS ----------
-class Plan(str):
-    OWNER_FULL = "owner_full"
-    START = "start"
-    GROWTH = "growth"
-    PRO = "pro"
+# ---------------- In-memory storage (MVP) ----------------
+# Nota: va bene per demo; per persistenza reale useremo un DB più avanti.
+BOOKS: Dict[str, Dict] = {}  # book_id -> {"id", "title","author","language","genre","plan","chapters":[...]}
 
-class ChapterCreate(BaseModel):
-    title: str = Field(..., description="Titolo capitolo")
-    outline: Optional[str] = Field(None, description="Scaletta")
-    prompt: Optional[str] = Field(None, description="Prompt/nota")
-
-class ChapterOut(BaseModel):
-    id: str
-    title: str
-    outline: Optional[str] = None
-    prompt: Optional[str] = None
-    content: Optional[str] = None  # placeholder per futuro generatore
-
+# ---------------- Models ----------------
 class BookCreate(BaseModel):
     title: str
     author: str = "Eccomi Online"
@@ -56,223 +50,278 @@ class BookOut(BaseModel):
     author: str
     language: str
     genre: str
-    description: Optional[str] = None
-    plan: str = Plan.OWNER_FULL
-    chapters: List[ChapterOut] = []
+    plan: str = "owner_full"
+    chapters: List[Dict] = []
 
-# --------- HELPERS ----------
-def get_state() -> Dict[str, Any]:
-    return storage.load_state()
+class ChapterCreate(BaseModel):
+    title: str
+    outline: Optional[str] = None
+    prompt: Optional[str] = None
 
-def save_state(s: Dict[str, Any]) -> None:
-    storage.save_state(s)
+class ChapterOut(BaseModel):
+    id: str
+    title: str
+    outline: Optional[str] = None
+    prompt: Optional[str] = None
+    text: Optional[str] = None
 
-def resolve_plan(request: Request) -> str:
-    key = request.headers.get("x-api-key") or request.headers.get("X-Api-Key")
-    if OWNER_API_KEY and key == OWNER_API_KEY:
-        return Plan.OWNER_FULL
-    return Plan.PRO  # default piano “buono” se non autenticato
+# --------------- Helpers ---------------
+def _new_id(prefix: str) -> str:
+    return f"{prefix}_{uuid.uuid4().hex[:8]}"
 
-def base_url(request: Request) -> str:
-    url = str(request.base_url)  # termina con "/"
-    return url
+def _is_owner(key: Optional[str]) -> bool:
+    return key and key == OWNER_API_KEY
 
-# --------- STARTUP ----------
+# --------------- Lifecycle ---------------
 @app.on_event("startup")
 def on_startup():
+    print(f"✅ APP STARTED | ENV: {APP_ENV}")
+    # (b) assicura cartelle scrivibili (in /tmp/eccomibook di default)
     storage.ensure_dirs()
-    _ = get_state()
-    print(f"✅ Storage: {STORAGE_DIR}")
 
-# --------- ROUTES ----------
-@app.get("/")
+# --------------- Default routes ---------------
+@app.get("/", response_model=dict)
 def root():
-    return {"message": APP_NAME}
+    return {"message": "EccomiBook Backend"}
 
-@app.get("/health")
+@app.get("/health", response_model=dict)
 def health():
-    s = get_state()
-    return {
-        "status": "ok",
-        "service": APP_NAME,
-        "env": os.getenv("APP_ENV", "production"),
-        "books_count": len(s.get("books", {})),
-        "storage_dir": STORAGE_DIR,
-    }
+    try:
+        storage.ensure_dirs()
+        ok = True
+        note = "ok"
+    except Exception as e:
+        ok = False
+        note = f"storage error: {e}"
+    return {"status": "ok" if ok else "degraded", "env": APP_ENV, "service": APP_NAME, "storage": note}
 
+# --------------- Books ---------------
 @app.get("/books", response_model=List[BookOut])
 def list_books():
-    s = get_state()
-    out: List[BookOut] = []
-    for b in s["books"].values():
-        out.append(BookOut(**b))
-    return out
+    return list(BOOKS.values())
 
 @app.post("/books", response_model=BookOut)
-def create_book(body: BookCreate, request: Request):
-    s = get_state()
-    s["counters"]["books"] = int(s["counters"].get("books", 0)) + 1
-    bid = storage.new_book_id(s["counters"]["books"])
-    plan = resolve_plan(request)
-    book = {
-        "id": bid,
+def create_book(
+    body: BookCreate,
+    x_api_key: Optional[str] = Header(default=None, convert_underscores=False)
+):
+    # Piano: owner_full se chiave coincide, altrimenti "growth" (limiti li attiveremo più avanti)
+    plan = "owner_full" if _is_owner(x_api_key) else "growth"
+    book_id = _new_id("book")
+    BOOKS[book_id] = {
+        "id": book_id,
         "title": body.title,
         "author": body.author,
         "language": body.language,
         "genre": body.genre,
-        "description": body.description,
+        "description": body.description or "",
         "plan": plan,
         "chapters": [],
     }
-    s["books"][bid] = book
-    save_state(s)
-    return BookOut(**book)
+    return BOOKS[book_id]
 
 @app.post("/books/{book_id}/chapters", response_model=ChapterOut)
-def add_chapter(book_id: str, body: ChapterCreate):
-    s = get_state()
-    book = s["books"].get(book_id)
+def add_chapter(
+    book_id: str,
+    body: ChapterCreate,
+    x_api_key: Optional[str] = Header(default=None, convert_underscores=False)
+):
+    book = BOOKS.get(book_id)
     if not book:
         raise HTTPException(status_code=404, detail="Libro non trovato")
-    s["counters"]["chapters"] = int(s["counters"].get("chapters", 0)) + 1
-    cid = storage.new_chapter_id(s["counters"]["chapters"])
-    ch = {
-        "id": cid,
+
+    ch_id = _new_id("ch")
+    chapter = {
+        "id": ch_id,
         "title": body.title,
-        "outline": body.outline,
-        "prompt": body.prompt,
-        "content": None,
+        "outline": (body.outline or ""),
+        "prompt": (body.prompt or ""),
+        "text": "",  # generazione testo a parte (/generate/chapter)
     }
-    book["chapters"].append(ch)
-    save_state(s)
-    return ChapterOut(**ch)
+    book["chapters"].append(chapter)
+    return chapter
 
 @app.put("/books/{book_id}/chapters/{chapter_id}", response_model=ChapterOut)
-def update_chapter(book_id: str, chapter_id: str, body: ChapterCreate):
-    s = get_state()
-    book = s["books"].get(book_id)
+def update_chapter(
+    book_id: str,
+    chapter_id: str,
+    body: ChapterCreate,
+    x_api_key: Optional[str] = Header(default=None, convert_underscores=False)
+):
+    book = BOOKS.get(book_id)
     if not book:
         raise HTTPException(status_code=404, detail="Libro non trovato")
     for ch in book["chapters"]:
         if ch["id"] == chapter_id:
-            ch["title"] = body.title
-            ch["outline"] = body.outline
-            ch["prompt"] = body.prompt
-            save_state(s)
-            return ChapterOut(**ch)
+            if body.title is not None:   ch["title"] = body.title
+            if body.outline is not None: ch["outline"] = body.outline
+            if body.prompt is not None:  ch["prompt"] = body.prompt
+            return ch
     raise HTTPException(status_code=404, detail="Capitolo non trovato")
 
-# ------- GENERAZIONE (placeholder) -------
-class GenReq(BaseModel):
-    topic: str
-    style: Optional[str] = None
+# --------------- Generate (MVP) ---------------
+class GenChapterIn(BaseModel):
+    title: str
+    outline: Optional[str] = None
+    prompt: Optional[str] = None
+    book_id: Optional[str] = None
 
-@app.post("/generate/chapter", response_model=ChapterOut)
-def generate_chapter(body: GenReq, book_id: Optional[str] = None, request: Request = None):
-    # Placeholder: crea un capitolo “vuoto” con content fake
-    ch = ChapterCreate(
-        title=body.topic,
-        outline=f"Scaletta: {body.topic}",
-        prompt=f"Stile: {body.style or 'standard'}"
-    )
-    created = add_chapter(book_id, ch) if book_id else ChapterOut(
-        id=storage.new_chapter_id(), title=ch.title, outline=ch.outline, prompt=ch.prompt, content=None
-    )
-    return created
+class GenChapterOut(BaseModel):
+    id: str
+    title: str
+    outline: Optional[str] = None
+    prompt: Optional[str] = None
+    text: str
 
-# ------- EXPORT -------
+@app.post("/generate/chapter", response_model=GenChapterOut)
+def generate_chapter(
+    body: GenChapterIn,
+    x_api_key: Optional[str] = Header(default=None, convert_underscores=False)
+):
+    # Stub di generazione “simil-AI”: crea un testo fittizio coerente
+    base = body.prompt or body.outline or body.title
+    generated = (
+        f"{body.title}\n\n"
+        f"{(body.outline or '').strip()}\n\n"
+        f"Testo generato automaticamente a scopo demo. Prompt/outline: {base}"
+    ).strip()
+
+    ch_id = _new_id("ch")
+    ch = {
+        "id": ch_id,
+        "title": body.title,
+        "outline": body.outline or "",
+        "prompt": body.prompt or "",
+        "text": generated,
+    }
+
+    # se ci passa un book_id, aggiungiamo il capitolo al libro
+    if body.book_id:
+        book = BOOKS.get(body.book_id)
+        if not book:
+            raise HTTPException(status_code=404, detail="Libro non trovato")
+        book["chapters"].append(ch)
+
+    return ch
+
+# --------------- Export ---------------
 @app.get("/generate/export/book/{book_id}")
-def export_book(book_id: str, format: str = Query("pdf", pattern="^(pdf|epub|docx)$"), request: Request = None):
-    s = get_state()
-    book = s["books"].get(book_id)
+def export_book(
+    book_id: str,
+    format: str = Query("pdf", pattern="^(pdf|epub|docx)$"),
+    x_api_key: Optional[str] = Header(default=None, convert_underscores=False),
+):
+    """
+    Genera un export del libro (PDF/ePub/DOCX). Per ora implementiamo il PDF (MVP).
+    Ritorna JSON con URL di download.
+    """
+    book = BOOKS.get(book_id)
     if not book:
         raise HTTPException(status_code=404, detail="Libro non trovato")
 
-    if format != "pdf":
-        # implementeremo ePub/DOCX più avanti
-        raise HTTPException(status_code=501, detail="Solo PDF supportato in questa versione")
+    # Solo PDF implementato davvero nell’MVP; gli altri formati sono placeholder.
+    ext = format.lower()
+    if ext != "pdf":
+        # placeholder finché non implementiamo gli altri
+        _, filename = storage.exports_dir_and_filename(book_id, ext)
+        url = f"/downloads/{filename}"  # non esisterà, ma manteniamo la forma
+        return {
+            "ok": True,
+            "book_id": book_id,
+            "format": ext,
+            "file_name": filename,
+            "url": url,
+            "chapters": len(book["chapters"]),
+            "generated_at": int(time.time()),
+            "note": "Formato non ancora implementato; usa pdf."
+        }
 
-    # Crea PDF
-    filename = f"{book_id}.pdf"
-    export_dir = storage.exports_dir()
-    os.makedirs(export_dir, exist_ok=True)
-    pdf_path = os.path.join(export_dir, filename)
+    # ---- PDF reale ----
+    pdf_path = storage.export_pdf_path(book_id)
+    storage.ensure_dirs()  # in caso la dir sia stata pulita da Render
 
-    buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    w, h = A4
+    # Crea PDF semplice con titolo + capitoli
+    c = canvas.Canvas(str(pdf_path), pagesize=A4)
+    width, height = A4
 
-    # Copertina semplice
-    c.setFont("Helvetica-Bold", 20)
-    c.drawString(2*cm, h-3*cm, book["title"])
+    # Copertina
+    c.setFont("Helvetica-Bold", 22)
+    c.drawString(2 * cm, height - 3 * cm, book["title"])
     c.setFont("Helvetica", 12)
-    c.drawString(2*cm, h-4*cm, f"Autore: {book['author']}")
-    c.drawString(2*cm, h-4.7*cm, f"Lingua: {book['language']}  •  Genere: {book['genre']}")
-    if book.get("description"):
-        text = c.beginText(2*cm, h-6*cm)
-        text.setFont("Helvetica", 11)
-        for line in break_lines(book["description"], max_chars=90):
-            text.textLine(line)
-        c.drawText(text)
+    c.drawString(2 * cm, height - 4 * cm, f"Autore: {book['author']}")
+    c.drawString(2 * cm, height - 4.7 * cm, f"Genere: {book['genre']} • Lingua: {book['language']}")
     c.showPage()
 
     # Capitoli
-    for i, ch in enumerate(book["chapters"], 1):
+    for idx, ch in enumerate(book["chapters"], start=1):
         c.setFont("Helvetica-Bold", 16)
-        c.drawString(2*cm, h-3*cm, f"Capitolo {i}: {ch.get('title','')}")
+        c.drawString(2 * cm, height - 2.5 * cm, f"Capitolo {idx}. {ch['title']}")
         c.setFont("Helvetica", 11)
-        y = h-4.5*cm
-        for label in ("outline", "prompt", "content"):
-            val = ch.get(label)
-            if val:
-                y = draw_paragraph(c, f"{label.capitalize()}:", val, 2*cm, y, w-4*cm)
-                y -= 0.5*cm
+        y = height - 3.5 * cm
+
+        def draw_multiline(text: str, y_start: float) -> float:
+            maxw = width - 4 * cm
+            for line in text.split("\n"):
+                # semplice wrap molto basico
+                while line:
+                    # rompi linee lunghe in blocchi ~100 char
+                    chunk = line[:100]
+                    c.drawString(2 * cm, y_start, chunk)
+                    y_start -= 14
+                    line = line[100:]
+                    if y_start < 2 * cm:
+                        c.showPage()
+                        c.setFont("Helvetica", 11)
+                        y_start = height - 2.5 * cm
+            return y_start
+
+        if ch.get("outline"):
+            c.setFont("Helvetica-Oblique", 11)
+            y = draw_multiline(f"Outline: {ch['outline']}", y)
+            y -= 8
+
+        c.setFont("Helvetica", 11)
+        y = draw_multiline(ch.get("text") or "(Nessun testo generato)", y)
+
         c.showPage()
 
     c.save()
-    with open(pdf_path, "wb") as f:
-        f.write(buffer.getvalue())
 
-    # URL pubblico per il download
-    base = base_url(request).rstrip("/")
-    url = f"{base}/downloads/{filename}"
-
+    filename = pdf_path.name
+    url = f"/downloads/{filename}"
     return {
         "ok": True,
         "book_id": book_id,
-        "format": format,
+        "format": "pdf",
         "file_name": filename,
         "url": url,
         "chapters": len(book["chapters"]),
-        "generated_at": int(datetime.datetime.utcnow().timestamp()),
+        "generated_at": int(time.time()),
     }
 
-def break_lines(text: str, max_chars: int = 90):
-    words = (text or "").split()
-    line, out = [], []
-    for w in words:
-        if sum(len(x) for x in line) + len(line) + len(w) > max_chars:
-            out.append(" ".join(line)); line = [w]
-        else:
-            line.append(w)
-    if line: out.append(" ".join(line))
-    return out
-
-def draw_paragraph(c: canvas.Canvas, title: str, body: str, x: float, y: float, max_w: float) -> float:
-    c.setFont("Helvetica-Bold", 12); c.drawString(x, y, title); y -= 0.4*cm
-    c.setFont("Helvetica", 11)
-    for line in break_lines(body, max_chars=100):
-        c.drawString(x, y, line)
-        y -= 0.4*cm
-        if y < 3*cm:
-            c.showPage(); y = A4[1]-3*cm
-            c.setFont("Helvetica", 11)
-    return y
-
-# --------- FILE DOWNLOAD ----------
+# --------------- (c) Download dei file generati ---------------
 @app.get("/downloads/{filename}")
 def download_file(filename: str):
-    path = os.path.join(storage.exports_dir(), filename)
-    if not os.path.exists(path):
+    """
+    Restituisce un file dall'area di export (es: book_xxxxx.pdf).
+    """
+    path = (storage.EXPORTS_DIR / filename).resolve()
+
+    # difesa minima: impedisci traversal
+    if storage.EXPORTS_DIR not in path.parents and storage.EXPORTS_DIR != path.parent:
+        raise HTTPException(status_code=400, detail="Filename non valido")
+
+    if not path.exists():
         raise HTTPException(status_code=404, detail="File non trovato")
-    return FileResponse(path, filename=filename, media_type="application/pdf")
+
+    return FileResponse(path, media_type="application/octet-stream", filename=filename)
+
+# --------------- Pagina di test basic ---------------
+@app.get("/test", response_class=HTMLResponse)
+def test_page():
+    return """
+    <html><body style="font-family:system-ui;padding:24px">
+      <h1>EccomiBook Backend</h1>
+      <p>API online. Vai su <a href="/docs">/docs</a> per provare gli endpoint.</p>
+    </body></html>
+    """
