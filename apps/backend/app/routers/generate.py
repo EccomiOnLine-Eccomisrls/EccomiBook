@@ -151,11 +151,12 @@ def generate_chapter(
     # Per MVP locale:
     pdf_url = f"/static/chapters/{chapter_id}.pdf"  # esponi 'storage/chapters' come /static/chapters
 
-    # 5) Output coerente con lo schema
-    return GenChapterOut(
-        chapter_id=chapter_id,
-        title=title,
-        content=base_content,
-        abstract=abstract,
-        page_numbers=bool(payload.page_numbers),
-    )
+    # 5) Output coerente con lo schema (incluso link al PDF)
+return GenChapterOut(
+    chapter_id=chapter_id,
+    title=title,
+    content=base_content,
+    abstract=abstract,
+    page_numbers=bool(payload.page_numbers),
+    pdf_url=f"/static/chapters/{chapter_id}.pdf",
+)
