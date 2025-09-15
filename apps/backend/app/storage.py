@@ -1,93 +1,46 @@
+# apps/backend/app/storage.py
 from __future__ import annotations
-import time, uuid
-from datetime import date
-from typing import Dict, List, Optional
-from .models import BookCreate, BookOut, ChapterCreate, ChapterOut, Plan
+import json, os, tempfile, shutil, time
+from typing import Dict, Any
 
-# ---------------- In-memory ----------------
-_DB_BOOKS: Dict[str, BookOut] = {}
-# usage counters
-_USAGE_BOOKS_MONTH: Dict[str, Dict[str, int]] = {}      # user_id -> { "YYYY-MM": count }
-_USAGE_CHAPTERS_DAY: Dict[str, Dict[str, int]] = {}     # user_id -> { "YYYY-MM-DD": count }
+DEFAULT_DIR = os.getenv("STORAGE_DIR", "/data/eccomibook")
+STATE_FILE = "state.json"
 
-def _gen_id(prefix: str) -> str:
-    return f"{prefix}_{uuid.uuid4().hex[:8]}"
+def ensure_dirs() -> str:
+    os.makedirs(DEFAULT_DIR, exist_ok=True)
+    os.makedirs(os.path.join(DEFAULT_DIR, "exports"), exist_ok=True)
+    return DEFAULT_DIR
 
-# -------------- Usage helpers --------------
-def get_usage_books_month(user_id: str, month: str) -> int:
-    return _USAGE_BOOKS_MONTH.get(user_id, {}).get(month, 0)
+def state_path() -> str:
+    return os.path.join(DEFAULT_DIR, STATE_FILE)
 
-def get_usage_chapters_day(user_id: str, day: str) -> int:
-    return _USAGE_CHAPTERS_DAY.get(user_id, {}).get(day, 0)
+def load_state() -> Dict[str, Any]:
+    ensure_dirs()
+    p = state_path()
+    if not os.path.exists(p):
+        return {"books": {}, "counters": {"books": 0, "chapters": 0}}
+    with open(p, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-def inc_book(user_id: str):
-    m = date.today().strftime("%Y-%m")
-    _USAGE_BOOKS_MONTH.setdefault(user_id, {})
-    _USAGE_BOOKS_MONTH[user_id][m] = _USAGE_BOOKS_MONTH[user_id].get(m, 0) + 1
+def save_state(data: Dict[str, Any]) -> None:
+    ensure_dirs()
+    p = state_path()
+    d = os.path.dirname(p)
+    os.makedirs(d, exist_ok=True)
+    tmp = tempfile.NamedTemporaryFile("w", delete=False, dir=d, encoding="utf-8")
+    json.dump(data, tmp, ensure_ascii=False, indent=2)
+    tmp.flush(); os.fsync(tmp.fileno()); tmp.close()
+    shutil.move(tmp.name, p)
 
-def inc_chapter(user_id: str):
-    d = date.today().isoformat()
-    _USAGE_CHAPTERS_DAY.setdefault(user_id, {})
-    _USAGE_CHAPTERS_DAY[user_id][d] = _USAGE_CHAPTERS_DAY[user_id].get(d, 0) + 1
+def new_book_id(counter: int | None = None) -> str:
+    ts = int(time.time()) % 1000000
+    if counter is None: counter = ts
+    return f"book_{counter:06d}"
 
-# -------------- Books CRUD -----------------
-def list_books() -> List[BookOut]:
-    return list(_DB_BOOKS.values())
+def new_chapter_id(counter: int | None = None) -> str:
+    ts = int(time.time()) % 1000000
+    if counter is None: counter = ts
+    return f"ch_{counter:06d}"
 
-def create_book(body: BookCreate, plan: Plan = Plan.GROWTH) -> BookOut:
-    book_id = _gen_id("book")
-    book = BookOut(id=book_id, plan=plan, **body.model_dump(), chapters=[])
-    _DB_BOOKS[book_id] = book
-    return book
-
-def get_book(book_id: str) -> Optional[BookOut]:
-    return _DB_BOOKS.get(book_id)
-
-# -------------- Chapters -------------------
-def add_chapter(book_id: str, body: ChapterCreate) -> ChapterOut:
-    book = get_book(book_id)
-    if not book:
-        return None
-    ch = ChapterOut(id=_gen_id("ch"), **body.model_dump())
-    book.chapters.append(ch)
-    return ch
-
-def update_chapter(book_id: str, chapter_id: str, body: ChapterCreate) -> Optional[ChapterOut]:
-    book = get_book(book_id)
-    if not book:
-        return None
-    for i, ch in enumerate(book.chapters):
-        if ch.id == chapter_id:
-            new_ch = ChapterOut(id=ch.id, **body.model_dump())
-            book.chapters[i] = new_ch
-            return new_ch
-    return None
-
-# -------------- AI / Export stubs ----------
-def generate_chapter_stub(body: ChapterCreate) -> ChapterCreate:
-    """
-    Qui andrà la chiamata al tuo modello AI.
-    Per ora ritorniamo il body così com’è (placeholder).
-    """
-    return body
-
-def export_book_stub(book_id: str, format: str = "pdf") -> dict:
-    """
-    Stub export: restituisce metadati + un fake URL (che potrai sostituire con
-    un vero link a storage S3/Cloud/etc o StreamingResponse).
-    """
-    book = get_book(book_id)
-    if not book:
-        return {"ok": False, "error": "book_not_found"}
-
-    fname = f"{book_id}.{format}"
-    url = f"https://example.com/downloads/{fname}"  # placeholder
-    return {
-        "ok": True,
-        "book_id": book_id,
-        "format": format,
-        "file_name": fname,
-        "url": url,
-        "chapters": len(book.chapters),
-        "generated_at": int(time.time()),
-    }
+def exports_dir() -> str:
+    return os.path.join(DEFAULT_DIR, "exports")
