@@ -1,8 +1,20 @@
+from typing import Optional, List
 from pydantic import BaseModel, Field
-from typing import Literal, Optional
 
 
-Plan = Literal["start", "growth", "pro", "owner_full"]
+# ----- Libri & Capitoli -----
+
+class ChapterCreate(BaseModel):
+    title: str = Field(..., description="Titolo capitolo")
+    prompt: str = Field(..., description="Testo/brief del capitolo")
+    outline: Optional[str] = Field(None, description="Contenuto/outline del capitolo (facoltativo)")
+
+
+class ChapterOut(BaseModel):
+    id: str
+    title: str
+    prompt: str
+    outline: str = ""
 
 
 class BookCreate(BaseModel):
@@ -11,13 +23,8 @@ class BookCreate(BaseModel):
     language: str
     genre: str
     description: str = ""
-    plan: Plan = "owner_full"
-
-
-class ChapterCreate(BaseModel):
-    title: str
-    prompt: str
-    outline: Optional[str] = None
+    abstract: Optional[str] = Field(None, description="Abstract del libro (facoltativo)")
+    plan: str = Field("owner_full", description="Piano/permessi (solo segnaposto)")
 
 
 class BookOut(BaseModel):
@@ -27,25 +34,21 @@ class BookOut(BaseModel):
     language: str
     genre: str
     description: str = ""
-    plan: Plan = "owner_full"
-    chapters: list["ChapterOut"] = []
+    abstract: Optional[str] = None
+    plan: str
+    chapters: List[ChapterOut]
 
 
-class ChapterOut(BaseModel):
-    id: str
-    title: str
-    prompt: str | None = None
-    outline: str | None = None
-
+# ----- Generazione capitolo (mock) -----
 
 class GenChapterIn(BaseModel):
-    title: str = Field(..., description="Titolo del capitolo")
-    prompt: str | None = Field(default=None, description="Prompt testuale")
-    outline: str | None = Field(default=None, description="Outline riassuntiva")
-    book_id: str | None = Field(default=None, description="Se presente, aggiunge il capitolo al libro")
+    title: str
+    prompt: Optional[str] = ""
+    outline: Optional[str] = ""
+    book_id: Optional[str] = None
 
 
 class GenChapterOut(BaseModel):
-    chapter_id: str | None
+    chapter_id: Optional[str]
     title: str
     content: str
