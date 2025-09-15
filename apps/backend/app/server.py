@@ -1,6 +1,8 @@
-# server.py (in root)
-# Prova prima questo import; se fallisce, sostituisci con l'altro commentato.
-from apps.backend.app.main import app  # <-- se il tuo main è in apps/backend/app/main.py
+# server.py (in root del repo)
 
-# Se invece il tuo main è in app/main.py in root del repo, usa:
-# from app.main import app
+# Se il tuo main è in app/main.py (root/app/main.py):
+from app.main import app
+
+# Se invece è in un altro path (es. apps/backend/app/main.py),
+# cambia l'import a:
+# from apps.backend.app.main import app
