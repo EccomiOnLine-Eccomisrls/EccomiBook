@@ -1,31 +1,47 @@
-# apps/backend/app/storage.py
-from __future__ import annotations
 import os
 from pathlib import Path
-from typing import Tuple
+from .settings import get_settings
 
-# Directory base scrivibile:
-# - default: /tmp/eccomibook (sempre scrivibile su Render)
-# - puoi sovrascrivere mettendo STORAGE_DIR nelle env vars di Render
-BASE_DIR = Path(os.getenv("STORAGE_DIR", "/tmp/eccomibook")).resolve()
+# Directory base (robusta su Render)
+DEFAULT_DIRS = [
+    # 1) env var esplicita
+    lambda s: Path(s.storage_dir) if s.storage_dir else None,
+    # 2) ./data nella root di esecuzione
+    lambda s: Path("./data"),
+    # 3) /tmp fallback sempre scrivibile
+    lambda s: Path("/tmp/eccomibook-data"),
+]
 
-BOOKS_DIR   = BASE_DIR / "books"
-EXPORTS_DIR = BASE_DIR / "exports"
+
+def _pick_dir() -> Path:
+    s = get_settings()
+    for maker in DEFAULT_DIRS:
+        p = maker(s)
+        if p is None:
+            continue
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            test = p / ".touch"
+            test.write_text("ok")
+            test.unlink(missing_ok=True)
+            return p
+        except Exception:
+            continue
+    # estremo fallback
+    return Path("/tmp")
+
+
+BASE_DIR = _pick_dir()
+
 
 def ensure_dirs() -> None:
-    """Crea le cartelle necessarie se non esistono (no error se già esistono)."""
-    BOOKS_DIR.mkdir(parents=True, exist_ok=True)
-    EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    BASE_DIR.mkdir(parents=True, exist_ok=True)
 
-def book_json_path(book_id: str) -> Path:
-    """Percorso dove potresti salvare eventuale JSON del libro (se/quando servirà)."""
-    return BOOKS_DIR / f"{book_id}.json"
 
-def export_pdf_path(book_id: str) -> Path:
-    """Percorso del PDF esportato."""
-    return EXPORTS_DIR / f"{book_id}.pdf"
+def file_path(filename: str) -> Path:
+    return BASE_DIR / filename
 
-def exports_dir_and_filename(book_id: str, ext: str) -> Tuple[Path, str]:
-    """Percorso file di export e nome file (per download)."""
-    filename = f"{book_id}.{ext}"
-    return (EXPORTS_DIR / filename, filename)
+
+def public_url(filename: str) -> str:
+    # URL di download esposto dalla stessa app
+    return f"/downloads/{filename}"
