@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 class Settings(BaseModel):
     environment: str = os.getenv("ENVIRONMENT", "production")
-    x_api_key: str | None = os.getenv("X_API_KEY", "Lillieoncommerce01")
+    x_api_key: str | None = os.getenv("X_API_KEY", "Lillinoecommerce@1")
     storage_dir: str | None = os.getenv("STORAGE_DIR")  # facoltativa
 
 
