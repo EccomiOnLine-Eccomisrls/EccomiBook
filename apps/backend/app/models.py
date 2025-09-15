@@ -1,52 +1,62 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Literal
-from datetime import datetime
+# app/models.py
+from typing import List, Optional
+from pydantic import BaseModel
+from enum import Enum
 
-# ==== Domain ====
 
-class Chapter(BaseModel):
-    id: str
-    index: int
+# ----- Piani -----
+class Plan(str, Enum):
+    OWNER_FULL = "owner_full"
+    START = "start"
+    GROWTH = "growth"
+    PRO = "pro"
+
+
+PLAN_CAPS = {
+    Plan.OWNER_FULL: dict(max_books=None, max_chapters_per_day=None, images_hd=True, export_hd=True, priority="highest"),
+    Plan.START:      dict(max_books=1,   max_chapters_per_day=10,  images_hd=False, export_hd=True,  priority="normal"),
+    Plan.GROWTH:     dict(max_books=5,   max_chapters_per_day=50,  images_hd=True,  export_hd=True,  priority="high"),
+    Plan.PRO:        dict(max_books=None,max_chapters_per_day=200, images_hd=True,  export_hd=True,  priority="max"),
+}
+
+
+# ----- DTO -----
+class BookCreate(BaseModel):
     title: str
-    content_md: str = ""        # markdown
-    images: List[str] = []      # url o path locali
-    created_at: datetime
-    updated_at: datetime
+    language: str = "it"
+    genre: str = "general"
+    plan: Plan = Plan.START
 
-class Book(BaseModel):
-    id: str
+
+class ChapterCreate(BaseModel):
     title: str
-    genre: str = "General"
-    language: str = "it"
-    plan: Literal["owner_full", "pro", "growth", "start", "free"] = "owner_full"
-    outline: List[str] = []     # titoli capitoli proposti
-    chapters: List[Chapter] = []
-    created_at: datetime
-    updated_at: datetime
+    prompt: str
+    order: int | None = None
 
-# ==== Requests / Responses ====
 
-class CreateBookReq(BaseModel):
-    title: str = Field(..., min_length=3)
-    genre: str = "General"
-    language: str = "it"
-    plan: Optional[Literal["owner_full", "pro", "growth", "start", "free"]] = None
-
-class GenerateOutlineReq(BaseModel):
-    chapters: int = 10
-
-class GenerateChapterReq(BaseModel):
-    chapter_index: int
-    prompt: Optional[str] = None
-    hd_images: bool = False
-    images: int = 0
-
-class EditChapterReq(BaseModel):
+class ChapterUpdate(BaseModel):
     title: Optional[str] = None
-    content_md: Optional[str] = None
+    content: Optional[str] = None
 
-class ExportReq(BaseModel):
-    fmt: Literal["mdzip", "json"] = "mdzip"  # semplice: zip di markdown, oppure json grezzo
 
-class BookList(BaseModel):
-    items: List[Book]
+class GenerateChapterIn(BaseModel):
+    book_id: str
+    prompt: str
+    images: int = 0  # quante immagini generare (placeholder per ora)
+
+
+class ChapterOut(BaseModel):
+    id: str
+    title: str
+    order: int
+    content: str
+    images: List[str] = []
+
+
+class BookOut(BaseModel):
+    id: str
+    title: str
+    language: str
+    genre: str
+    plan: Plan
+    chapters: List[ChapterOut] = []
