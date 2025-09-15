@@ -1,46 +1,31 @@
 # apps/backend/app/storage.py
 from __future__ import annotations
-import json, os, tempfile, shutil, time
-from typing import Dict, Any
+import os
+from pathlib import Path
+from typing import Tuple
 
-DEFAULT_DIR = os.getenv("STORAGE_DIR", "/data/eccomibook")
-STATE_FILE = "state.json"
+# Directory base scrivibile:
+# - default: /tmp/eccomibook (sempre scrivibile su Render)
+# - puoi sovrascrivere mettendo STORAGE_DIR nelle env vars di Render
+BASE_DIR = Path(os.getenv("STORAGE_DIR", "/tmp/eccomibook")).resolve()
 
-def ensure_dirs() -> str:
-    os.makedirs(DEFAULT_DIR, exist_ok=True)
-    os.makedirs(os.path.join(DEFAULT_DIR, "exports"), exist_ok=True)
-    return DEFAULT_DIR
+BOOKS_DIR   = BASE_DIR / "books"
+EXPORTS_DIR = BASE_DIR / "exports"
 
-def state_path() -> str:
-    return os.path.join(DEFAULT_DIR, STATE_FILE)
+def ensure_dirs() -> None:
+    """Crea le cartelle necessarie se non esistono (no error se già esistono)."""
+    BOOKS_DIR.mkdir(parents=True, exist_ok=True)
+    EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-def load_state() -> Dict[str, Any]:
-    ensure_dirs()
-    p = state_path()
-    if not os.path.exists(p):
-        return {"books": {}, "counters": {"books": 0, "chapters": 0}}
-    with open(p, "r", encoding="utf-8") as f:
-        return json.load(f)
+def book_json_path(book_id: str) -> Path:
+    """Percorso dove potresti salvare eventuale JSON del libro (se/quando servirà)."""
+    return BOOKS_DIR / f"{book_id}.json"
 
-def save_state(data: Dict[str, Any]) -> None:
-    ensure_dirs()
-    p = state_path()
-    d = os.path.dirname(p)
-    os.makedirs(d, exist_ok=True)
-    tmp = tempfile.NamedTemporaryFile("w", delete=False, dir=d, encoding="utf-8")
-    json.dump(data, tmp, ensure_ascii=False, indent=2)
-    tmp.flush(); os.fsync(tmp.fileno()); tmp.close()
-    shutil.move(tmp.name, p)
+def export_pdf_path(book_id: str) -> Path:
+    """Percorso del PDF esportato."""
+    return EXPORTS_DIR / f"{book_id}.pdf"
 
-def new_book_id(counter: int | None = None) -> str:
-    ts = int(time.time()) % 1000000
-    if counter is None: counter = ts
-    return f"book_{counter:06d}"
-
-def new_chapter_id(counter: int | None = None) -> str:
-    ts = int(time.time()) % 1000000
-    if counter is None: counter = ts
-    return f"ch_{counter:06d}"
-
-def exports_dir() -> str:
-    return os.path.join(DEFAULT_DIR, "exports")
+def exports_dir_and_filename(book_id: str, ext: str) -> Tuple[Path, str]:
+    """Percorso file di export e nome file (per download)."""
+    filename = f"{book_id}.{ext}"
+    return (EXPORTS_DIR / filename, filename)
