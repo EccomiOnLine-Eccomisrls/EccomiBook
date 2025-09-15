@@ -1,140 +1,77 @@
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from typing import Dict
-from uuid import uuid4
-from io import BytesIO
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, PageBreak
-from reportlab.lib.units import cm
-from reportlab.lib.styles import getSampleStyleSheet
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+import os
+from reportlab.pdfgen import canvas
 
-from models import BookCreate, BookOut, ChapterCreate, ChapterOut
+app = FastAPI()
 
-app = FastAPI(title="EccomiBook Backend", version="0.1.0")
+# --- memoria in RAM ---
+books = {}
 
-# In-memory storage
-BOOKS: Dict[str, dict] = {}
+class BookCreate(BaseModel):
+    title: str
+    author: str
+    language: str
+    genre: str
+    description: str
 
+class ChapterCreate(BaseModel):
+    title: str
+    content: str
 
-# -------------------------
-# HELPERS
-# -------------------------
-def _render_book_pdf_to_memory(book: dict) -> BytesIO:
-    """Crea PDF da un libro (in memoria)"""
-    buf = BytesIO()
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        leftMargin=2 * cm,
-        rightMargin=2 * cm,
-        topMargin=2 * cm,
-        bottomMargin=2 * cm,
-        title=book.get("title") or "EccomiBook",
-        author=book.get("author") or "Eccomi Online",
-    )
-    styles = getSampleStyleSheet()
-    story = []
-
-    # Copertina
-    story.append(Paragraph(book.get("title", "EccomiBook"), styles["Title"]))
-    meta = []
-    if book.get("author"):
-        meta.append(f"Autore: {book['author']}")
-    if book.get("language"):
-        meta.append(f"Lingua: {book['language']}")
-    if book.get("genre"):
-        meta.append(f"Genere: {book['genre']}")
-    if meta:
-        story.append(Spacer(1, 0.4 * cm))
-        story.append(Paragraph(" • ".join(meta), styles["Normal"]))
-    if book.get("description"):
-        story.append(Spacer(1, 0.6 * cm))
-        story.append(Paragraph(book["description"], styles["BodyText"]))
-    story.append(PageBreak())
-
-    # Capitoli
-    chapters = book.get("chapters") or []
-    for idx, ch in enumerate(chapters, start=1):
-        title = ch.get("title") or f"Capitolo {idx}"
-        outline = ch.get("outline") or ""
-        story.append(Paragraph(title, styles["Heading1"]))
-        story.append(Spacer(1, 0.3 * cm))
-        story.append(Paragraph(outline.replace("\n", "<br/>"), styles["BodyText"]))
-        if idx < len(chapters):
-            story.append(PageBreak())
-
-    doc.build(story)
-    buf.seek(0)
-    return buf
-
-
-# -------------------------
-# ENDPOINTS
-# -------------------------
-
-@app.get("/health")
-def health():
-    return {"status": "ok", "service": "EccomiBook Backend"}
-
-
-@app.get("/books", response_model=list[BookOut])
-def list_books():
-    return list(BOOKS.values())
-
-
-@app.post("/books", response_model=BookOut)
+@app.post("/books")
 def create_book(book: BookCreate):
-    book_id = f"book_{uuid4().hex[:6]}"
-    new_book = book.dict()
-    new_book["id"] = book_id
-    new_book["plan"] = "owner_full"
-    new_book["chapters"] = []
-    BOOKS[book_id] = new_book
-    return new_book
+    book_id = f"book_{len(books)+1}"
+    books[book_id] = {"info": book.dict(), "chapters": []}
+    return {"id": book_id, **book.dict()}
 
-
-@app.post("/books/{book_id}/chapters", response_model=ChapterOut)
+@app.post("/books/{book_id}/chapters")
 def add_chapter(book_id: str, chapter: ChapterCreate):
-    book = BOOKS.get(book_id)
-    if not book:
-        raise HTTPException(status_code=404, detail="Libro non trovato")
-    ch_id = f"ch_{uuid4().hex[:6]}"
-    new_ch = chapter.dict()
-    new_ch["id"] = ch_id
-    book["chapters"].append(new_ch)
-    return new_ch
+    if book_id not in books:
+        raise HTTPException(404, "Libro non trovato")
+    ch_id = f"ch_{len(books[book_id]['chapters'])+1}"
+    books[book_id]["chapters"].append({"id": ch_id, **chapter.dict()})
+    return {"id": ch_id, **chapter.dict()}
 
+@app.get("/generate/export/book/{book_id}")
+def export_book(book_id: str, format: str = "pdf"):
+    if book_id not in books:
+        raise HTTPException(404, "Libro non trovato")
 
-@app.put("/books/{book_id}/chapters/{chapter_id}", response_model=ChapterOut)
-def update_chapter(book_id: str, chapter_id: str, chapter: ChapterCreate):
-    book = BOOKS.get(book_id)
-    if not book:
-        raise HTTPException(status_code=404, detail="Libro non trovato")
-    for ch in book["chapters"]:
-        if ch["id"] == chapter_id:
-            ch.update(chapter.dict())
-            return ch
-    raise HTTPException(status_code=404, detail="Capitolo non trovato")
+    # Percorso file
+    file_name = f"{book_id}.pdf"
+    file_path = f"/tmp/{file_name}"
 
+    # Creazione PDF con reportlab
+    c = canvas.Canvas(file_path)
+    c.setFont("Helvetica", 16)
+    c.drawString(100, 800, books[book_id]["info"]["title"])
+    c.setFont("Helvetica", 12)
 
-@app.get("/generate/export/book/{book_id}/download")
-def export_book_download(
-    book_id: str,
-    format: str = Query("pdf", pattern="^(?i:pdf)$"),
-):
-    book = BOOKS.get(book_id)
-    if not book:
-        raise HTTPException(status_code=404, detail="Libro non trovato")
-    if not book.get("chapters"):
-        raise HTTPException(status_code=400, detail="Nessun capitolo da esportare")
+    y = 760
+    for ch in books[book_id]["chapters"]:
+        c.drawString(100, y, f"Capitolo: {ch['title']}")
+        y -= 20
+        c.drawString(120, y, ch["content"][:80] + "...")
+        y -= 40
+    c.save()
 
-    if format.lower() != "pdf":
-        raise HTTPException(status_code=400, detail="Formato non supportato (solo pdf)")
+    # URL pubblico (endpoint sotto)
+    url = f"https://eccomibook-backend.onrender.com/downloads/{file_name}"
 
-    pdf_io = _render_book_pdf_to_memory(book)
-    filename = f"{book_id}.pdf"
-    return StreamingResponse(
-        pdf_io,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return {
+        "ok": True,
+        "book_id": book_id,
+        "format": format,
+        "file_name": file_name,
+        "url": url,
+        "chapters": len(books[book_id]["chapters"])
+    }
+
+@app.get("/downloads/{filename}")
+def download_file(filename: str):
+    file_path = f"/tmp/{filename}"
+    if not os.path.exists(file_path):
+        raise HTTPException(404, "File non trovato")
+    return FileResponse(file_path, media_type="application/pdf", filename=filename)
