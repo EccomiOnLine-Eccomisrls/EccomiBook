@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles  # <<< AGGIUNTO
+from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+import shutil
 
 from .settings import get_settings
 from . import storage
@@ -17,9 +18,18 @@ app = FastAPI(
     docs_url="/",
 )
 
-# <<< AGGIUNTO: monta i PDF generati
-Path("storage/chapters").mkdir(parents=True, exist_ok=True)
-app.mount("/static/chapters", StaticFiles(directory="storage/chapters"), name="chapters")
+# Mount statici sul DISCO PERSISTENTE
+storage.ensure_dirs()
+app.mount(
+    "/static/chapters",
+    StaticFiles(directory=str(storage.BASE_DIR / "chapters")),
+    name="chapters",
+)
+app.mount(
+    "/static/books",
+    StaticFiles(directory=str(storage.BASE_DIR / "books")),
+    name="books",
+)
 
 # CORS (aperto: adatta se vuoi restringere)
 app.add_middleware(
@@ -29,39 +39,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.on_event("startup")
 def on_startup() -> None:
-    # directory persistente/sicura per i file export
     storage.ensure_dirs()
-    # piccolo DB in memoria
     app.state.books = {}  # {book_id: {...}}
-    # plan counters ecc. se serviranno
     app.state.counters = {"books": 0}
     settings = get_settings()
-    print(f"✅ APP STARTED | ENV: {settings.environment}")
-
+    print(f"✅ APP STARTED | ENV: {settings.environment} | STORAGE_ROOT={storage.BASE_DIR}")
 
 @app.get("/health", tags=["default"])
 def health():
     return {"ok": True}
 
-
 @app.get("/test", tags=["default"])
 def test_page():
     return {"ok": True, "msg": "test"}
 
-
-# Download file esportati
-@app.get("/downloads/{filename}", tags=["default"], summary="Download File")
-def download_file(filename: str):
-    file_path = storage.file_path(filename)
-    if not file_path.exists():
+# Download file esportati (supporta sottocartelle)
+@app.get("/downloads/{subpath:path}", tags=["default"], summary="Download File")
+def download_file(subpath: str):
+    full_path = (storage.BASE_DIR / subpath).resolve()
+    if not str(full_path).startswith(str(storage.BASE_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Percorso non valido")
+    if not full_path.exists():
         raise HTTPException(status_code=404, detail="File non trovato")
-    return FileResponse(file_path)
+    return FileResponse(full_path)
 
+# Diagnostica storage (utile per verificare Render Disk)
+@app.get("/debug/storage", tags=["default"])
+def debug_storage():
+    root = storage.BASE_DIR
+    total, used, free = shutil.disk_usage(root)
+    chapters = sorted([p.name for p in (root / "chapters").glob("*.pdf")])[:50]
+    books = sorted([p.name for p in (root / "books").glob("*.pdf")])[:50]
+    return {
+        "storage_root": str(root),
+        "exists": root.exists(),
+        "chapters_count": len(chapters),
+        "books_count": len(books),
+        "chapters_sample": chapters,
+        "books_sample": books,
+        "disk_bytes": {"total": total, "used": used, "free": free},
+    }
 
 # Routers
-app.include_router(auth_router.router, tags=["default"])      # solo per header spec
-app.include_router(books_router.router, tags=["default"])     # /books, /books/{id}/chapters
-app.include_router(generate_router.router, tags=["default"])  # /generate/chapter, /generate/export/book/{id}
+app.include_router(auth_router.router, tags=["default"])
+app.include_router(books_router.router, tags=["default"])
+app.include_router(generate_router.router, tags=["default"])
