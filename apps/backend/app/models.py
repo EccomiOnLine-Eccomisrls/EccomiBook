@@ -23,7 +23,7 @@ class ChapterCreate(BaseModel):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "title": "Capitolo 1: L’inizio",
                 "prompt": "Presenta il protagonista e il contesto della storia.",
@@ -39,7 +39,7 @@ class ChapterOut(BaseModel):
     outline: str = Field(default="", description="Outline/struttura consolidata del capitolo (se presente)", example="1) Introduzione 2) Incontro 3) Conflitto 4) Cliffhanger")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "ch_123456",
                 "title": "Capitolo 1: L’inizio",
@@ -59,7 +59,7 @@ class BookCreate(BaseModel):
     plan: str = Field("owner_full", description="Piano/permessi (placeholder)", example="owner_full")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "title": "Il Viaggio di Aria",
                 "author": "EccomiBook AI",
@@ -84,7 +84,7 @@ class BookOut(BaseModel):
     chapters: List['ChapterOut'] = Field(..., description="Elenco capitoli del libro")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "bk_987654",
                 "title": "Il Viaggio di Aria",
@@ -119,7 +119,7 @@ class GenChapterIn(BaseModel):
     page_numbers: bool = Field(default=True, description="Se True, il PDF generato includerà la numerazione delle pagine", example=True)
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "title": "Capitolo 1: L’inizio",
                 "prompt": "Racconta l’incipit della storia in tono avventuroso.",
@@ -140,7 +140,7 @@ class GenChapterOut(BaseModel):
     pdf_url: Optional[str] = Field(None, description="URL del PDF generato", example="https://eccomibook-backend.onrender.com/static/chapters/ch_12345678.pdf")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "chapter_id": "ch_12345678",
                 "title": "Capitolo 1: L’inizio",
