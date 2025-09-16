@@ -1,17 +1,14 @@
 import os
 from pathlib import Path
+from typing import Union
 from .settings import get_settings
 
-# Directory base (robusta su Render)
+# Scelta root: preferisci settings.storage_dir (es. /var/data su Render)
 DEFAULT_DIRS = [
-    # 1) env var esplicita
-    lambda s: Path(s.storage_dir) if s.storage_dir else None,
-    # 2) ./data nella root di esecuzione
+    lambda s: Path(s.storage_dir) if getattr(s, "storage_dir", None) else None,
     lambda s: Path("./data"),
-    # 3) /tmp fallback sempre scrivibile
     lambda s: Path("/tmp/eccomibook-data"),
 ]
-
 
 def _pick_dir() -> Path:
     s = get_settings()
@@ -21,27 +18,32 @@ def _pick_dir() -> Path:
             continue
         try:
             p.mkdir(parents=True, exist_ok=True)
-            test = p / ".touch"
-            test.write_text("ok")
-            test.unlink(missing_ok=True)
+            t = p / ".touch"
+            t.write_text("ok")
+            t.unlink(missing_ok=True)
             return p
         except Exception:
             continue
-    # estremo fallback
     return Path("/tmp")
 
-
+# Root effettiva (es. /var/data in produzione, ./data in locale)
 BASE_DIR = _pick_dir()
 
-
 def ensure_dirs() -> None:
-    BASE_DIR.mkdir(parents=True, exist_ok=True)
+    (BASE_DIR / "chapters").mkdir(parents=True, exist_ok=True)
+    (BASE_DIR / "books").mkdir(parents=True, exist_ok=True)
 
+def file_path(relpath: Union[str, Path]) -> Path:
+    """
+    Accetta percorsi con sottocartelle, es.:
+    - "chapters/ch_abc.pdf"
+    - "books/bk_123.pdf"
+    """
+    p = (BASE_DIR / str(relpath)).resolve()
+    if not str(p).startswith(str(BASE_DIR.resolve())):
+        raise ValueError("Percorso non valido")
+    return p
 
-def file_path(filename: str) -> Path:
-    return BASE_DIR / filename
-
-
-def public_url(filename: str) -> str:
-    # URL di download esposto dalla stessa app
-    return f"/downloads/{filename}"
+def public_url(relpath: Union[str, Path]) -> str:
+    """URL di download servito dalla stessa app, compatibile con /downloads/{subpath:path}."""
+    return f"/downloads/{relpath}"
