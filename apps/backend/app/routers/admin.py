@@ -4,10 +4,10 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Body
 from pydantic import BaseModel, Field
 
-# siamo in app/routers → per risalire a backend usiamo "..."
-from ...deps import get_owner_full
-from ...users import USERS_BY_KEY, User, save_users
-from ...plans import ALL_PLANS, ACTIVE_STATUSES, normalize_plan
+
+from ..deps import get_owner_full
+from ..users import USERS_BY_KEY, User, save_users
+from ..plans import ALL_PLANS, ACTIVE_STATUSES, normalize_plan
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
