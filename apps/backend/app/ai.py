@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, Dict, Any
 
 from .settings import get_settings
-from .plans import PLANS, normalize_plan  # <<< usa i piani ufficiali
+from ..plans import PLANS, normalize_plan  # <<< usa i piani ufficiali
 
 try:
     from openai import OpenAI  # openai>=1.0
