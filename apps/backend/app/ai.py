@@ -1,77 +1,112 @@
-import os
-from datetime import date
-from fastapi import Depends, Header, HTTPException
-from enum import Enum
-from dataclasses import dataclass
-from typing import Optional
-from .models import Plan
-from . import storage
+# apps/backend/ai.py
+from __future__ import annotations
+from typing import Optional, Dict, Any
 
-# Definizione capacità per piano
-PLAN_CAPS = {
-    Plan.OWNER_FULL: dict(max_books=None, max_chapters_per_day=None, exports={"pdf": True, "epub": True, "docx": True}, priority="highest"),
-    Plan.PRO:        dict(max_books=None, max_chapters_per_day=200, exports={"pdf": True, "epub": True, "docx": True}, priority="high"),
-    Plan.GROWTH:     dict(max_books=5,   max_chapters_per_day=50,  exports={"pdf": True, "epub": True, "docx": False}, priority="high"),
-    Plan.START:      dict(max_books=1,   max_chapters_per_day=10,  exports={"pdf": True, "epub": False, "docx": False}, priority="normal"),
-}
+from .settings import get_settings
+from .plans import PLANS, normalize_plan  # <<< usa i piani ufficiali
 
-@dataclass
-class Caps:
-    user_id: str
-    plan: Plan
-    max_books: Optional[int]
-    max_chapters_per_day: Optional[int]
-    exports: dict
-    priority: str
+try:
+    from openai import OpenAI  # openai>=1.0
+except Exception:
+    OpenAI = None  # libreria non installata: useremo fallback
 
-def _caps_for_plan(user_id: str, plan: Plan) -> Caps:
-    c = PLAN_CAPS[plan]
-    return Caps(
-        user_id=user_id,
-        plan=plan,
-        max_books=c["max_books"],
-        max_chapters_per_day=c["max_chapters_per_day"],
-        exports=c["exports"],
-        priority=c["priority"],
+
+SYSTEM_PROMPT_IT = (
+    "Sei un autore professionista. Scrivi in italiano, tono chiaro e coinvolgente, "
+    "con ritmo narrativo e coesione. Evita elenchi puntati, preferisci paragrafi. "
+    "Usa transizioni naturali e dettagli sensoriali quando opportuno. "
+    "Non fare meta-commenti (non dire che stai generando un testo)."
+)
+
+def _length_instruction(target_words: int) -> str:
+    low = max(350, int(target_words * 0.8))
+    high = int(target_words * 1.1)
+    return (
+        f"OBIETTIVO LUNGHEZZA: scrivi tra {low} e {high} parole, con inizio accattivante, "
+        f"sviluppo coerente e piccolo gancio finale. Non inserire titoli nel corpo; no bullet point."
     )
 
-def current_caps(
-    x_api_key: Optional[str] = Header(None, convert_underscores=False),
-) -> Caps:
+def _build_user_prompt(title: str, prompt: str, outline: str, target_words: int) -> str:
+    parts = [f"TITOLO CAPITOLO: {title}"]
+    if prompt:
+        parts.append(f"BRIEF: {prompt}")
+    if outline:
+        parts.append("OUTLINE (indice sintetico):\n" + outline)
+    parts.append(_length_instruction(target_words))
+    return "\n\n".join(parts)
+
+def _profile_from_plan(plan: Optional[str]) -> Dict[str, Any]:
     """
-    Se l'header X-API-Key coincide con OWNER_API_KEY => owner_full (nessun limite).
-    Altrimenti, per ora *default* al piano GROWTH (puoi cambiare qui la policy
-    o collegare in futuro Shopify).
+    Ritorna un profilo AI derivato dal piano, con eventuali override da settings:
+    - model (default dal piano, override con OPENAI_MODEL)
+    - max_tokens (override con AI_MAX_TOKENS)
+    - temperature (override con AI_TEMPERATURE)
+    - target_words (dal piano)
     """
-    owner_key = os.getenv("OWNER_API_KEY", "").strip()
-    user_id = "guest"
+    s = get_settings()
+    canonical = normalize_plan(plan)
+    rules = PLANS[canonical]
+    profile = {
+        "model": rules.model,
+        "max_tokens": rules.max_tokens,
+        "temperature": rules.temperature,
+        "target_words": rules.target_words,
+    }
+    # override opzionali via ENV
+    if getattr(s, "openai_model", None):
+        profile["model"] = s.openai_model
+    if getattr(s, "ai_max_tokens", None):
+        profile["max_tokens"] = s.ai_max_tokens
+    if getattr(s, "ai_temperature", None) is not None:
+        profile["temperature"] = s.ai_temperature
+    return profile
 
-    if owner_key and x_api_key and x_api_key.strip() == owner_key:
-        return _caps_for_plan(user_id="owner", plan=Plan.OWNER_FULL)
+def generate_chapter_text(
+    *,
+    title: str,
+    prompt: str = "",
+    outline: str = "",
+    plan: Optional[str] = None,
+) -> str:
+    """
+    Genera testo narrativo del capitolo, agganciando automaticamente il MODELLO dal PIANO.
+    Se OpenAI non è configurato o c’è un errore, usa un fallback dignitoso.
+    """
+    s = get_settings()
+    profile = _profile_from_plan(plan)
+    target_words = int(profile["target_words"])
 
-    # TODO: integrare con Shopify (lookup piano utente dal tuo shop)
-    return _caps_for_plan(user_id=user_id, plan=Plan.GROWTH)
+    # Se abbiamo client e chiave → usa OpenAI
+    if OpenAI and s.openai_api_key:
+        client = OpenAI(api_key=s.openai_api_key)
+        user_prompt = _build_user_prompt(title, prompt, outline, target_words)
+        try:
+            resp = client.chat.completions.create(
+                model=profile["model"],
+                temperature=float(profile["temperature"]),
+                max_tokens=int(profile["max_tokens"]),
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT_IT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                timeout=60,
+            )
+            content = (resp.choices[0].message.content or "").strip()
+            if content:
+                return content
+        except Exception as e:
+            print(f"[AI] OpenAI error: {e!r} — uso fallback (plan={normalize_plan(plan)})")
 
-# ---------- Guardie / ensure ----------
-
-def ensure_can_create_book(caps: Caps):
-    if caps.plan == Plan.OWNER_FULL or caps.max_books is None:
-        return
-    # conteggio libri del mese per user
-    used = storage.get_usage_books_month(caps.user_id, month=date.today().strftime("%Y-%m"))
-    if used >= caps.max_books:
-        raise HTTPException(status_code=403, detail="Limite libri raggiunto per il tuo piano")
-
-def ensure_can_add_chapter(caps: Caps):
-    if caps.plan == Plan.OWNER_FULL or caps.max_chapters_per_day is None:
-        return
-    used = storage.get_usage_chapters_day(caps.user_id, day=date.today().isoformat())
-    if used >= caps.max_chapters_per_day:
-        raise HTTPException(status_code=403, detail="Limite capitoli/giorno raggiunto per il tuo piano")
-
-def ensure_can_export(fmt: str, caps: Caps):
-    if caps.plan == Plan.OWNER_FULL:
-        return
-    allowed = caps.exports.get(fmt.lower(), False)
-    if not allowed:
-        raise HTTPException(status_code=403, detail=f"Export {fmt.upper()} non incluso nel tuo piano")
+    # Fallback locale (se manca chiave o c’è errore)
+    scaffold = (outline or prompt or "").strip() or "Il capitolo presenta il protagonista e l'inizio del suo viaggio."
+    return (
+        f"«{title}»\n\n"
+        "Questo capitolo sviluppa i temi richiesti partendo dallo schema seguente:\n"
+        f"{scaffold}\n\n"
+        "(Fallback locale: configura OPENAI_API_KEY per la generazione completa.)\n\n"
+        "Il protagonista muove i primi passi in un mondo che lo sfida e lo attrae. "
+        "Le sue esitazioni si intrecciano con la curiosità, mentre il paesaggio intorno "
+        "cambia lentamente, rivelando dettagli e presagi. In assenza di motore creativo esterno, "
+        "questo paragrafo funge da segnaposto narrativo, pronto a essere sostituito "
+        "dalla generazione AI appena configurata."
+    )
