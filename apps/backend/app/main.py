@@ -10,12 +10,9 @@ from . import storage
 from .routers import books as books_router
 from .routers import generate as generate_router
 from .routers import auth as auth_router
-from .routers import admin as admin_router  # <<< pannello OWNER_FULL
+from .routers import admin as admin_router   # <<< pannello OWNER_FULL
 
-# opzionale: se in futuro userai anche il webhook billing
-# from .routers import billing as billing_router
-
-from .users import load_users, seed_demo_users  # <<< gestione utenti/piani
+from .users import load_users, seed_demo_users  # gestione utenti/piani
 
 app = FastAPI(
     title="EccomiBook Backend",
@@ -102,7 +99,4 @@ def debug_storage():
 app.include_router(auth_router.router, tags=["default"])
 app.include_router(books_router.router, tags=["default"])
 app.include_router(generate_router.router, tags=["default"])
-app.include_router(admin_router.router)  # <<< pannello OWNER_FULL ( /admin/... )
-
-# opzionale:
-# app.include_router(billing_router.router, tags=["billing"])
+app.include_router(admin_router.router)  # <<< pannello OWNER_FULL
