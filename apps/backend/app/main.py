@@ -10,6 +10,12 @@ from . import storage
 from .routers import books as books_router
 from .routers import generate as generate_router
 from .routers import auth as auth_router
+from .routers import admin as admin_router  # <<< pannello OWNER_FULL
+
+# opzionale: se in futuro userai anche il webhook billing
+# from .routers import billing as billing_router
+
+from .users import load_users, seed_demo_users  # <<< gestione utenti/piani
 
 app = FastAPI(
     title="EccomiBook Backend",
@@ -41,9 +47,19 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup() -> None:
+    # directory persistenti
     storage.ensure_dirs()
+
+    # piccolo DB in memoria
     app.state.books = {}  # {book_id: {...}}
     app.state.counters = {"books": 0}
+
+    # utenti/piani: carica da disco + seed demo (solo MVP)
+    load_users()
+    if not app.state.get("seeded"):
+        seed_demo_users()  # solo in dev/MVP
+        app.state["seeded"] = True
+
     settings = get_settings()
     print(f"✅ APP STARTED | ENV: {settings.environment} | STORAGE_ROOT={storage.BASE_DIR}")
 
@@ -86,3 +102,7 @@ def debug_storage():
 app.include_router(auth_router.router, tags=["default"])
 app.include_router(books_router.router, tags=["default"])
 app.include_router(generate_router.router, tags=["default"])
+app.include_router(admin_router.router)  # <<< pannello OWNER_FULL ( /admin/... )
+
+# opzionale:
+# app.include_router(billing_router.router, tags=["billing"])
