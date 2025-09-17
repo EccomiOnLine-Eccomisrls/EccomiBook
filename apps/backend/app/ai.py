@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Optional, Dict, Any
 
 from .settings import get_settings                    # stesso package (app)
-from ..plans import PLANS, normalize_plan             # salgo: app -> backend
+from .plans import PLANS, normalize_plan            
 
 try:
     from openai import OpenAI  # openai>=1.0
