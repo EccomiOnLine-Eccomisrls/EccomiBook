@@ -12,7 +12,7 @@ from .. import storage                     # path/URL persistenti
 from .. import ai                          # generazione AI
 
 # dipendenze/piani (salgo di due livelli: app/routers -> backend)
-from ...deps import get_current_user
+from ..deps import get_current_user
 from ..plans import PLANS
 
 router = APIRouter()
