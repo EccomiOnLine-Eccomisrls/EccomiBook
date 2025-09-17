@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 import shutil
 
 from .settings import get_settings
@@ -10,7 +9,7 @@ from . import storage
 from .routers import books as books_router
 from .routers import generate as generate_router
 from .routers import auth as auth_router
-from .routers import admin as admin_router   # <<< pannello OWNER_FULL
+from .routers import admin as admin_router   # pannello OWNER_FULL
 
 from .users import load_users, seed_demo_users  # gestione utenti/piani
 
@@ -44,9 +43,6 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup() -> None:
-    # directory persistenti
-    storage.ensure_dirs()
-
     # piccolo DB in memoria
     app.state.books = {}  # {book_id: {...}}
     app.state.counters = {"books": 0}
@@ -99,4 +95,4 @@ def debug_storage():
 app.include_router(auth_router.router, tags=["default"])
 app.include_router(books_router.router, tags=["default"])
 app.include_router(generate_router.router, tags=["default"])
-app.include_router(admin_router.router)  # <<< pannello OWNER_FULL
+app.include_router(admin_router.router, tags=["admin"])  # pannello OWNER_FULL
