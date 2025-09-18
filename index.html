@@ -1,14 +1,78 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>EccomiBook</title>
     <link rel="stylesheet" href="/src/styles.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EccomiBook Frontend</title>
   </head>
   <body>
-    <div id="root"></div>
-    <!-- in fondo a index.html -->
-<script type="module" src="/src/main.js"></script>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span class="brand-title">EccomiBook</span>
+      </div>
+      <div class="status">
+        <span id="health-dot" class="dot dot-off"></span>
+        <span id="health-text" class="status-text">Backend: verifico…</span>
+      </div>
+    </header>
+
+    <main class="container">
+      <!-- HERO -->
+      <section class="hero">
+        <h1>Crea libri professionali con AI</h1>
+        <p>Genera capitoli, organizza la libreria, esporta in PDF.</p>
+        <div class="actions">
+          <button id="btn-create" class="btn btn-primary">Crea Libro</button>
+          <button id="btn-library" class="btn btn-secondary">Libreria</button>
+          <button id="btn-edit" class="btn btn-ghost">Modifica Capitolo</button>
+        </div>
+      </section>
+
+      <!-- DASHBOARD -->
+      <section class="grid" id="dashboard">
+        <article class="card">
+          <h3>Quick start</h3>
+          <p>Avvia la creazione del tuo primo libro con pochi clic.</p>
+          <button class="btn btn-primary" id="card-create">Nuovo libro</button>
+        </article>
+
+        <article class="card">
+          <h3>Libreria</h3>
+          <p>Raccogli bozze e progetti completati in un unico posto.</p>
+          <button class="btn btn-secondary" id="card-library">Apri libreria</button>
+        </article>
+
+        <article class="card">
+          <h3>Modifica capitolo</h3>
+          <p>Affina titoli, riassunti e contenuti AI.</p>
+          <button class="btn btn-ghost" id="card-edit">Vai all’editor</button>
+        </article>
+      </section>
+
+      <!-- LIBRARY (placeholder) -->
+      <section class="library hidden" id="library">
+        <div class="library-head">
+          <h2>La tua libreria</h2>
+          <button class="btn btn-primary" id="lib-new">+ Nuovo libro</button>
+        </div>
+        <div class="empty">
+          <div class="empty-illustration">📚</div>
+          <h3>Nessun libro ancora</h3>
+          <p>Crea il tuo primo progetto e lo vedrai qui.</p>
+          <button class="btn btn-secondary" id="empty-create">Crea libro</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>© <span id="year"></span> EccomiOnline — Tutti i diritti riservati</span>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>
