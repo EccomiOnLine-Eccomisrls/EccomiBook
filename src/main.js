@@ -1,5 +1,6 @@
 // Legge l'URL del backend da ENV (Render -> Environment Variables)
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://eccomibook-backend.onrender.com";
+// usa env se c'è, altrimenti forza l'URL del backend (test)
+const API_BASE_URL = (import.meta?.env?.VITE_API_BASE_URL || 'https://eccomibook-backend.onrender.com').trim();
 
 // UI helpers
 const $ = (s) => document.querySelector(s);
