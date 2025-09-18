@@ -1,10 +1,92 @@
-* { box-sizing: border-box; }
-body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background: #0b0f19; color: #eef2ff; }
-.topbar { background: #111827; border-bottom: 1px solid #1f2937; padding: 12px 20px; position: sticky; top: 0; }
-.brand { font-weight: 700; letter-spacing: .2px; }
-.container { max-width: 980px; margin: 32px auto; padding: 0 16px; }
-.card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px; margin-top: 16px; }
-button { background: #22c55e; border: none; color: #0b0f19; padding: 10px 14px; border-radius: 8px; cursor: pointer; }
-button:hover { opacity: .9; }
-pre { white-space: pre-wrap; background: #0b1220; border: 1px solid #1e293b; padding: 10px; border-radius: 8px; }
-.footer { opacity: .7; text-align: center; margin: 60px 0 24px; font-size: 14px; }
+:root{
+  --eco-bg:#0e1116;
+  --eco-panel:#161a22;
+  --eco-border:#262b36;
+  --eco-text:#e6e8ee;
+  --eco-muted:#aeb6c7;
+  --eco-primary:#e02828; /* rosso Eccomi */
+  --eco-primary-600:#b71f1f;
+  --eco-secondary:#2b6cb0; /* blu supporto */
+  --eco-secondary-600:#1f4f80;
+  --radius:14px;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--eco-bg);
+  color:var(--eco-text);
+  font:16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+/* Top bar */
+.topbar{
+  position:sticky; top:0; z-index:10;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 20px; border-bottom:1px solid var(--eco-border);
+  background:linear-gradient(0deg, rgba(14,17,22,.6), rgba(14,17,22,.6));
+  backdrop-filter:saturate(140%) blur(8px);
+}
+.brand{display:flex; align-items:center; gap:10px; font-weight:700}
+.brand-dot{width:10px; height:10px; border-radius:50%; background:var(--eco-primary)}
+.brand-title{letter-spacing:.5px}
+.status{display:flex; align-items:center; gap:8px; color:var(--eco-muted); font-size:14px}
+.dot{display:inline-block; width:10px; height:10px; border-radius:50%}
+.dot-ok{background:#20c67a; box-shadow:0 0 0 3px rgba(32,198,122,.15)}
+.dot-off{background:#888;}
+
+/* Layout */
+.container{max-width:1100px; margin:32px auto; padding:0 18px}
+.hero{
+  background:linear-gradient(180deg, rgba(224,40,40,.08), rgba(43,108,176,.08));
+  border:1px solid var(--eco-border);
+  border-radius:var(--radius);
+  padding:28px;
+}
+.hero h1{margin:0 0 6px; font-size:28px}
+.hero p{margin:0 0 16px; color:var(--eco-muted)}
+.actions{display:flex; gap:10px; flex-wrap:wrap}
+
+/* Buttons */
+.btn{
+  border-radius:10px; border:1px solid transparent;
+  padding:10px 14px; font-weight:600; cursor:pointer;
+  color:var(--eco-text); background:var(--eco-panel);
+  transition:.15s ease-in-out;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn-primary{background:var(--eco-primary); border-color:var(--eco-primary-600)}
+.btn-primary:hover{background:var(--eco-primary-600)}
+.btn-secondary{background:var(--eco-secondary); border-color:var(--eco-secondary-600)}
+.btn-secondary:hover{background:var(--eco-secondary-600)}
+.btn-ghost{background:transparent; border-color:var(--eco-border); color:var(--eco-muted)}
+.btn-ghost:hover{border-color:#3a4254; color:var(--eco-text)}
+
+/* Cards grid */
+.grid{
+  display:grid; gap:16px; margin:22px 0;
+  grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+}
+.card{
+  background:var(--eco-panel); border:1px solid var(--eco-border);
+  border-radius:var(--radius); padding:18px;
+}
+.card h3{margin:0 0 6px}
+.card p{margin:0 0 14px; color:var(--eco-muted)}
+
+/* Library */
+.library{margin-top:26px}
+.library-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px}
+.empty{
+  border:1px dashed var(--eco-border); border-radius:var(--radius);
+  display:grid; place-items:center; text-align:center; padding:40px; gap:10px;
+  color:var(--eco-muted);
+}
+.empty-illustration{font-size:42px}
+
+.hidden{display:none}
+
+.footer{
+  margin:40px 0 24px; text-align:center; color:var(--eco-muted); font-size:14px;
+}
