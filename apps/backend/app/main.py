@@ -43,19 +43,21 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup() -> None:
+    # directory persistenti
+    storage.ensure_dirs()
+
     # piccolo DB in memoria
-    app.state.books = {}  # {book_id: {...}}
+    app.state.books = {}          # {book_id: {...}}
     app.state.counters = {"books": 0}
 
     # utenti/piani: carica da disco + seed demo (solo MVP)
     load_users()
-    if not app.state.get("seeded"):
-        seed_demo_users()  # solo in dev/MVP
-        app.state["seeded"] = True
+    if not getattr(app.state, "seeded", False):   # <<< qui il fix
+        seed_demo_users()                         # solo in dev/MVP
+        app.state.seeded = True                   # <<< e qui
 
     settings = get_settings()
     print(f"✅ APP STARTED | ENV: {settings.environment} | STORAGE_ROOT={storage.BASE_DIR}")
-
 @app.get("/health", tags=["default"])
 def health():
     return {"ok": True}
