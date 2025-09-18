@@ -1,46 +1,53 @@
-import './styles.css';
+// Legge la base URL dal build-time env (Render -> VITE_API_BASE_URL)
+// Fallback al tuo backend pubblico
+const API_BASE_URL =
+  (import.meta && import.meta.env && import.meta.env.VITE_API_BASE_URL) ||
+  "https://eccomibook-backend.onrender.com";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "undefined";
-
-// Funzione che controlla lo stato del backend
-async function checkBackend() {
-  const statusEl = document.getElementById('backend-status');
+// Stato backend + riga di debug
+const statusEl = document.getElementById("backend-status");
+(async () => {
   try {
-    const res = await fetch(`${API_BASE_URL}/health`);
-    if (res.ok) {
-      statusEl.textContent = "Backend: raggiungibile ✅";
-      statusEl.style.color = "lightgreen";
+    const r = await fetch(`${API_BASE_URL}/health`, { method: "GET" });
+    if (r.ok) {
+      statusEl.textContent = "Backend: OK";
     } else {
-      statusEl.textContent = "Backend: non raggiungibile ❌";
-      statusEl.style.color = "red";
+      statusEl.textContent = `Backend: errore ${r.status}`;
     }
   } catch (e) {
-    statusEl.textContent = "Backend: non raggiungibile ❌";
-    statusEl.style.color = "red";
+    statusEl.textContent = "Backend: non raggiungibile";
+  } finally {
+    const dbg = document.createElement("div");
+    dbg.style.fontSize = "10px";
+    dbg.style.opacity = "0.6";
+    dbg.textContent = `API: ${API_BASE_URL}`;
+    statusEl.appendChild(dbg);
   }
+})();
 
-  // Mostra l'URL effettivo (mini debug)
-  const debugLine = document.createElement('div');
-  debugLine.style.fontSize = '10px';
-  debugLine.style.opacity = '0.6';
-  debugLine.style.marginTop = '4px';
-  debugLine.textContent = `API: ${API_BASE_URL}`;
-  statusEl.appendChild(debugLine);
-}
+// Event delegation su tutti i bottoni con data-action
+document.addEventListener("click", (ev) => {
+  const btn = ev.target.closest("[data-action]");
+  if (!btn) return;
 
-// UI: Bottoni principali
-document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("btn-crea-libro").addEventListener("click", () => {
-    alert("📖 Funzione Crea Libro (da collegare al backend)");
-  });
+  const action = btn.getAttribute("data-action");
+  switch (action) {
+    case "crea-libro":
+      // TODO: sostituire con navigazione reale / chiamata a /books (POST)
+      alert("🚀 Crea Libro — (placeholder)");
+      break;
 
-  document.getElementById("btn-libreria").addEventListener("click", () => {
-    alert("📚 Funzione Libreria (da collegare al backend)");
-  });
+    case "libreria":
+      // TODO: sostituire con navigazione + fetch /books (GET)
+      alert("📚 Libreria — (placeholder)");
+      break;
 
-  document.getElementById("btn-modifica-capitolo").addEventListener("click", () => {
-    alert("✍️ Funzione Modifica Capitolo (da collegare al backend)");
-  });
+    case "modifica-capitolo":
+      // TODO: sostituire con navigazione editor
+      alert("✍️ Modifica Capitolo — (placeholder)");
+      break;
 
-  checkBackend();
+    default:
+      break;
+  }
 });
