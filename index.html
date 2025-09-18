@@ -2,88 +2,106 @@
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>EccomiBook</title>
-    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/styles.css" />
   </head>
-  <body>
-    <header class="topbar">
-      <div class="brand">📚 EccomiBook</div>
-      <div class="right">
-        <span id="backend-status" class="muted">Backend: verifica…</span>
-        <button id="btn-api-key" class="btn ghost">API key</button>
+  <body class="app">
+    <!-- Navbar -->
+    <header class="nav">
+      <div class="nav__left">
+        <span class="logo">📚</span>
+        <span class="brand">EccomiBook</span>
+        <span id="backend-status" class="backend-chip">Backend: verifica…</span>
+      </div>
+      <div class="nav__right">
+        <button id="btn-api-key" class="btn btn--ghost btn--xs">API key</button>
       </div>
     </header>
 
-    <main class="container">
-      <section class="hero">
-        <h1>Crea libri professionali con AI</h1>
-        <p>Genera capitoli, organizza la libreria, esporta in PDF.</p>
-        <div class="row gap">
-          <button id="btn-create-book" class="btn primary">Crea Libro</button>
-          <button id="btn-open-library" class="btn">Libreria</button>
-          <button id="btn-open-editor" class="btn ghost">Modifica Capitolo</button>
-        </div>
-      </section>
+    <!-- Hero -->
+    <section class="hero">
+      <h1 class="hero__title"><span>Crea libri professionali</span> <em>con AI</em></h1>
+      <p class="hero__subtitle">Genera capitoli, organizza la libreria, esporta in PDF.</p>
+      <div class="hero__actions">
+        <button class="btn btn--primary" id="cta-create">Crea Libro</button>
+        <button class="btn btn--neutral" id="cta-library">Libreria</button>
+        <button class="btn btn--neutral" id="cta-edit">Modifica Capitolo</button>
+      </div>
+    </section>
 
-      <!-- Quick actions -->
-      <section class="grid-3">
-        <div class="card">
-          <h3>Quick start</h3>
-          <p>Avvia la creazione del tuo primo libro con pochi clic.</p>
-          <button id="btn-quick-new" class="btn danger">Nuovo libro</button>
+    <!-- Dashboard grid -->
+    <main class="grid">
+      <!-- Quick start -->
+      <article class="card">
+        <h3 class="card__title">Quick start</h3>
+        <p class="card__text">Avvia la creazione del tuo primo libro con pochi clic.</p>
+        <div class="card__actions">
+          <button class="btn btn--primary" id="btn-new-book">Nuovo libro</button>
         </div>
+      </article>
 
-        <div class="card">
-          <h3>Libreria</h3>
-          <p>Raccogli bozze e progetti completati in un unico posto.</p>
-          <button id="btn-library-card" class="btn">Apri libreria</button>
+      <!-- Libreria -->
+      <article class="card">
+        <h3 class="card__title">Libreria</h3>
+        <p class="card__text">Raccogli bozze e progetti completati in un unico posto.</p>
+        <div class="card__actions">
+          <button class="btn btn--neutral" id="btn-open-library">Apri libreria</button>
         </div>
+      </article>
 
-        <div class="card">
-          <h3>Modifica capitolo</h3>
-          <p>Affina titoli, riassunti e contenuti AI.</p>
-          <button id="btn-editor-card" class="btn ghost">Vai all’editor</button>
+      <!-- Modifica capitolo -->
+      <article class="card">
+        <h3 class="card__title">Modifica capitolo</h3>
+        <p class="card__text">Affina titoli, riassunti e contenuti AI.</p>
+        <div class="card__actions">
+          <button class="btn btn--neutral" id="btn-open-editor">Vai all’editor</button>
         </div>
-      </section>
+      </article>
 
-      <!-- LIBRERIA -->
-      <section id="library-section" class="card hidden">
-        <div class="row between center">
-          <h3>La tua libreria</h3>
-          <button id="btn-refresh-library" class="btn ghost small">Aggiorna</button>
+      <!-- (Facoltativo) Quota/Export -->
+      <article class="card">
+        <h3 class="card__title">Strumenti</h3>
+        <p class="card__text">Esporta il libro in PDF o controlla lo stato del tuo piano.</p>
+        <div class="card__actions">
+          <button class="btn btn--neutral" id="btn-export-demo">Export demo</button>
         </div>
-        <div id="library-list" class="list"></div>
-      </section>
-
-      <!-- EDITOR (placeholder) -->
-      <section id="editor-section" class="card hidden">
-        <h3>Editor capitolo (demo)</h3>
-        <div class="row gap">
-          <input id="edit-book-id" class="input" placeholder="ID libro (es. book_il-tuo-titolo)" />
-          <input id="edit-chapter-id" class="input" placeholder="ID capitolo (se già esiste)" />
-        </div>
-        <textarea id="edit-content" class="textarea" rows="8" placeholder="Testo del capitolo..."></textarea>
-        <div class="row gap">
-          <button id="btn-editor-save" class="btn primary">Salva (demo)</button>
-          <button id="btn-editor-close" class="btn ghost">Chiudi</button>
-        </div>
-        <p class="muted small">Questo è un placeholder: appena definiamo l’endpoint ufficiale `PUT /books/{id}/chapters/{id}` lo colleghiamo qui.</p>
-      </section>
+      </article>
     </main>
 
-    <!-- Modal API KEY -->
-    <dialog id="apikey-modal" class="modal">
-      <form method="dialog" class="modal-card">
-        <h3>Imposta API key</h3>
-        <p class="muted small">Usa la key associata al tuo piano EccomiBook. Per test: <code>demo_key_user</code></p>
-        <input id="apikey-input" class="input" placeholder="Inserisci X-API-Key" />
-        <div class="row end gap">
-          <button value="cancel" class="btn ghost">Annulla</button>
-          <button id="apikey-save" class="btn primary">Salva</button>
+    <!-- Footer -->
+    <footer class="footer">
+      <span>© 2025 EccomiOnline — Tutti i diritti riservati</span>
+    </footer>
+
+    <!-- Modale Editor Capitolo (demo) -->
+    <div id="modal" class="modal" aria-hidden="true">
+      <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal__header">
+          <h3 id="modal-title">Editor capitolo (demo)</h3>
+          <button class="modal__close" id="modal-close" aria-label="Chiudi">×</button>
         </div>
-      </form>
-    </dialog>
+        <div class="modal__body">
+          <label class="field">
+            <span class="field__label">ID libro (es. <code>book_il-mio-titolo</code>)</span>
+            <input id="f-book-id" class="field__input" placeholder="book_il-mio-titolo" />
+          </label>
+          <label class="field">
+            <span class="field__label">ID capitolo (es. <code>ch_abc12345</code>)</span>
+            <input id="f-ch-id" class="field__input" placeholder="ch_xxxxxx" />
+          </label>
+          <label class="field">
+            <span class="field__label">Testo del capitolo</span>
+            <textarea id="f-ch-text" class="field__textarea" rows="8" placeholder="Scrivi o incolla qui…"></textarea>
+          </label>
+          <p class="muted">Placeholder: collegheremo il PUT <code>/books/{id}/chapters/{id}</code>.</p>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--primary" id="modal-save">Salva (demo)</button>
+          <button class="btn" id="modal-cancel">Chiudi</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="/src/main.js"></script>
   </body>
