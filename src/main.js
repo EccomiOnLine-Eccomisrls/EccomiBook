@@ -1,32 +1,60 @@
-const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+// Legge l'URL del backend da ENV (Render -> Environment Variables)
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://eccomibook-backend.onrender.com";
 
-// UI minimale per verificare che tutto funzioni
-const app = document.getElementById("app");
-app.innerHTML = `
-  <header class="topbar">
-    <div class="brand">📚 EccomiBook</div>
-  </header>
+// UI helpers
+const $ = (s) => document.querySelector(s);
+const show = (el) => el.classList.remove("hidden");
+const hide = (el) => el.classList.add("hidden");
 
-  <main class="container">
-    <h1>Benvenuto/a</h1>
-    <p>Frontend Vite collegato al backend FastAPI.</p>
+// Footer anno
+$("#year").textContent = new Date().getFullYear();
 
-    <div class="card">
-      <h3>Ping backend</h3>
-      <button id="btnHealth">Chiama /health</button>
-      <pre id="out"></pre>
-    </div>
-  </main>
-  <footer class="footer">© ${new Date().getFullYear()} EccomiBook</footer>
-`;
-
-document.getElementById("btnHealth").onclick = async () => {
-  const out = document.getElementById("out");
-  out.textContent = "Loading...";
+// Health check backend
+async function checkHealth() {
+  const dot = $("#health-dot");
+  const text = $("#health-text");
   try {
-    const r = await fetch(`${API}/health`);
-    out.textContent = await r.text();
-  } catch (e) {
-    out.textContent = String(e);
+    const r = await fetch(`${API_BASE}/health`, { cache: "no-store" });
+    if (!r.ok) throw new Error("not ok");
+    const data = await r.json();
+    if (data && data.ok) {
+      dot.classList.remove("dot-off");
+      dot.classList.add("dot-ok");
+      text.textContent = "Backend: connesso";
+      return;
+    }
+    throw new Error("invalid");
+  } catch {
+    dot.classList.remove("dot-ok");
+    dot.classList.add("dot-off");
+    text.textContent = "Backend: non raggiungibile";
   }
-};
+}
+checkHealth();
+
+// Navigazione molto semplice: mostra Libreria o Dashboard
+function goLibrary() {
+  hide($("#dashboard"));
+  show($("#library"));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function goDashboard() {
+  hide($("#library"));
+  show($("#dashboard"));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// Bind pulsanti
+$("#btn-create").addEventListener("click", () => alert("Azione: Crea Libro (hook da collegare)"));
+$("#btn-library").addEventListener("click", goLibrary);
+$("#btn-edit").addEventListener("click", () => alert("Azione: Modifica Capitolo (hook da collegare)"));
+
+$("#card-create").addEventListener("click", () => alert("Azione: Crea Libro"));
+$("#card-library").addEventListener("click", goLibrary);
+$("#card-edit").addEventListener("click", () => alert("Azione: Modifica Capitolo"));
+
+$("#lib-new").addEventListener("click", () => alert("Azione: Nuovo libro"));
+$("#empty-create").addEventListener("click", goDashboard);
+
+// (Opzionale) refresh periodico health
+setInterval(checkHealth, 15000);
