@@ -17,9 +17,9 @@
       <h2>Crea libri professionali con AI</h2>
       <p>Genera capitoli, organizza la libreria, esporta in PDF.</p>
       <div class="buttons">
-        <button id="btn-crea-libro" class="btn btn-red">Crea Libro</button>
-        <button id="btn-libreria" class="btn btn-blue">Libreria</button>
-        <button id="btn-modifica-capitolo" class="btn btn-gray">Modifica Capitolo</button>
+        <button data-action="crea-libro" class="btn btn-red">Crea Libro</button>
+        <button data-action="libreria" class="btn btn-blue">Libreria</button>
+        <button data-action="modifica-capitolo" class="btn btn-gray">Modifica Capitolo</button>
       </div>
     </section>
 
@@ -27,17 +27,17 @@
       <div class="card">
         <h3>Quick start</h3>
         <p>Avvia la creazione del tuo primo libro con pochi clic.</p>
-        <button id="btn-crea-libro" class="btn btn-red">Nuovo libro</button>
+        <button data-action="crea-libro" class="btn btn-red">Nuovo libro</button>
       </div>
       <div class="card">
         <h3>Libreria</h3>
         <p>Raccogli bozze e progetti completati in un unico posto.</p>
-        <button id="btn-libreria" class="btn btn-blue">Apri libreria</button>
+        <button data-action="libreria" class="btn btn-blue">Apri libreria</button>
       </div>
       <div class="card">
         <h3>Modifica capitolo</h3>
         <p>Affina titoli, riassunti e contenuti AI.</p>
-        <button id="btn-modifica-capitolo" class="btn btn-gray">Vai all’editor</button>
+        <button data-action="modifica-capitolo" class="btn btn-gray">Vai all’editor</button>
       </div>
     </section>
   </main>
@@ -46,6 +46,7 @@
     <p>© 2025 EccomiOnline — Tutti i diritti riservati</p>
   </footer>
 
+  <!-- Vite userà questo come entry e riscriverà lo script in /dist -->
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
