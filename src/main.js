@@ -1,61 +1,31 @@
-// Legge l'URL del backend da ENV (Render -> Environment Variables)
-// usa env se c'è, altrimenti forza l'URL del backend (test)
-const API_BASE_URL = (import.meta?.env?.VITE_API_BASE_URL || 'https://eccomibook-backend.onrender.com').trim();
+// src/main.js
+import './styles.css';
 
-// UI helpers
-const $ = (s) => document.querySelector(s);
-const show = (el) => el.classList.remove("hidden");
-const hide = (el) => el.classList.add("hidden");
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "undefined";
 
-// Footer anno
-$("#year").textContent = new Date().getFullYear();
-
-// Health check backend
-async function checkHealth() {
-  const dot = $("#health-dot");
-  const text = $("#health-text");
+// Funzione che controlla lo stato del backend
+async function checkBackend() {
+  const statusEl = document.getElementById('backend-status');
   try {
-    const r = await fetch(`${API_BASE}/health`, { cache: "no-store" });
-    if (!r.ok) throw new Error("not ok");
-    const data = await r.json();
-    if (data && data.ok) {
-      dot.classList.remove("dot-off");
-      dot.classList.add("dot-ok");
-      text.textContent = "Backend: connesso";
-      return;
+    const res = await fetch(`${API_BASE_URL}/health`);
+    if (res.ok) {
+      statusEl.textContent = "Backend: raggiungibile ✅";
+      statusEl.style.color = "lightgreen";
+    } else {
+      statusEl.textContent = "Backend: non raggiungibile ❌";
+      statusEl.style.color = "red";
     }
-    throw new Error("invalid");
-  } catch {
-    dot.classList.remove("dot-ok");
-    dot.classList.add("dot-off");
-    text.textContent = "Backend: non raggiungibile";
+  } catch (e) {
+    statusEl.textContent = "Backend: non raggiungibile ❌";
+    statusEl.style.color = "red";
   }
-}
-checkHealth();
 
-// Navigazione molto semplice: mostra Libreria o Dashboard
-function goLibrary() {
-  hide($("#dashboard"));
-  show($("#library"));
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-function goDashboard() {
-  hide($("#library"));
-  show($("#dashboard"));
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  // Mostra l'URL effettivo (mini debug)
+  const debugLine = document.createElement('div');
+  debugLine.style.fontSize = '10px';
+  debugLine.style.opacity = '0.6';
+  debugLine.textContent = `API: ${API_BASE_URL}`;
+  statusEl.appendChild(debugLine);
 }
 
-// Bind pulsanti
-$("#btn-create").addEventListener("click", () => alert("Azione: Crea Libro (hook da collegare)"));
-$("#btn-library").addEventListener("click", goLibrary);
-$("#btn-edit").addEventListener("click", () => alert("Azione: Modifica Capitolo (hook da collegare)"));
-
-$("#card-create").addEventListener("click", () => alert("Azione: Crea Libro"));
-$("#card-library").addEventListener("click", goLibrary);
-$("#card-edit").addEventListener("click", () => alert("Azione: Modifica Capitolo"));
-
-$("#lib-new").addEventListener("click", () => alert("Azione: Nuovo libro"));
-$("#empty-create").addEventListener("click", goDashboard);
-
-// (Opzionale) refresh periodico health
-setInterval(checkHealth, 15000);
+checkBackend();
