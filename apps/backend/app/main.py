@@ -13,11 +13,21 @@ from .routers import admin as admin_router   # pannello OWNER_FULL
 
 from .users import load_users, seed_demo_users  # gestione utenti/piani
 
+# --- Metadati tag (solo per organizzare la doc, tutto in IT) ---
+OPENAPI_TAGS = [
+    {"name": "default",  "description": "Endpoint generali: health, test, download e diagnostica storage."},
+    {"name": "books",    "description": "Gestione libri e capitoli (creazione, elenco, ecc.)."},
+    {"name": "generate", "description": "Generazione AI di capitoli e export PDF del libro."},
+    {"name": "admin",    "description": "Pannello amministratore (OWNER_FULL): gestione utenti e piani."},
+]
+
 app = FastAPI(
     title="EccomiBook Backend",
+    description="API per gestire libri, capitoli e generazione AI con EccomiBook. Documentazione in italiano.",
     version="0.1.0",
     openapi_url="/openapi.json",
-    docs_url="/",
+    docs_url="/",               # Swagger UI sulla root
+    openapi_tags=OPENAPI_TAGS,  # <- metadati in italiano
 )
 
 # Mount statici sul DISCO PERSISTENTE
@@ -68,7 +78,7 @@ def test_page():
     return {"ok": True, "msg": "test"}
 
 # Download file esportati (supporta sottocartelle)
-@app.get("/downloads/{subpath:path}", tags=["default"], summary="Download File")
+@app.get("/downloads/{subpath:path}", tags=["default"], summary="Download file")
 def download_file(subpath: str):
     full_path = (storage.BASE_DIR / subpath).resolve()
     if not str(full_path).startswith(str(storage.BASE_DIR.resolve())):
@@ -78,7 +88,7 @@ def download_file(subpath: str):
     return FileResponse(full_path)
 
 # Diagnostica storage (utile per verificare Render Disk)
-@app.get("/debug/storage", tags=["default"])
+@app.get("/debug/storage", tags=["default"], summary="Diagnostica storage")
 def debug_storage():
     root = storage.BASE_DIR
     total, used, free = shutil.disk_usage(root)
@@ -96,6 +106,6 @@ def debug_storage():
 
 # Routers
 app.include_router(auth_router.router, tags=["default"])
-app.include_router(books_router.router, tags=["default"])
-app.include_router(generate_router.router, tags=["default"])
+app.include_router(books_router.router, tags=["books"])
+app.include_router(generate_router.router, tags=["generate"])
 app.include_router(admin_router.router, tags=["admin"])  # pannello OWNER_FULL
