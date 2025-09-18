@@ -51,13 +51,14 @@ def on_startup() -> None:
     app.state.counters = {"books": 0}
 
     # utenti/piani: carica da disco + seed demo (solo MVP)
-load_users()
-if not getattr(app.state, "seeded", False):
-    seed_demo_users()  # solo in dev/MVP
-    app.state.seeded = True
+    load_users()
+    if not getattr(app.state, "seeded", False):
+        seed_demo_users()  # solo in dev/MVP
+        app.state.seeded = True
 
     settings = get_settings()
     print(f"✅ APP STARTED | ENV: {settings.environment} | STORAGE_ROOT={storage.BASE_DIR}")
+
 @app.get("/health", tags=["default"])
 def health():
     return {"ok": True}
