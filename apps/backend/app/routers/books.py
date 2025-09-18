@@ -1,105 +1,64 @@
-from fastapi import APIRouter, Header, HTTPException, Request, Body, Path
-from typing import Dict, Any, List
+# apps/backend/app/routers/books.py
+from fastapi import APIRouter, HTTPException, Body, Request, Header, Depends
+from pydantic import BaseModel
+import uuid
+import re
 
-from ..models import BookCreate, ChapterCreate, BookOut, ChapterOut
 from ..settings import get_settings
+from .. import storage
+from ..deps import get_current_user
+from ..plans import PLANS
 
 router = APIRouter()
 
 
-def _auth_or_403(x_api_key: str | None):
-    settings = get_settings()
-    if settings.x_api_key and x_api_key != settings.x_api_key:
-        raise HTTPException(status_code=403, detail="Chiave API non valida")
+class BookIn(BaseModel):
+    title: str
+    author: str | None = None
+    abstract: str | None = None
+    description: str | None = None
+    genre: str | None = None
+    language: str = "it"
+    plan: str | None = None
+    chapters: list[dict] = []
 
 
-@router.get("/books", summary="List Books", response_model=List[BookOut])
-def list_books(request: Request):
-    books: Dict[str, Dict[str, Any]] = request.app.state.books
-    return [BookOut(**b) for b in books.values()]
+def slugify(text: str) -> str:
+    """Crea slug leggibile dal titolo."""
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    return text.strip("-")
 
 
-@router.post("/books", summary="Create Book", response_model=BookOut)
+@router.post("/books/create", tags=["books"])
 def create_book(
     request: Request,
-    payload: BookCreate = Body(...),
+    payload: BookIn = Body(...),
     x_api_key: str | None = Header(default=None),
+    user=Depends(get_current_user),
 ):
-    _auth_or_403(x_api_key)
-    books: Dict[str, Dict[str, Any]] = request.app.state.books
+    # Controllo piano utente
+    rules = PLANS.get((user.plan or "START").upper(), PLANS["START"])
+    if not rules.allow_books:
+        raise HTTPException(status_code=403, detail="Il tuo piano non consente la creazione di libri")
 
-    # ID incrementale semplice
-    request.app.state.counters["books"] += 1
-    num = request.app.state.counters["books"]
-    book_id = f"book_{num:07x}"
+    # Genera ID libro leggibile
+    slug = slugify(payload.title) or "senza-titolo"
+    random_part = uuid.uuid4().hex[:6]
+    book_id = f"book_{slug}_{random_part}"
 
-    book: Dict[str, Any] = {
+    # Salva in memoria
+    books_db = request.app.state.books
+    books_db[book_id] = {
         "id": book_id,
         "title": payload.title,
         "author": payload.author,
-        "language": payload.language,
-        "genre": payload.genre,
+        "abstract": payload.abstract,
         "description": payload.description,
-        "abstract": payload.abstract or None,
-        "plan": payload.plan,
-        "chapters": [],
+        "genre": payload.genre,
+        "language": payload.language,
+        "plan": payload.plan or user.plan,
+        "chapters": payload.chapters,
     }
-    books[book_id] = book
-    return BookOut(**book)
 
-
-@router.post(
-    "/books/{book_id}/chapters",
-    summary="Add Chapter",
-    response_model=ChapterOut,
-)
-def add_chapter(
-    request: Request,
-    book_id: str = Path(..., description="ID del libro"),
-    payload: ChapterCreate = Body(...),
-    x_api_key: str | None = Header(default=None),
-):
-    _auth_or_403(x_api_key)
-    books: Dict[str, Dict[str, Any]] = request.app.state.books
-    if book_id not in books:
-        raise HTTPException(status_code=404, detail="Libro non trovato")
-
-    idx = len(books[book_id]["chapters"]) + 1
-    ch_id = f"ch_{idx:08x}"
-
-    chapter = {
-        "id": ch_id,
-        "title": payload.title,
-        "prompt": payload.prompt,
-        "outline": payload.outline or "",
-    }
-    books[book_id]["chapters"].append(chapter)
-    return ChapterOut(**chapter)
-
-
-@router.put(
-    "/books/{book_id}/chapters/{chapter_id}",
-    summary="Update Chapter",
-    response_model=ChapterOut,
-)
-def update_chapter(
-    request: Request,
-    book_id: str,
-    chapter_id: str,
-    payload: ChapterCreate = Body(...),
-    x_api_key: str | None = Header(default=None),
-):
-    _auth_or_403(x_api_key)
-    books: Dict[str, Dict[str, Any]] = request.app.state.books
-    if book_id not in books:
-        raise HTTPException(status_code=404, detail="Libro non trovato")
-
-    chapters = books[book_id]["chapters"]
-    for ch in chapters:
-        if ch["id"] == chapter_id:
-            ch["title"] = payload.title
-            ch["prompt"] = payload.prompt
-            ch["outline"] = payload.outline or ch.get("outline", "")
-            return ChapterOut(**ch)
-
-    raise HTTPException(status_code=404, detail="Capitolo non trovato")
+    return {"book_id": book_id, "title": payload.title, "chapters_count": len(payload.chapters)}
