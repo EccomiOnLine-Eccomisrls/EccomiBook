@@ -1,28 +1,20 @@
 /* =========================================================
  * EccomiBook — Frontend vanilla (Vite)
- * main.js
+ * src/main.js
  * ========================================================= */
 
 import './styles.css';
+
 const API_BASE_URL =
   (import.meta?.env?.VITE_API_BASE_URL) ||
   window.VITE_API_BASE_URL ||
   "https://eccomibook-backend.onrender.com";
 
-/* ────────────────────────────────────────────────
-   Utilità
-   ──────────────────────────────────────────────── */
-function $(sel) {
-  return document.querySelector(sel);
-}
-function setText(id, text) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = text;
-}
+/* Utils */
+const $ = (sel) => document.querySelector(sel);
+const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
 
-/* ────────────────────────────────────────────────
-   Ping backend
-   ──────────────────────────────────────────────── */
+/* Ping backend */
 async function pingBackend() {
   const el = document.getElementById("backend-status");
   if (!el) return;
@@ -35,16 +27,14 @@ async function pingBackend() {
     setText("backend-status", "Backend: non raggiungibile");
   }
 
-  // debug URL
+  // Mostra l’URL effettivo (mini debug)
   const dbg = document.createElement("div");
   dbg.className = "debug-url";
-  dbg.innerHTML = `API: <a href="${API_BASE_URL}" target="_blank">${API_BASE_URL}</a>`;
+  dbg.innerHTML = `API: <a href="${API_BASE_URL}" target="_blank" rel="noreferrer">${API_BASE_URL}</a>`;
   el.appendChild(dbg);
 }
 
-/* ────────────────────────────────────────────────
-   Azioni
-   ──────────────────────────────────────────────── */
+/* Azioni */
 async function createBookSimple() {
   const title = prompt("Titolo del libro:", "Manuale EccomiBook");
   if (!title) return;
@@ -75,26 +65,17 @@ async function createBookSimple() {
   }
 }
 
-function goLibrary() {
-  alert("📖 Libreria — funzione in arrivo");
-}
+function goLibrary() { alert("📖 Libreria — in arrivo"); }
+function goEditor()  { alert("✏️ Editor — in arrivo");  }
 
-function goEditor() {
-  alert("✏️ Editor capitolo — funzione in arrivo");
-}
-
-/* ────────────────────────────────────────────────
-   Hook UI
-   ──────────────────────────────────────────────── */
+/* Hook UI */
 function wireButtons() {
   $("#btn-create-book")?.addEventListener("click", createBookSimple);
   $("#btn-library")?.addEventListener("click", goLibrary);
   $("#btn-editor")?.addEventListener("click", goEditor);
 }
 
-/* ────────────────────────────────────────────────
-   Init
-   ──────────────────────────────────────────────── */
+/* Init */
 document.addEventListener("DOMContentLoaded", async () => {
   wireButtons();
   await pingBackend();
