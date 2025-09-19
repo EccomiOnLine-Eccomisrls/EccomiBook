@@ -1,46 +1,82 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EccomiBook</title>
-    <!-- niente link diretto al CSS -->
-<script type="module" src="/src/main.js"></script>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>EccomiBook — Dashboard</title>
+    <!-- Lo stile è importato dentro main.js (import "./styles.css") -->
   </head>
   <body>
+    <!-- Topbar -->
     <header class="topbar">
-      <div class="logo">📚 EccomiBook</div>
-      <div id="backend-status" class="status"></div>
-      <nav class="menu">
-        <button id="btn-create-book" class="btn">+ Nuovo Libro</button>
-        <button id="btn-library" class="btn">Libreria</button>
-        <button id="btn-editor" class="btn">✏️ Editor Capitolo</button>
-      </nav>
+      <div class="brand">
+        <div class="logo">📚</div>
+        <div class="title">EccomiBook</div>
+      </div>
+
+      <div id="backend-status" class="backend-pill">Backend: …</div>
+
+      <div class="actions">
+        <button id="btn-create-book" class="btn btn-primary">+ Crea libro</button>
+        <button id="btn-library" class="btn btn-secondary">Libreria</button>
+        <button id="btn-editor" class="btn btn-ghost">Editor capitolo</button>
+      </div>
     </header>
 
-    <main>
-      <section class="hero">
-        <h1>Crea libri professionali con AI</h1>
-        <p>Genera capitoli, organizza la libreria, esporta in PDF.</p>
-      </section>
+    <!-- Contenuto -->
+    <main class="container">
+      <h1 class="hero">Benvenuto in EccomiBook</h1>
+      <p class="subhero">
+        Genera libri e manuali con l’assistente AI. Crea subito un nuovo progetto oppure
+        apri la tua libreria.
+      </p>
 
-      <!-- Editor nascosto di default -->
-      <section id="editor-card" class="card" style="display:none;">
-        <h2>Editor Capitolo <span id="editor-mode-badge" class="badge"></span></h2>
-        <input id="bookIdInput" placeholder="ID Libro (es. book_xxx)" />
-        <input id="chapterIdInput" placeholder="ID Capitolo (es. ch_0001)" />
-        <textarea id="chapterText" rows="8"></textarea>
-        <div class="actions">
-          <button id="btn-ed-save" class="btn">Salva</button>
-          <button id="btn-ed-close" class="btn btn-secondary">Chiudi</button>
+      <section class="card" style="margin-top:24px">
+        <div class="card-head">
+          <h2 style="margin:0">Azioni rapide</h2>
+          <span class="badge badge-gray">MVP</span>
+        </div>
+
+        <div class="grid">
+          <div>
+            <label>Creazione rapida</label>
+            <p style="margin:.25rem 0 .75rem 0; color:var(--muted);">
+              Clicca “Crea libro” per avviare un progetto base (titolo e autore).
+            </p>
+            <button id="btn-create-book" class="btn btn-primary">+ Crea libro</button>
+          </div>
+
+          <div>
+            <label>Libreria</label>
+            <p style="margin:.25rem 0 .75rem 0; color:var(--muted);">
+              Visualizza i libri creati e riprendi il lavoro.
+            </p>
+            <button id="btn-library" class="btn btn-secondary">Apri libreria</button>
+          </div>
+        </div>
+
+        <div>
+          <label>Editor capitolo</label>
+          <p style="margin:.25rem 0 .75rem 0; color:var(--muted);">
+            Accedi all’editor dei capitoli (funzione in arrivo nella prossima iterazione).
+          </p>
+          <button id="btn-editor" class="btn btn-ghost">Apri editor</button>
         </div>
       </section>
+
+      <p class="footer">
+        © <span id="year"></span> EccomiBook — Tutti i diritti riservati.
+      </p>
     </main>
 
-    <footer>
-      <p>© 2025 EccomiOnline — Tutti i diritti riservati</p>
-    </footer>
-
-    <script type="module" src="main.js"></script>
+    <!-- Script Vite -->
+    <script type="module" src="/src/main.js"></script>
+    <script>
+      // piccola comodità per l’anno nel footer
+      document.getElementById("year").textContent = new Date().getFullYear();
+    </script>
   </body>
 </html>
