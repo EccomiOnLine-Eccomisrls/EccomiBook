@@ -10,9 +10,6 @@ const API_BASE_URL =
   window.VITE_API_BASE_URL ||
   "https://eccomibook-backend.onrender.com";
 
-// editor in DEMO finché non abilitiamo il PUT
-const USE_DEMO_EDITOR = true;
-
 /* ────────────────────────────────────────────────
    Utilità
    ──────────────────────────────────────────────── */
@@ -20,7 +17,7 @@ const $ = (sel) => document.querySelector(sel);
 const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
 
 /* ────────────────────────────────────────────────
-   Ping backend
+   Backend status
    ──────────────────────────────────────────────── */
 async function pingBackend() {
   const el = document.getElementById("backend-status");
@@ -34,6 +31,7 @@ async function pingBackend() {
     setText("backend-status", "Backend: non raggiungibile");
   }
 
+  // mini-debug URL
   const dbg = document.createElement("div");
   dbg.className = "debug-url";
   dbg.innerHTML = `API: <a href="${API_BASE_URL}" target="_blank" rel="noreferrer">${API_BASE_URL}</a>`;
@@ -43,51 +41,65 @@ async function pingBackend() {
 /* ────────────────────────────────────────────────
    Libreria
    ──────────────────────────────────────────────── */
-function showLibrary() {
-  const lib = document.getElementById("library-section");
-  if (lib) lib.style.display = "block";
-  loadLibrary();
+async function fetchBooks() {
+  const res = await fetch(`${API_BASE_URL}/books`);
+  if (!res.ok) throw new Error(`Errore (${res.status})`);
+  const data = await res.json();
+  // compat: il backend può restituire {books:{}} o direttamente {}
+  return data?.books ?? data ?? {};
 }
 
-async function loadLibrary() {
-  const list = document.getElementById("library-list");
-  if (!list) return;
+function renderLibrary(booksById = {}) {
+  const container = document.getElementById("library-list");
+  if (!container) return;
 
-  list.innerHTML = "Caricamento…";
+  container.innerHTML = "";
+  const ids = Object.keys(booksById);
 
-  try {
-    const res = await fetch(`${API_BASE_URL}/books`);
-    if (!res.ok) throw new Error(`Errore ${res.status}`);
-    const data = await res.json();
-    const books = data.items || [];
+  if (!ids.length) {
+    container.innerHTML = `<div class="card" style="opacity:.8">Nessun libro ancora. Crea il tuo primo libro con “Crea libro”.</div>`;
+    return;
+  }
 
-    if (books.length === 0) {
-      list.className = "";
-      list.innerHTML = "<em>Nessun libro ancora. Crea il tuo primo libro!</em>";
-      return;
-    }
-
-    list.className = "library-grid";
-    list.innerHTML = "";
-
-    books.forEach(b => {
-      const card = document.createElement("div");
-      card.className = "book-card";
-      card.innerHTML = `
-        <div class="book-title">${b.title || "(senza titolo)"}</div>
-        <div class="book-meta">Autore: ${b.author || "-"} — Lingua: ${b.language || "-"}</div>
-        <div class="book-id">${b.id}</div>
-        <div class="book-actions" style="margin-top:12px;">
-          <button class="btn btn-secondary" data-open="${b.id}">Apri</button>
+  ids.forEach((id) => {
+    const b = booksById[id] || {};
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.margin = "10px 0";
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:600">${b.title || "(senza titolo)"}</div>
+          <div style="font-size:13px;opacity:.8">Autore: ${b.author || "—"} — Lingua: ${b.language || "it"}</div>
         </div>
-      `;
-      card.querySelector(`[data-open="${b.id}"]`).addEventListener("click", () => openBook(b.id));
-      list.appendChild(card);
-    });
+        <code style="opacity:.7">${id}</code>
+      </div>
+      <div class="row-right" style="margin-top:10px">
+        <button class="btn btn-secondary" data-open-id="${id}">Apri</button>
+        <button class="btn btn-ghost" data-edit-id="${id}">Modifica</button>
+        <button class="btn btn-ghost" data-del-id="${id}">Elimina</button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
 
+  // wire “Apri”
+  container.querySelectorAll("[data-open-id]").forEach(btn => {
+    btn.addEventListener("click", () => openBook(btn.getAttribute("data-open-id")));
+  });
+
+  // (se vuoi: future handler per Modifica/Elimina)
+}
+
+/* mostra la sezione libreria */
+async function showLibrary() {
+  $("#library-section").style.display = "block";
+  try {
+    const books = await fetchBooks();
+    renderLibrary(books);
   } catch (e) {
-    list.className = "";
-    list.innerHTML = `<span style="color:red">Errore di rete: ${e.message}</span>`;
+    document.getElementById("library-list").innerHTML =
+      `<div class="card" style="border-color:#5a2a2a;color:#f2b5b5">Errore di rete: ${e.message}</div>`;
   }
 }
 
@@ -117,7 +129,10 @@ async function createBookSimple() {
     }
 
     const data = await res.json();
+    alert(`✅ Libro creato!\nID: ${data.book_id}\nTitolo: ${data.title}`);
     try { localStorage.setItem("last_book_id", data.book_id); } catch {}
+
+    // aggiorna libreria a vista
     showLibrary();
   } catch (e) {
     alert("Errore di rete: " + e.message);
@@ -125,64 +140,35 @@ async function createBookSimple() {
 }
 
 /* ────────────────────────────────────────────────
-   Editor capitolo (DEMO per ora)
+   Editor capitolo (placeholder)
    ──────────────────────────────────────────────── */
 function openBook(bookId) {
-  // mostra editor e pre-compila ID
-  const sec = document.getElementById("editor-section");
-  if (sec) sec.style.display = "block";
-
-  $("#ed-book-id").value = bookId;
-  $("#ed-chapter-id").value = $("#ed-chapter-id").value || "ch_0001";
-  $("#ed-content").focus();
-
+  const ed = $("#editor-card");
+  if (ed) ed.style.display = "block";
+  const book = $("#bookIdInput");
+  const ch = $("#chapterIdInput");
+  const tx = $("#chapterText");
+  if (book) book.value = bookId || "";
+  if (ch && !ch.value) ch.value = "ch_0001";
+  if (tx && !tx.value) tx.value = "";
   try { localStorage.setItem("last_book_id", bookId); } catch {}
-
-  const badge = document.getElementById("editor-mode-badge");
-  if (badge) {
-    badge.textContent = USE_DEMO_EDITOR ? "DEMO" : "REALE";
-    badge.className = "badge " + (USE_DEMO_EDITOR ? "badge-gray" : "badge-green");
-  }
 }
 
 function closeEditor() {
-  const sec = document.getElementById("editor-section");
-  if (sec) sec.style.display = "none";
+  const ed = $("#editor-card");
+  if (ed) ed.style.display = "none";
 }
 
 async function saveChapter() {
-  const bookId = $("#ed-book-id").value.trim();
-  const chapterId = $("#ed-chapter-id").value.trim();
-  const content = $("#ed-content").value;
-
-  if (!bookId || !chapterId) {
-    alert("Inserisci ID libro e ID capitolo.");
-    return;
-  }
-
-  if (USE_DEMO_EDITOR) {
-    alert(`(DEMO) Salvataggio capitolo\n\nLibro: ${bookId}\nCapitolo: ${chapterId}\n\nTesto (primi 200):\n${content.slice(0,200)}${content.length>200?"…":""}`);
-    return;
-  }
-
-  // Quando abilitiamo il PUT backend, scommenta:
-  // try {
-  //   const resp = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`, {
-  //     method: "PUT",
-  //     headers: { "Content-Type": "application/json" },
-  //     body: JSON.stringify({ content })
-  //   });
-  //   if (!resp.ok) throw new Error(`Errore ${resp.status}`);
-  //   alert("✅ Capitolo salvato!");
-  // } catch (e) {
-  //   alert("❌ Errore: " + e.message);
-  // }
+  // Endpoint PUT in arrivo: per ora simuliamo
+  alert("Salvataggio capitolo: endpoint PUT verrà abilitato nella prossima iterazione.");
 }
 
 /* ────────────────────────────────────────────────
    Hook UI
    ──────────────────────────────────────────────── */
 function wireButtons() {
+  // Topbar
   $("#btn-create-book")?.addEventListener("click", createBookSimple);
   $("#btn-library")?.addEventListener("click", showLibrary);
   $("#btn-editor")?.addEventListener("click", () => {
@@ -191,6 +177,16 @@ function wireButtons() {
     else alert("Apri prima un libro dalla libreria.");
   });
 
+  // Azioni rapide (card) – ID diversi
+  $("#btn-create-book-2")?.addEventListener("click", createBookSimple);
+  $("#btn-library-2")?.addEventListener("click", showLibrary);
+  $("#btn-editor-2")?.addEventListener("click", () => {
+    const last = localStorage.getItem("last_book_id");
+    if (last) openBook(last);
+    else alert("Apri prima un libro dalla libreria.");
+  });
+
+  // Editor
   $("#btn-ed-save")?.addEventListener("click", saveChapter);
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
 }
@@ -201,5 +197,11 @@ function wireButtons() {
 document.addEventListener("DOMContentLoaded", async () => {
   wireButtons();
   await pingBackend();
-  showLibrary(); // mostra la libreria all’avvio
+
+  // badge modalità (placeholder)
+  const modeBadge = document.getElementById("editor-mode-badge");
+  if (modeBadge) {
+    modeBadge.textContent = "DEMO";
+    modeBadge.className = "badge badge-gray";
+  }
 });
