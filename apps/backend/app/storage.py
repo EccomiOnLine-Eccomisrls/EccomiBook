@@ -48,3 +48,24 @@ def save_books_to_disk(books: dict) -> None:
         tmp.replace(BOOKS_FILE)
     except Exception:
         print("⚠️  Impossibile salvare books.json")
+
+# ---- File capitoli -----------------------------------------------------
+
+def _chapter_path(book_id: str, chapter_id: str) -> Path:
+    """
+    Percorso assoluto del file capitolo.
+    Es: /data/eccomibook/chapters/<book_id>/<chapter_id>.md
+    """
+    ensure_dirs()
+    folder = BASE_DIR / "chapters" / book_id
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / f"{chapter_id}.md"
+
+def save_chapter_file(book_id: str, chapter_id: str, content: str) -> str:
+    """
+    Salva il contenuto del capitolo su disco e ritorna il percorso RELATIVO
+    (es. 'chapters/<book_id>/<chapter_id>.md') da memorizzare nel libro.
+    """
+    path = _chapter_path(book_id, chapter_id)
+    path.write_text(content or "", encoding="utf-8")
+    return path.relative_to(BASE_DIR).as_posix()
