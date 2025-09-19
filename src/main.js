@@ -11,7 +11,7 @@
 // Quando attivi l'endpoint reale /books/{id}/chapters/{id} (PUT), metti false.
 window.USE_DEMO_EDITOR = true;
 
-// API base: ENV di Render (VITE_API_BASE_URL) oppure fallback al backend pubblico
+// API base: ENV di Vite/Render oppure fallback al backend pubblico
 const API_BASE_URL =
   (import.meta && import.meta.env && import.meta.env.VITE_API_BASE_URL) ||
   window.VITE_API_BASE_URL ||
@@ -60,11 +60,11 @@ async function pingBackend() {
     } else {
       setText("backend-status", `Backend: errore ${r.status}`);
     }
-  } catch (e) {
+  } catch {
     setText("backend-status", "Backend: non raggiungibile");
   }
 
-  // Mostra l'URL effettivo (mini debug)
+  // Mini debug: mostra l'URL effettivo
   const dbg = document.createElement("div");
   dbg.style.fontSize = "11px";
   dbg.style.opacity = "0.7";
@@ -73,7 +73,7 @@ async function pingBackend() {
     `API: <a href="${API_BASE_URL}" target="_blank" rel="noreferrer">${API_BASE_URL}</a>`;
   el.appendChild(dbg);
 
-  // Pulsante rapido per salvare una API key nella storage
+  // Pulsante rapido per impostare la x-api-key
   const kbtn = document.createElement("button");
   kbtn.textContent = "API key";
   kbtn.style.marginTop = "6px";
@@ -94,27 +94,56 @@ async function pingBackend() {
    Azioni topbar
    ───────────────────────────────────────────────────────── */
 
-function goCreateBook() {
-  // qui potremo aprire un wizard; per ora avvisa
-  alert("Qui apriremo il wizard 'Crea Libro'.");
+// Crea libro chiamando il backend
+async function createBookSimple() {
+  const title = prompt("Titolo del libro:", "Manuale EccomiBook");
+  if (!title) return;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/books/create`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": getApiKey() || "demo_key_user", // in dev puoi usare demo_key_owner
+      },
+      body: JSON.stringify({
+        title,
+        author: "EccomiBook",
+        language: "it",
+        chapters: []
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(`Errore (${res.status}): ${err.detail || JSON.stringify(err)}`);
+      return;
+    }
+
+    const data = await res.json();
+    alert(`✅ Libro creato!\nID: ${data.book_id}\nTitolo: ${data.title}`);
+    try { localStorage.setItem("last_book_id", data.book_id); } catch {}
+  } catch (e) {
+    alert("Errore di rete: " + (e?.message || String(e)));
+  }
 }
 
 function goLibrary() {
-  // es. chiama GET /books e mostra lista; ora solo alert
-  alert("Apro la Libreria (elenco libri) — collegamento in arrivo.");
+  // Prossimo step: colleghiamo GET /books per mostrare l’elenco
+  alert("Apro la Libreria (elenco libri)… in arrivo!");
 }
 
 function goEditor() {
-  // mostra il pannello editor nella pagina (ancorato in fondo)
+  // Mostra il pannello editor nella pagina (ancorato in fondo)
   const ed = $("#editor-card");
   if (ed) ed.style.display = "block";
   const book = $("#bookIdInput");
   const ch = $("#chapterIdInput");
   const tx = $("#chapterText");
-  if (book && !book.value) book.value = "book_titolo-di-prova";
+  if (book && !book.value) book.value = (localStorage.getItem("last_book_id") || "book_titolo-di-prova");
   if (ch && !ch.value) ch.value = "ch_0001";
   if (tx && !tx.value) tx.value =
-    "Scrivi qui il contenuto del capitolo...\n\n(Questa è la modalità " +
+    "Scrivi qui il contenuto del capitolo...\n\n(Modalità " +
     (window.USE_DEMO_EDITOR ? "DEMO" : "REALE") +
     ").";
 }
@@ -130,8 +159,8 @@ function closeEditor() {
 
 async function saveChapter() {
   const bookId = $("#bookIdInput")?.value?.trim();
-  const chId = $("#chapterIdInput")?.value?.trim();
-  const text = $("#chapterText")?.value ?? "";
+  const chId   = $("#chapterIdInput")?.value?.trim();
+  const text   = $("#chapterText")?.value ?? "";
 
   if (!bookId || !chId) {
     alert("Inserisci ID libro e ID capitolo.");
@@ -141,14 +170,13 @@ async function saveChapter() {
   if (window.USE_DEMO_EDITOR) {
     alert(
       `(DEMO) Capitolo salvato!\n\nBook: ${bookId}\nChapter: ${chId}\n\nTesto:\n${text.slice(
-        0,
-        200
+        0, 200
       )}${text.length > 200 ? "..." : ""}`
     );
     return;
   }
 
-  // modalità reale: chiama PUT backend
+  // Modalità reale: chiama PUT backend
   try {
     const resp = await fetch(
       `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chId)}`,
@@ -177,54 +205,22 @@ async function saveChapter() {
   }
 }
 
-// ── Crea libro (chiamata reale al backend) ─────────────────
-async function createBookSimple() {
-  const title = prompt("Titolo del libro:", "Manuale EccomiBook");
-  if (!title) return;
-
-  try {
-    const res = await fetch(`${API_BASE_URL}/books/create`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": getApiKey() || "demo_key_user", // o demo_key_owner in dev
-      },
-      body: JSON.stringify({
-        title,
-        author: "EccomiBook",
-        language: "it",
-        chapters: []
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      alert(`Errore (${res.status}): ${err.detail || JSON.stringify(err)}`);
-      return;
-    }
-
-    const data = await res.json();
-    alert(`✅ Libro creato!\nID: ${data.book_id}\nTitolo: ${data.title}`);
-    // opzionale: salva ultimo ID per usarlo altrove
-    try { localStorage.setItem("last_book_id", data.book_id); } catch {}
-  } catch (e) {
-    alert("Errore di rete: " + e.message);
-  }
-}
-
 /* ─────────────────────────────────────────────────────────
    Hook UI
    ───────────────────────────────────────────────────────── */
 
 function wireButtons() {
-  $("#btn-create-book")?.addEventListener("click", goCreateBook);
-  $("#btn-library")?.addEventListener("click", goLibrary);
-  $("#btn-editor")?.addEventListener("click", goEditor);
+  // Crea libro
+  $("#btn-create-book")?.addEventListener("click", createBookSimple);
+  $("#btn-quick-new")?.addEventListener("click", createBookSimple);
 
-  $("#btn-quick-new")?.addEventListener("click", goCreateBook);
+  // Libreria & Editor
+  $("#btn-library")?.addEventListener("click", goLibrary);
   $("#btn-lib-open")?.addEventListener("click", goLibrary);
+  $("#btn-editor")?.addEventListener("click", goEditor);
   $("#btn-go-editor")?.addEventListener("click", goEditor);
 
+  // Editor actions
   $("#btn-ed-save")?.addEventListener("click", saveChapter);
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
 }
@@ -248,6 +244,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 /* =========================================================
  * Esporta funzioni usate inline in index.html (se servisse)
  * ========================================================= */
-window.goEditor = goEditor;
+window.goEditor   = goEditor;
 window.saveChapter = saveChapter;
 window.closeEditor = closeEditor;
+window.createBookSimple = createBookSimple; // opzionale
