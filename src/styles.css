@@ -1,3 +1,4 @@
+import './styles.css';   // deve esistere in src/styles.css
 :root{
   --bg:#0f1620;
   --panel:#0a1320;
