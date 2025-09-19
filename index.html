@@ -11,9 +11,12 @@
         <span class="logo">📚</span>
         <span class="title">EccomiBook</span>
       </div>
-
-      <!-- Solo stato backend, NIENTE bottoni qui -->
       <div id="backend-status" class="backend-pill">Backend: …</div>
+      <div class="actions">
+        <button id="btn-create-book" class="btn btn-primary">+ Crea libro</button>
+        <button id="btn-library" class="btn btn-secondary">Libreria</button>
+        <button id="btn-editor" class="btn btn-ghost">Editor</button>
+      </div>
     </header>
 
     <main class="container">
@@ -32,15 +35,45 @@
       </div>
 
       <!-- Libreria -->
-      <div id="library-section" style="display:none; margin-top:20px;">
+      <section id="library-section" style="display:none; margin-top:20px;">
         <h2>📚 La tua libreria</h2>
         <div id="library-list"></div>
-      </div>
+      </section>
+
+      <!-- Editor capitolo -->
+      <section id="editor-section" style="display:none; margin-top:24px;">
+        <div class="editor-card">
+          <div class="editor-head">
+            <strong>✏️ Editor capitolo</strong>
+            <button id="btn-ed-close" class="btn btn-ghost">Chiudi</button>
+          </div>
+
+          <div class="grid">
+            <div>
+              <label>ID libro</label>
+              <input id="ed-book-id" type="text" readonly />
+            </div>
+            <div>
+              <label>ID capitolo</label>
+              <input id="ed-chapter-id" type="text" placeholder="ch_0001" />
+            </div>
+          </div>
+
+          <div>
+            <label>Contenuto</label>
+            <textarea id="ed-content" rows="10" placeholder="Scrivi qui il contenuto del capitolo…"></textarea>
+          </div>
+
+          <div class="row-right">
+            <span id="editor-mode-badge" class="badge badge-gray">DEMO</span>
+            <button id="btn-ed-save" class="btn btn-primary">Salva</button>
+          </div>
+        </div>
+      </section>
 
       <p class="footer">© EccomiBook</p>
     </main>
 
-    <!-- Vite: importa lo script dal folder src -->
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
