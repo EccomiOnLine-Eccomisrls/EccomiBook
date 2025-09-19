@@ -1,101 +1,107 @@
 # apps/backend/app/routers/admin.py
 from __future__ import annotations
-from fastapi import APIRouter, Depends, HTTPException, Body, Path
-from typing import Optional
 
-from ..deps import get_owner_full
-from ..users import USERS_BY_KEY, save_users, load_users, User
-from ..plans import PLANS, ACTIVE_STATUSES, normalize_plan
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Any, Dict, List
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+from ..deps import get_owner_full     # protegge con ruolo OWNER_FULL
+from ..users import load_users, save_users, list_users
 
-
-@router.get("/plans")
-def list_plans(_: User = Depends(get_owner_full)):
-    """Restituisce l’elenco dei piani disponibili."""
-    return {"plans": list(PLANS.keys())}
+router = APIRouter(prefix="/admin")
 
 
-@router.get("/users")
-def list_users(_: User = Depends(get_owner_full)):
-    """Lista utenti con dettagli completi."""
-    load_users()
+@router.get("/plans", summary="List Piani", description="Ritorna i piani disponibili.")
+def get_plans(_: Dict[str, Any] = Depends(get_owner_full)) -> Dict[str, Any]:
     return {
-        "count": len(USERS_BY_KEY),
-        "users": [vars(u) for u in USERS_BY_KEY.values()],
+        "items": [
+            {"code": "START", "label": "Start"},
+            {"code": "PRO", "label": "Pro"},
+            {"code": "OWNER", "label": "Owner"},
+        ]
     }
 
 
-@router.post("/users")
-def create_user(
-    email: str = Body(..., embed=True),
-    api_key: str = Body(..., embed=True),
-    plan: str = Body("START", embed=True),
-    status: str = Body("active", embed=True),
-    role: str = Body("USER", embed=True),
-    _: User = Depends(get_owner_full),
-):
-    """Crea un nuovo utente con piano e stato."""
+@router.get("/users", summary="List Users")
+def admin_list_users(_: Dict[str, Any] = Depends(get_owner_full)) -> Dict[str, Any]:
     load_users()
-    if api_key in USERS_BY_KEY:
-        raise HTTPException(status_code=400, detail="API key già esistente")
-
-    plan_norm = normalize_plan(plan)
-    if plan_norm not in PLANS:
-        raise HTTPException(status_code=400, detail=f"Piano non valido: {plan}")
-
-    allowed_status = {"active", "trialing", "past_due", "canceled"}
-    if status not in allowed_status:
-        raise HTTPException(status_code=400, detail=f"Status non valido: {status}")
-
-    u = User(
-        user_id=f"u_{len(USERS_BY_KEY)+1}",
-        email=email,
-        api_key=api_key,
-        plan=plan_norm,
-        status=status,
-        role=role,
-    )
-    USERS_BY_KEY[api_key] = u
-    save_users()
-    return {"ok": True, "user": vars(u)}
+    return {"items": list_users()}
 
 
-@router.put("/users/{user_id}/plan")
-def change_plan(
-    user_id: str = Path(...),
-    plan: str = Body(..., embed=True),
-    _: User = Depends(get_owner_full),
-):
-    """Aggiorna il piano di un utente esistente."""
+@router.post("/users", summary="Create User")
+def admin_create_user(payload: Dict[str, Any], _: Dict[str, Any] = Depends(get_owner_full)) -> Dict[str, Any]:
+    """
+    payload atteso:
+    {
+      "id": "id_unico",
+      "name": "Nome",
+      "role": "USER|OWNER_FULL",
+      "plan": "START|PRO|OWNER",
+      "status": "ACTIVE|SUSPENDED",
+      "api_key": "chiave"
+    }
+    """
+    required = ["id", "name", "role", "plan", "status", "api_key"]
+    for k in required:
+        if not payload.get(k):
+            raise HTTPException(status_code=422, detail=f"Campo mancante: {k}")
+
+    # Carica, verifica duplicati per id / api_key, salva
+    from ..users import USERS, USERS_BY_KEY  # import locale per evitare cicli
     load_users()
-    target = next((u for u in USERS_BY_KEY.values() if u.user_id == user_id), None)
-    if not target:
-        raise HTTPException(status_code=404, detail="Utente non trovato")
 
-    plan_norm = normalize_plan(plan)
-    if plan_norm not in PLANS:
-        raise HTTPException(status_code=400, detail=f"Piano non valido: {plan}")
-    target.plan = plan_norm
+    uid = str(payload["id"])
+    if uid in USERS:
+        raise HTTPException(status_code=409, detail="user id già esistente")
+
+    if payload["api_key"] in USERS_BY_KEY:
+        raise HTTPException(status_code=409, detail="api_key già esistente")
+
+    USERS[uid] = {
+        "id": uid,
+        "name": payload["name"],
+        "role": payload["role"],
+        "plan": payload["plan"],
+        "status": payload["status"],
+        "api_key": payload["api_key"],
+    }
+    # ricostruisci indice e salva
+    from ..users import _rebuild_indexes
+    _rebuild_indexes()
     save_users()
-    return {"ok": True, "user": vars(target)}
+    return {"ok": True, "user": USERS[uid]}
 
 
-@router.put("/users/{user_id}/status")
-def change_status(
-    user_id: str = Path(...),
-    status: str = Body(..., embed=True),
-    _: User = Depends(get_owner_full),
-):
-    """Aggiorna lo stato di sottoscrizione di un utente."""
+@router.put("/users/{user_id}/plan", summary="Change Plan")
+def admin_change_plan(user_id: str, payload: Dict[str, Any], _: Dict[str, Any] = Depends(get_owner_full)) -> Dict[str, Any]:
+    """
+    payload: { "plan": "START|PRO|OWNER" }
+    """
+    from ..users import USERS
     load_users()
-    target = next((u for u in USERS_BY_KEY.values() if u.user_id == user_id), None)
-    if not target:
-        raise HTTPException(status_code=404, detail="Utente non trovato")
-
-    allowed = {"active", "trialing", "past_due", "canceled"}
-    if status not in allowed:
-        raise HTTPException(status_code=400, detail=f"Status non valido: {status}")
-    target.status = status
+    u = USERS.get(user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="user non trovato")
+    new_plan = payload.get("plan")
+    if not new_plan:
+        raise HTTPException(status_code=422, detail="plan mancante")
+    u["plan"] = new_plan
     save_users()
-    return {"ok": True, "user": vars(target)}
+    return {"ok": True, "user": u}
+
+
+@router.put("/users/{user_id}/status", summary="Change Status")
+def admin_change_status(user_id: str, payload: Dict[str, Any], _: Dict[str, Any] = Depends(get_owner_full)) -> Dict[str, Any]:
+    """
+    payload: { "status": "ACTIVE|SUSPENDED" }
+    """
+    from ..users import USERS
+    load_users()
+    u = USERS.get(user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="user non trovato")
+    st = payload.get("status")
+    if not st:
+        raise HTTPException(status_code=422, detail="status mancante")
+    u["status"] = st
+    save_users()
+    return {"ok": True, "user": u}
