@@ -62,3 +62,34 @@ def create_book(
     }
 
     return {"book_id": book_id, "title": payload.title, "chapters_count": len(payload.chapters)}
+
+
+# 🔥 Nuovo endpoint: aggiorna un capitolo esistente
+@router.put("/books/{book_id}/chapters/{chapter_id}", tags=["books"])
+def update_chapter(
+    book_id: str,
+    chapter_id: str,
+    request: Request,
+    payload: dict = Body(...),
+    x_api_key: str | None = Header(default=None),
+    user=Depends(get_current_user),
+):
+    books_db = request.app.state.books
+
+    if book_id not in books_db:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+
+    chapters = books_db[book_id].get("chapters", [])
+    for ch in chapters:
+        if ch.get("id") == chapter_id:
+            # Aggiorna i campi passati
+            if "title" in payload:
+                ch["title"] = payload["title"]
+            if "content" in payload:
+                ch["content"] = payload["content"]
+            if "outline" in payload:
+                ch["outline"] = payload["outline"]
+
+            return {"ok": True, "chapter": ch}
+
+    raise HTTPException(status_code=404, detail="Capitolo non trovato")
