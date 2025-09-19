@@ -4,6 +4,7 @@
  * ========================================================= */
 
 import './styles.css';
+
 const API_BASE_URL =
   (import.meta?.env?.VITE_API_BASE_URL) ||
   window.VITE_API_BASE_URL ||
@@ -12,7 +13,9 @@ const API_BASE_URL =
 /* ────────────────────────────────────────────────
    Utilità
    ──────────────────────────────────────────────── */
-function $(sel) { return document.querySelector(sel); }
+function $(sel) {
+  return document.querySelector(sel);
+}
 function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
@@ -67,9 +70,11 @@ async function createBookSimple() {
 
     const data = await res.json();
     alert(`✅ Libro creato!\nID: ${data.book_id}\nTitolo: ${data.title}`);
-
     try { localStorage.setItem("last_book_id", data.book_id); } catch {}
-    await loadLibrary(); // aggiorna subito la libreria
+
+    // ricarica libreria
+    await loadLibrary();
+
   } catch (e) {
     alert("Errore di rete: " + e.message);
   }
@@ -86,24 +91,30 @@ async function loadLibrary() {
     if (!res.ok) throw new Error(`Errore ${res.status}`);
 
     const data = await res.json();
-    const books = data.items || []; // FIX QUI ✅
+    const books = data.items || [];
 
     if (books.length === 0) {
       list.innerHTML = "<em>Nessun libro ancora. Crea il tuo primo libro!</em>";
       return;
     }
 
+    // render griglia
+    list.className = "library-grid";
     list.innerHTML = "";
     books.forEach(b => {
-      const o = document.createElement("div");
-      o.className = "card";
-      o.style.margin = "10px 0";
-      o.innerHTML = `
-        <strong>${b.title || "(senza titolo)"}</strong><br>
-        Autore: ${b.author || "-"} — Lingua: ${b.language || "-"}<br>
-        <small>${b.id}</small>
+      const card = document.createElement("div");
+      card.className = "book-card";
+      card.innerHTML = `
+        <div class="book-title">${b.title || "(senza titolo)"}</div>
+        <div class="book-meta">Autore: ${b.author || "-"} — Lingua: ${b.language || "-"}</div>
+        <div class="book-id">${b.id}</div>
+        <div class="book-actions">
+          <button class="btn btn-secondary">Apri</button>
+          <button class="btn btn-ghost">Modifica</button>
+          <button class="btn btn-ghost">Elimina</button>
+        </div>
       `;
-      list.appendChild(o);
+      list.appendChild(card);
     });
 
   } catch (e) {
