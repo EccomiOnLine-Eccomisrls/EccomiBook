@@ -6,6 +6,7 @@
     <title>EccomiBook</title>
   </head>
   <body>
+    <!-- Topbar -->
     <header class="topbar">
       <div class="brand">
         <span class="logo">📚</span>
@@ -25,58 +26,58 @@
       <h1 class="hero">Benvenuto in EccomiBook</h1>
       <p class="subhero">Genera libri e capitoli con un click.</p>
 
-      <!-- Card: Azioni rapide -->
-      <div class="card">
+      <!-- Azioni rapide -->
+      <section class="card">
         <div class="card-head">
           <strong>Azioni rapide</strong>
         </div>
         <div class="row-right">
-          <!-- NOTA: ID diversi dai bottoni in topbar -->
-          <button id="btn-create-book-2" class="btn btn-primary">+ Crea libro</button>
-          <button id="btn-library-2" class="btn btn-secondary">Libreria</button>
-          <button id="btn-editor-2" class="btn btn-ghost">Editor</button>
+          <!-- NB: niente ID qui; il main.js aggancia per classe -->
+          <button class="btn btn-primary">+ Crea libro</button>
+          <button class="btn btn-secondary">Libreria</button>
+          <button class="btn btn-ghost">Editor</button>
         </div>
-      </div>
+      </section>
 
       <!-- Libreria -->
       <section id="library-section" style="display:none; margin-top:20px;">
         <h2>📚 La tua libreria</h2>
-        <div id="library-list"></div>
+        <div id="library-list">Caricamento…</div>
       </section>
 
-      <!-- Editor capitolo -->
-      <section id="editor-card" class="card" style="display:none; margin-top:20px;">
+      <!-- Editor capitolo (semplice) -->
+      <section id="editor-section" class="card" style="display:none; margin-top:24px;">
         <div class="card-head">
           <strong>Editor capitolo</strong>
-          <button id="btn-ed-close" class="btn btn-ghost">Chiudi</button>
+          <button id="btn-close-editor" class="btn btn-ghost">Chiudi</button>
         </div>
 
         <div class="grid">
           <div>
             <label>ID libro</label>
-            <input id="bookIdInput" placeholder="es. book_..." />
+            <input id="editor-book-id" type="text" placeholder="book_…" />
           </div>
           <div>
             <label>ID capitolo</label>
-            <input id="chapterIdInput" placeholder="es. ch_0001" />
+            <input id="editor-chapter-id" type="text" value="ch_0001" />
           </div>
         </div>
 
-        <div style="margin-top:10px;">
+        <div>
           <label>Contenuto</label>
-          <textarea id="chapterText" rows="8" placeholder="Scrivi qui il contenuto del capitolo..."></textarea>
+          <textarea id="editor-text" rows="8" placeholder="Scrivi il contenuto del capitolo…"></textarea>
         </div>
 
         <div class="row-right">
-          <span id="editor-mode-badge" class="badge badge-gray">DEMO</span>
-          <button id="btn-ed-save" class="btn btn-primary">Salva</button>
+          <span class="badge badge-gray">DEMO</span>
+          <button class="btn btn-primary" disabled>Salva</button>
         </div>
       </section>
 
       <p class="footer">© EccomiBook</p>
     </main>
 
-    <!-- Vite: entry nella cartella src -->
-    <script type="module" src="/src/main.js"></script>
+    <!-- Vite entry -->
+    <script type="module" src="./src/main.js"></script>
   </body>
 </html>
