@@ -41,36 +41,63 @@ async function pingBackend() {
 /* ────────────────────────────────────────────────
    Libreria
    ──────────────────────────────────────────────── */
+/** Normalizza la risposta di /books in un array di libri {id,title,author,language,...} */
+function normalizeBooksPayload(payload) {
+  // 1) array diretto
+  if (Array.isArray(payload)) return payload;
+
+  // 2) { items: [...] , count: n }
+  if (payload && Array.isArray(payload.items)) return payload.items;
+
+  // 3) { books: [...] }  oppure  { books: { id: {...} } }
+  if (payload && payload.books) {
+    const b = payload.books;
+    if (Array.isArray(b)) return b;
+    if (typeof b === "object") {
+      return Object.keys(b).map(id => ({ id, ...(b[id] || {}) }));
+    }
+  }
+
+  // 4) dict per id
+  if (payload && typeof payload === "object") {
+    return Object.keys(payload).map(id => ({ id, ...(payload[id] || {}) }));
+  }
+
+  return [];
+}
+
 async function fetchBooks() {
   const res = await fetch(`${API_BASE_URL}/books`);
   if (!res.ok) throw new Error(`Errore (${res.status})`);
   const data = await res.json();
-  // compat: il backend può restituire {books:{}} o direttamente {}
-  return data?.books ?? data ?? {};
+  return normalizeBooksPayload(data);
 }
 
-function renderLibrary(booksById = {}) {
+function renderLibrary(books = []) {
   const container = document.getElementById("library-list");
   if (!container) return;
 
   container.innerHTML = "";
-  const ids = Object.keys(booksById);
 
-  if (!ids.length) {
+  if (!books.length) {
     container.innerHTML = `<div class="card" style="opacity:.8">Nessun libro ancora. Crea il tuo primo libro con “Crea libro”.</div>`;
     return;
   }
 
-  ids.forEach((id) => {
-    const b = booksById[id] || {};
+  books.forEach((b) => {
+    const id = b.id || b.book_id || "";
+    const title = b.title || "(senza titolo)";
+    const author = b.author || "—";
+    const language = b.language || "it";
+
     const card = document.createElement("div");
     card.className = "card";
     card.style.margin = "10px 0";
     card.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
         <div>
-          <div style="font-weight:600">${b.title || "(senza titolo)"}</div>
-          <div style="font-size:13px;opacity:.8">Autore: ${b.author || "—"} — Lingua: ${b.language || "it"}</div>
+          <div style="font-weight:600">${title}</div>
+          <div style="font-size:13px;opacity:.8">Autore: ${author} — Lingua: ${language}</div>
         </div>
         <code style="opacity:.7">${id}</code>
       </div>
@@ -87,8 +114,6 @@ function renderLibrary(booksById = {}) {
   container.querySelectorAll("[data-open-id]").forEach(btn => {
     btn.addEventListener("click", () => openBook(btn.getAttribute("data-open-id")));
   });
-
-  // (se vuoi: future handler per Modifica/Elimina)
 }
 
 /* mostra la sezione libreria */
@@ -129,8 +154,9 @@ async function createBookSimple() {
     }
 
     const data = await res.json();
-    alert(`✅ Libro creato!\nID: ${data.book_id}\nTitolo: ${data.title}`);
-    try { localStorage.setItem("last_book_id", data.book_id); } catch {}
+    const newId = data.book_id || data.id;
+    alert(`✅ Libro creato!\nID: ${newId}\nTitolo: ${data.title || title}`);
+    try { localStorage.setItem("last_book_id", newId); } catch {}
 
     // aggiorna libreria a vista
     showLibrary();
@@ -160,7 +186,6 @@ function closeEditor() {
 }
 
 async function saveChapter() {
-  // Endpoint PUT in arrivo: per ora simuliamo
   alert("Salvataggio capitolo: endpoint PUT verrà abilitato nella prossima iterazione.");
 }
 
@@ -177,7 +202,7 @@ function wireButtons() {
     else alert("Apri prima un libro dalla libreria.");
   });
 
-  // Azioni rapide (card) – ID diversi
+  // Azioni rapide (card) – ID diversi per evitare conflitti
   $("#btn-create-book-2")?.addEventListener("click", createBookSimple);
   $("#btn-library-2")?.addEventListener("click", showLibrary);
   $("#btn-editor-2")?.addEventListener("click", () => {
@@ -204,4 +229,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     modeBadge.textContent = "DEMO";
     modeBadge.className = "badge badge-gray";
   }
+
+  // mostra la libreria all’avvio (opzionale)
+  await showLibrary();
 });
