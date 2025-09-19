@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>EccomiBook</title>
+    <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
     <!-- Topbar -->
@@ -12,9 +13,7 @@
         <span class="logo">📚</span>
         <span class="title">EccomiBook</span>
       </div>
-
       <div id="backend-status" class="backend-pill">Backend: …</div>
-
       <div class="actions">
         <button id="btn-create-book" class="btn btn-primary">+ Crea libro</button>
         <button id="btn-library" class="btn btn-secondary">Libreria</button>
@@ -22,62 +21,50 @@
       </div>
     </header>
 
+    <!-- Main -->
     <main class="container">
       <h1 class="hero">Benvenuto in EccomiBook</h1>
       <p class="subhero">Genera libri e capitoli con un click.</p>
 
-      <!-- Azioni rapide -->
-      <section class="card">
+      <!-- Card Azioni rapide -->
+      <div class="card">
         <div class="card-head">
           <strong>Azioni rapide</strong>
         </div>
         <div class="row-right">
-          <!-- NB: niente ID qui; il main.js aggancia per classe -->
-          <button class="btn btn-primary">+ Crea libro</button>
-          <button class="btn btn-secondary">Libreria</button>
-          <button class="btn btn-ghost">Editor</button>
+          <button id="btn-quick-create" class="btn btn-primary">+ Crea libro</button>
+          <button id="btn-quick-library" class="btn btn-secondary">Libreria</button>
+          <button id="btn-quick-editor" class="btn btn-ghost">Editor</button>
         </div>
-      </section>
+      </div>
 
       <!-- Libreria -->
-      <section id="library-section" style="display:none; margin-top:20px;">
+      <div id="library-section" style="display:none; margin-top:20px;">
         <h2>📚 La tua libreria</h2>
-        <div id="library-list">Caricamento…</div>
-      </section>
+        <div id="library-list"></div>
+      </div>
 
-      <!-- Editor capitolo (semplice) -->
-      <section id="editor-section" class="card" style="display:none; margin-top:24px;">
+      <!-- Editor -->
+      <div id="editor-card" class="card" style="display:none; margin-top:20px;">
         <div class="card-head">
-          <strong>Editor capitolo</strong>
-          <button id="btn-close-editor" class="btn btn-ghost">Chiudi</button>
+          <strong>✏️ Editor capitolo</strong>
         </div>
-
-        <div class="grid">
-          <div>
-            <label>ID libro</label>
-            <input id="editor-book-id" type="text" placeholder="book_…" />
-          </div>
-          <div>
-            <label>ID capitolo</label>
-            <input id="editor-chapter-id" type="text" value="ch_0001" />
-          </div>
-        </div>
-
-        <div>
-          <label>Contenuto</label>
-          <textarea id="editor-text" rows="8" placeholder="Scrivi il contenuto del capitolo…"></textarea>
-        </div>
-
+        <label>Book ID</label>
+        <input id="bookIdInput" type="text" placeholder="ID libro" />
+        <label>Chapter ID</label>
+        <input id="chapterIdInput" type="text" placeholder="es. ch_0001" />
+        <label>Contenuto</label>
+        <textarea id="chapterText" rows="8" placeholder="Scrivi qui..."></textarea>
         <div class="row-right">
-          <span class="badge badge-gray">DEMO</span>
-          <button class="btn btn-primary" disabled>Salva</button>
+          <button id="btn-ed-save" class="btn btn-primary">💾 Salva</button>
+          <button id="btn-ed-close" class="btn btn-secondary">Chiudi</button>
         </div>
-      </section>
+      </div>
 
       <p class="footer">© EccomiBook</p>
     </main>
 
-    <!-- Vite entry -->
-    <script type="module" src="./src/main.js"></script>
+    <!-- JS -->
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>
