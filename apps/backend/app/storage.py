@@ -1,17 +1,20 @@
 # apps/backend/app/storage.py
 from __future__ import annotations
 from pathlib import Path
+from typing import Any
 import json
 
 # Radice dello storage persistente su Render
 BASE_DIR = Path("/opt/render/project/data/eccomibook")
 
+# ----------------------------- cartelle base -----------------------------
+
 def ensure_dirs() -> None:
     """Crea le cartelle necessarie sul disco persistente."""
     BASE_DIR.mkdir(parents=True, exist_ok=True)
-    (BASE_DIR / "chapters").mkdir(exist_ok=True)
-    (BASE_DIR / "books").mkdir(exist_ok=True)
-    (BASE_DIR / "admin").mkdir(exist_ok=True)   # per users.json, ecc.
+    (BASE_DIR / "chapters").mkdir(exist_ok=True)  # capitoli (per libro)
+    (BASE_DIR / "books").mkdir(exist_ok=True)     # esport PDF/libri
+    (BASE_DIR / "admin").mkdir(exist_ok=True)     # es. users.json
 
 def file_path(rel: str) -> Path:
     """
@@ -21,7 +24,27 @@ def file_path(rel: str) -> Path:
     ensure_dirs()
     return (BASE_DIR / rel).resolve()
 
-# ---- Persistenza libri -------------------------------------------------
+# ----------------------------- util JSON --------------------------------
+
+def read_json(path: Path) -> Any:
+    """Legge JSON, ritorna None in caso di errore/assenza."""
+    try:
+        if path.exists():
+            with path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return None
+
+def write_json(path: Path, data: Any) -> None:
+    """Scrive JSON in modo atomico."""
+    ensure_dirs()
+    tmp = path.with_suffix(".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    tmp.replace(path)
+
+# ----------------------------- “DB” libri --------------------------------
 
 BOOKS_FILE = BASE_DIR / "books.json"
 
@@ -49,7 +72,7 @@ def save_books_to_disk(books: dict) -> None:
     except Exception:
         print("⚠️  Impossibile salvare books.json")
 
-# ---- File capitoli -----------------------------------------------------
+# ----------------------------- capitoli ----------------------------------
 
 def _chapter_path(book_id: str, chapter_id: str) -> Path:
     """
@@ -69,3 +92,20 @@ def save_chapter_file(book_id: str, chapter_id: str, content: str) -> str:
     path = _chapter_path(book_id, chapter_id)
     path.write_text(content or "", encoding="utf-8")
     return path.relative_to(BASE_DIR).as_posix()
+
+def read_chapter_file(book_id: str, chapter_id: str) -> str:
+    """Legge il contenuto di un capitolo; ritorna stringa vuota se non esiste."""
+    path = _chapter_path(book_id, chapter_id)
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    return ""
+
+# ----------------------------- export libri ------------------------------
+
+def exported_book_pdf_path(book_id: str) -> Path:
+    """
+    Percorso suggerito per un PDF esportato del libro.
+    Es: /data/eccomibook/books/<book_id>.pdf
+    """
+    ensure_dirs()
+    return (BASE_DIR / "books" / f"{book_id}.pdf")
