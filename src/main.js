@@ -1,47 +1,54 @@
 /* =========================================================
- * EccomiBook — Frontend vanilla (Vite)
- * main.js (COMPLETO)
+ * EccomiBook — Frontend (Vite, vanilla)
+ * main.js — COMPLETO
  * ========================================================= */
 
 import "./styles.css";
 
-/* ────────────────────────────────────────────────
+/* ───────────────────────────────────────────────
    Config
-   ──────────────────────────────────────────────── */
+   ─────────────────────────────────────────────── */
 const API_BASE_URL =
   (import.meta?.env?.VITE_API_BASE_URL) ||
   window.VITE_API_BASE_URL ||
   "https://eccomibook-backend.onrender.com";
 
-// Editor: per ora restiamo in DEMO (niente PUT reale)
-const USE_DEMO_EDITOR = true;
-
-/* ────────────────────────────────────────────────
-   Helpers
-   ──────────────────────────────────────────────── */
-const $  = (sel) => document.querySelector(sel);
-const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+/* ───────────────────────────────────────────────
+   Util
+   ─────────────────────────────────────────────── */
+const $  = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
 function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
 
-/** Aggancia lo stesso handler a TUTTI gli elementi che (anche se non dovrebbe) condividono lo stesso id */
-function onAll(id, event, handler) {
-  $$( `#${id}` ).forEach((el) => el.addEventListener(event, handler));
+function toast(msg) {
+  // mvp: semplice alert
+  alert(msg);
 }
 
-function safeJson(res) {
-  return res.json().catch(() => ({}));
+function rememberLastBook(id) {
+  try { localStorage.setItem("last_book_id", id || ""); } catch {}
+}
+function loadLastBook() {
+  try { return localStorage.getItem("last_book_id") || ""; } catch { return ""; }
 }
 
-/* ────────────────────────────────────────────────
-   Header: ping backend + pillola URL
-   ──────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────
+   Stato UI
+   ─────────────────────────────────────────────── */
+const uiState = {
+  libraryVisible: true,
+};
+
+/* ───────────────────────────────────────────────
+   Backend ping + badge
+   ─────────────────────────────────────────────── */
 async function pingBackend() {
-  const host = $("#backend-status");
-  if (!host) return;
+  const el = document.getElementById("backend-status");
+  if (!el) return;
 
   setText("backend-status", "Backend: verifico…");
   try {
@@ -51,254 +58,208 @@ async function pingBackend() {
     setText("backend-status", "Backend: non raggiungibile");
   }
 
-  // mini debug URL
   const dbg = document.createElement("div");
   dbg.className = "debug-url";
   dbg.innerHTML = `API: <a href="${API_BASE_URL}" target="_blank" rel="noreferrer">${API_BASE_URL}</a>`;
-  host.appendChild(dbg);
+  el.appendChild(dbg);
 }
 
-/* ────────────────────────────────────────────────
-   Libreria
-   ──────────────────────────────────────────────── */
-async function fetchLibrary() {
-  const listHost = $("#library-list");
-  const section  = $("#library-section");
-  if (!listHost) return;
-
-  // mostra se è nascosta (scelta: libreria sempre visibile se la sto caricando)
-  if (section && section.style.display === "none") section.style.display = "block";
-
-  listHost.innerHTML = `<div class="muted">Carico libreria…</div>`;
+/* ───────────────────────────────────────────────
+   Libreria: API + render
+   ─────────────────────────────────────────────── */
+async function fetchBooks() {
+  const box = $("#library-list");
+  if (box) box.innerHTML = '<div class="muted">Carico libreria…</div>';
 
   try {
     const res = await fetch(`${API_BASE_URL}/books`, { method: "GET" });
     if (!res.ok) {
-      const err = await safeJson(res);
-      listHost.innerHTML = `<div class="error">Errore: ${res.status} ${err?.detail || ""}</div>`;
-      return;
+      const txt = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
     }
-    const data = await res.json(); // dict: {book_id: {...}, ...}
-    renderLibrary(data);
+    const data = await res.json();
+    renderLibrary(Array.isArray(data) ? data : (data?.items || []));
   } catch (e) {
-    alert("Errore di rete: " + (e?.message || "Load failed"));
-    $("#library-list").innerHTML = `<div class="error">Errore di rete.</div>`;
+    if (box) box.innerHTML = `<div class="error">Errore: ${e.message || e}</div>`;
   }
 }
 
-function renderLibrary(booksDict) {
-  const listHost = $("#library-list");
-  if (!listHost) return;
+function renderLibrary(books) {
+  const box = $("#library-list");
+  if (!box) return;
 
-  const entries = Object.entries(booksDict || {});
-  if (entries.length === 0) {
-    listHost.innerHTML = `<div class="muted">Nessun libro ancora. Crea il tuo primo libro con “Crea libro”.</div>`;
+  if (!books || books.length === 0) {
+    box.innerHTML = `<div class="muted">Nessun libro ancora. Crea il tuo primo libro con “Crea libro”.</div>`;
     return;
   }
 
-  const ul = document.createElement("ul");
-  ul.style.listStyle = "none";
-  ul.style.padding = "0";
-  ul.style.margin  = "0";
+  box.innerHTML = "";
+  books.forEach((b) => {
+    const id = b?.id || "";
+    const title = b?.title || "(senza titolo)";
+    const author = b?.author || "—";
+    const lang = b?.language || "it";
 
-  entries
-    .sort((a, b) => a[1]?.title?.localeCompare(b[1]?.title || "") || 0)
-    .forEach(([id, b]) => {
-      const li = document.createElement("li");
-      li.className = "card";
-      li.style.margin = "10px 0";
-
-      const title   = b?.title || "(senza titolo)";
-      const author  = b?.author || "—";
-      const lang    = b?.language || "it";
-
-      li.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-          <div>
-            <div style="font-weight:600">${escapeHtml(title)}</div>
-            <div class="muted">Autore: ${escapeHtml(author)} — Lingua: ${escapeHtml(lang)}</div>
-            <div class="badge" style="margin-top:6px">${escapeHtml(id)}</div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-secondary js-open"  data-id="${id}">Apri</button>
-            <button class="btn btn-ghost js-edit"      data-id="${id}">Modifica</button>
-            <button class="btn btn-ghost js-delete"    data-id="${id}">Elimina</button>
-          </div>
-        </div>
-      `;
-      ul.appendChild(li);
-    });
-
-  listHost.innerHTML = "";
-  listHost.appendChild(ul);
-
-  // wire pulsanti per card
-  $$(".js-open").forEach((btn) =>
-    btn.addEventListener("click", () => openEditorFor(btn.dataset.id))
-  );
-  $$(".js-delete").forEach((btn) =>
-    btn.addEventListener("click", () => deleteBook(btn.dataset.id))
-  );
-  $$(".js-edit").forEach((btn) =>
-    btn.addEventListener("click", () => alert("✏️ Modifica libro — in arrivo"))
-  );
+    const li = document.createElement("div");
+    li.className = "card";
+    li.style.margin = "10px 0";
+    li.innerHTML = `
+      <div class="card-head">
+        <strong>${escapeHtml(title)}</strong>
+        <span class="badge">${escapeHtml(id)}</span>
+      </div>
+      <div class="muted">Autore: ${escapeHtml(author)} — Lingua: ${escapeHtml(lang)}</div>
+      <div class="row-right" style="margin-top:10px">
+        <button class="btn btn-secondary" data-action="open" data-bookid="${escapeAttr(id)}">Apri</button>
+        <button class="btn btn-ghost" data-action="edit" data-bookid="${escapeAttr(id)}">Modifica</button>
+        <button class="btn btn-ghost" data-action="delete" data-bookid="${escapeAttr(id)}">Elimina</button>
+      </div>
+    `;
+    box.appendChild(li);
+  });
 }
 
-async function deleteBook(bookId) {
-  if (!confirm("Eliminare questo libro?")) return;
-  try {
-    const res = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      const err = await safeJson(res);
-      alert(`Errore eliminazione (${res.status}): ${err?.detail || "unknown"}`);
-      return;
-    }
-    await fetchLibrary(); // refresh
-  } catch (e) {
-    alert("Errore di rete: " + (e?.message || "Delete failed"));
-  }
-}
+// piccole utility di escape
+function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function escapeAttr(s) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 
-/* ────────────────────────────────────────────────
-   Creazione libro
-   ──────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────
+   Azioni: crea / elimina / apri editor
+   ─────────────────────────────────────────────── */
 async function createBookSimple() {
   const title = prompt("Titolo del libro:", "Manuale EccomiBook");
-  if (!title) return;
+  if (title == null) return;
 
   try {
     const res = await fetch(`${API_BASE_URL}/books/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title,
+        title: title.trim() || "Senza titolo",
         author: "EccomiBook",
         language: "it",
-        chapters: [],
+        chapters: []
       }),
     });
 
     if (!res.ok) {
-      const err = await safeJson(res);
-      alert(`Errore (${res.status}): ${err?.detail || JSON.stringify(err)}`);
-      return;
+      const txt = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
     }
 
     const data = await res.json();
-    try { localStorage.setItem("last_book_id", data.id || data.book_id || ""); } catch {}
-    await fetchLibrary(); // aggiorna lista
+    rememberLastBook(data?.book_id || data?.id || "");
+    toast("✅ Libro creato!");
+
+    // aggiorna libreria se visibile
+    if (uiState.libraryVisible) await fetchBooks();
   } catch (e) {
-    alert("Errore di rete: " + (e?.message || "Load failed"));
+    toast("Errore di rete: " + (e?.message || e));
   }
 }
 
-/* ────────────────────────────────────────────────
-   Editor capitolo (DEMO)
-   ──────────────────────────────────────────────── */
-function openEditorFor(bookId) {
-  const card = $("#editor-card");
-  if (card) card.style.display = "block";
+async function deleteBook(bookId) {
+  if (!bookId) return;
+  const ok = confirm("Eliminare questo libro?");
+  if (!ok) return;
 
-  // pre-compila
-  const bookInput = $("#bookIdInput");
-  const chInput   = $("#chapterIdInput");
-  const area      = $("#chapterText");
-
-  if (bookInput) bookInput.value = bookId || "";
-  if (chInput && !chInput.value) chInput.value = "ch_0001";
-  if (area) {
-    area.value =
-      "Scrivi qui il contenuto del capitolo…\n\n" +
-      `(Modalità ${USE_DEMO_EDITOR ? "DEMO" : "REALE"})`;
+  try {
+    const res = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok && res.status !== 204) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
+    }
+    toast("Libro eliminato.");
+    await fetchBooks();
+  } catch (e) {
+    toast("Errore: " + (e?.message || e));
   }
+}
 
-  // badge modalità
-  const modeBadge = $("#editor-mode-badge");
-  if (modeBadge) {
-    modeBadge.textContent = USE_DEMO_EDITOR ? "DEMO" : "REALE";
-    modeBadge.className = "badge " + (USE_DEMO_EDITOR ? "badge-gray" : "badge-green");
-  }
+function goEditor(bookId) {
+  const ed = $("#editor-card");
+  if (ed) ed.style.display = "block";
 
-  // scroll al pannello
-  card?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const inputBook = $("#bookIdInput");
+  const inputCh = $("#chapterIdInput");
+  const ta = $("#chapterText");
+
+  const id = bookId || loadLastBook() || "";
+  if (inputBook) inputBook.value = id;
+  if (inputCh && !inputCh.value) inputCh.value = "ch_0001";
+  if (ta && !ta.value) ta.value = "Scrivi qui il contenuto del capitolo…";
 }
 
 function closeEditor() {
-  const card = $("#editor-card");
-  if (card) card.style.display = "none";
+  const ed = $("#editor-card");
+  if (ed) ed.style.display = "none";
 }
 
-async function saveChapter() {
-  const bookId = $("#bookIdInput")?.value?.trim();
-  const chId   = $("#chapterIdInput")?.value?.trim();
-  const text   = $("#chapterText")?.value ?? "";
+/* ───────────────────────────────────────────────
+   Libreria: toggle visibilità
+   ─────────────────────────────────────────────── */
+async function toggleLibrary(force) {
+  const lib = $("#library-section");
+  if (!lib) return;
 
-  if (!bookId || !chId) {
-    alert("Inserisci ID libro e ID capitolo.");
-    return;
+  if (typeof force === "boolean") {
+    uiState.libraryVisible = force;
+  } else {
+    uiState.libraryVisible = !uiState.libraryVisible;
   }
+  lib.style.display = uiState.libraryVisible ? "block" : "none";
 
-  if (USE_DEMO_EDITOR) {
-    alert(
-      `DEMO — salvataggio locale\n\nBook: ${bookId}\nChapter: ${chId}\n\n` +
-      text.slice(0, 200) + (text.length > 200 ? "…" : "")
-    );
-    return;
-  }
-
-  // TODO: collegare al tuo endpoint reale quando disponibile:
-  // PUT ${API_BASE_URL}/books/{bookId}/chapters/{chId}
-  alert("Endpoint reale non ancora collegato.");
+  if (uiState.libraryVisible) await fetchBooks();
 }
 
-/* ────────────────────────────────────────────────
-   Azioni UI
-   ──────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────
+   Wiring bottoni
+   ─────────────────────────────────────────────── */
 function wireButtons() {
-  // Topbar + “Azioni rapide” (id duplicati: li aggancio tutti)
-  onAll("btn-create-book", "click", createBookSimple);
-  onAll("btn-library",     "click", fetchLibrary);
-  onAll("btn-editor",      "click", () => openEditorFor($("#lastBookIdHidden")?.value || ""));
+  // Topbar
+  $("#btn-create-book")?.addEventListener("click", createBookSimple);
+  $("#btn-library")?.addEventListener("click", () => toggleLibrary());
+  $("#btn-editor")?.addEventListener("click", () => goEditor());
 
-  // Editor card
-  $("#btn-ed-save") ?.addEventListener("click", saveChapter);
+  // Azioni rapide (devono avere ID dedicati)
+  $("#btn-quick-create")?.addEventListener("click", createBookSimple);
+  $("#btn-quick-library")?.addEventListener("click", () => toggleLibrary(true));
+  $("#btn-quick-editor")?.addEventListener("click", () => goEditor());
+
+  // Editor
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
+  $("#btn-ed-save")?.addEventListener("click", () => {
+    // MVP: solo feedback
+    toast("Demo salvataggio capitolo (endpoint reale in una prossima iterazione).");
+  });
+
+  // Delega eventi sulla libreria (Apri / Elimina / Modifica)
+  $("#library-list")?.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest("button[data-action]");
+    if (!btn) return;
+
+    const action = btn.getAttribute("data-action");
+    const bookId = btn.getAttribute("data-bookid") || "";
+
+    if (action === "open") {
+      rememberLastBook(bookId);
+      goEditor(bookId);
+    } else if (action === "delete") {
+      await deleteBook(bookId);
+    } else if (action === "edit") {
+      toast("✏️ Modifica libro: arriverà a breve.");
+    }
+  });
 }
 
-/* ────────────────────────────────────────────────
-   Utils
-   ──────────────────────────────────────────────── */
-function escapeHtml(s = "") {
-  return s.replace(/[&<>"']/g, (c) => (
-    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
-  ));
-}
-
-/* ────────────────────────────────────────────────
+/* ───────────────────────────────────────────────
    Init
-   ──────────────────────────────────────────────── */
+   ─────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", async () => {
   wireButtons();
   await pingBackend();
-
-  // carica libreria al primo avvio
-  await fetchLibrary();
-
-  // badge editor (se presente in DOM)
-  const modeBadge = $("#editor-mode-badge");
-  if (modeBadge) {
-    modeBadge.textContent = USE_DEMO_EDITOR ? "DEMO" : "REALE";
-    modeBadge.className = "badge " + (USE_DEMO_EDITOR ? "badge-gray" : "badge-green");
-  }
+  // all’avvio mostro la libreria e la carico
+  await toggleLibrary(true);
 });
-
-/* ────────────────────────────────────────────────
-   Export (se usi onclick inline in index.html)
-   ──────────────────────────────────────────────── */
-window.createBookSimple = createBookSimple;
-window.fetchLibrary     = fetchLibrary;
-window.openEditorFor    = openEditorFor;
-window.closeEditor      = closeEditor;
-window.saveChapter      = saveChapter;
