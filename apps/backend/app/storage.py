@@ -1,49 +1,50 @@
-import os
+# apps/backend/app/storage.py
+from __future__ import annotations
 from pathlib import Path
-from typing import Union
-from .settings import get_settings
+import json
 
-# Scelta root: preferisci settings.storage_dir (es. /var/data su Render)
-DEFAULT_DIRS = [
-    lambda s: Path(s.storage_dir) if getattr(s, "storage_dir", None) else None,
-    lambda s: Path("./data"),
-    lambda s: Path("/tmp/eccomibook-data"),
-]
-
-def _pick_dir() -> Path:
-    s = get_settings()
-    for maker in DEFAULT_DIRS:
-        p = maker(s)
-        if p is None:
-            continue
-        try:
-            p.mkdir(parents=True, exist_ok=True)
-            t = p / ".touch"
-            t.write_text("ok")
-            t.unlink(missing_ok=True)
-            return p
-        except Exception:
-            continue
-    return Path("/tmp")
-
-# Root effettiva (es. /var/data in produzione, ./data in locale)
-BASE_DIR = _pick_dir()
+# Radice dello storage persistente su Render
+BASE_DIR = Path("/opt/render/project/data/eccomibook")
 
 def ensure_dirs() -> None:
-    (BASE_DIR / "chapters").mkdir(parents=True, exist_ok=True)
-    (BASE_DIR / "books").mkdir(parents=True, exist_ok=True)
+    """Crea le cartelle necessarie sul disco persistente."""
+    BASE_DIR.mkdir(parents=True, exist_ok=True)
+    (BASE_DIR / "chapters").mkdir(exist_ok=True)
+    (BASE_DIR / "books").mkdir(exist_ok=True)
+    (BASE_DIR / "admin").mkdir(exist_ok=True)   # per users.json, ecc.
 
-def file_path(relpath: Union[str, Path]) -> Path:
+def file_path(rel: str) -> Path:
     """
-    Accetta percorsi con sottocartelle, es.:
-    - "chapters/ch_abc.pdf"
-    - "books/bk_123.pdf"
+    Ritorna un Path dentro BASE_DIR per compatibilità con altri moduli
+    (es. users.py fa storage.file_path("admin/users.json")).
     """
-    p = (BASE_DIR / str(relpath)).resolve()
-    if not str(p).startswith(str(BASE_DIR.resolve())):
-        raise ValueError("Percorso non valido")
-    return p
+    ensure_dirs()
+    return (BASE_DIR / rel).resolve()
 
-def public_url(relpath: Union[str, Path]) -> str:
-    """URL di download servito dalla stessa app, compatibile con /downloads/{subpath:path}."""
-    return f"/downloads/{relpath}"
+# ---- Persistenza libri -------------------------------------------------
+
+BOOKS_FILE = BASE_DIR / "books.json"
+
+def load_books_from_disk() -> dict:
+    """Carica il 'DB' libri (dict) da disco; se non esiste ritorna {}."""
+    ensure_dirs()
+    try:
+        if BOOKS_FILE.exists():
+            with BOOKS_FILE.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+                return dict(data or {})
+    except Exception:
+        # Log minimale in MVP
+        print("⚠️  Impossibile leggere books.json (uso DB vuoto)")
+    return {}
+
+def save_books_to_disk(books: dict) -> None:
+    """Salva il 'DB' libri su disco in modo atomico."""
+    ensure_dirs()
+    try:
+        tmp = BOOKS_FILE.with_suffix(".tmp")
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(books or {}, f, ensure_ascii=False, indent=2)
+        tmp.replace(BOOKS_FILE)
+    except Exception:
+        print("⚠️  Impossibile salvare books.json")
