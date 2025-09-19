@@ -2,64 +2,67 @@
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>EccomiBook</title>
-    <link rel="icon" href="/favicon.svg" />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
-    <!-- Topbar -->
     <header class="topbar">
       <div class="brand">
-        <img src="/favicon.svg" class="logo" alt="" />
-        <span class="brand-title">EccomiBook</span>
+        <span class="logo">📚</span>
+        <span class="title">EccomiBook</span>
       </div>
-      <div class="toolbar">
-        <button id="btn-api-key" class="btn btn-outline">API key</button>
-        <button id="btn-create-book" class="btn btn-primary">+ Nuovo Libro</button>
-        <button id="btn-library" class="btn">📚 Libreria</button>
-        <button id="btn-editor" class="btn">✏️ Editor Capitolo</button>
-      </div>
+
+      <div id="backend-status" class="backend-pill">Backend: verifico…</div>
+
+      <nav class="actions">
+        <button id="btn-api-key" class="btn btn-ghost">API key</button>
+        <button id="btn-new-book" class="btn btn-primary">+ Nuovo Libro</button>
+        <button id="btn-library" class="btn btn-secondary">Libreria</button>
+        <button id="btn-editor" class="btn btn-ghost">✏️ Editor Capitolo</button>
+      </nav>
     </header>
 
-    <!-- Stato backend + URL -->
-    <div id="backend-status" class="backend-status"></div>
+    <main class="container">
+      <h1 class="hero">Crea libri professionali con AI</h1>
+      <p class="subhero">
+        Genera capitoli, organizza la libreria, esporta in PDF.
+      </p>
+    </main>
 
-    <!-- Hero compatto -->
-    <section class="hero hero-compact">
-      <h1>Crea libri professionali con AI</h1>
-      <p>Genera capitoli, organizza la libreria, esporta in PDF.</p>
-    </section>
-
-    <!-- Editor Capitolo (reale) -->
-    <section id="editor-card" class="card editor-card" style="display:none;">
+    <!-- Editor capitolo (pannello) -->
+    <section id="editor-card" class="card editor" style="display:none;">
       <div class="card-head">
-        <h3>Editor capitolo</h3>
-        <button id="btn-ed-close" class="btn btn-outline sm">Chiudi</button>
+        <strong>Editor capitolo</strong>
+        <span id="editor-mode-badge" class="badge">REALE</span>
       </div>
-
-      <div class="form-row">
-        <label>ID libro</label>
-        <input id="bookIdInput" placeholder="es. book_il-titolo_xxxxxx" />
+      <div class="grid">
+        <label>
+          ID libro
+          <input id="bookIdInput" placeholder="es. book_il-mio-libro_abc123" />
+        </label>
+        <label>
+          ID capitolo
+          <input id="chapterIdInput" placeholder="es. ch_0001" />
+        </label>
       </div>
-
-      <div class="form-row">
-        <label>ID capitolo</label>
-        <input id="chapterIdInput" placeholder="es. ch_0001" />
-      </div>
-
-      <div class="form-row">
-        <label>Testo</label>
-        <textarea id="chapterText" rows="10"
-          placeholder="Scrivi qui il contenuto del capitolo..."></textarea>
-      </div>
-
-      <div class="actions">
+      <label>
+        Testo capitolo
+        <textarea id="chapterText" rows="10" placeholder="Scrivi qui..."></textarea>
+      </label>
+      <div class="row-right">
+        <button id="btn-ed-close" class="btn btn-ghost">Chiudi</button>
         <button id="btn-ed-save" class="btn btn-primary">Salva</button>
       </div>
+      <small class="muted">
+        Per salvare davvero serve l’endpoint <code>PUT /books/{book_id}/chapters/{chapter_id}</code>.
+        (Lo abiliteremo a breve.)
+      </small>
     </section>
 
-    <footer class="footer">© 2025 EccomiOnline — Tutti i diritti riservati</footer>
+    <footer class="footer">
+      © 2025 EccomiOnline — Tutti i diritti riservati
+    </footer>
 
     <script type="module" src="/src/main.js"></script>
   </body>
