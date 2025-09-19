@@ -2,13 +2,42 @@
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>EccomiBook</title>
-    <!-- NIENTE <link href="./styles.css">: lo importiamo in /src/main.js -->
   </head>
   <body>
-    <div id="app"></div>
-    <!-- Correzione fondamentale: punta a /src/main.js -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">📚</span>
+        <span class="title">EccomiBook</span>
+      </div>
+      <div id="backend-status" class="backend-pill">Backend: …</div>
+      <div class="actions">
+        <button id="btn-create-book" class="btn btn-primary">+ Crea libro</button>
+        <button id="btn-library" class="btn btn-secondary">Libreria</button>
+        <button id="btn-editor" class="btn btn-ghost">Editor</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <h1 class="hero">Benvenuto in EccomiBook</h1>
+      <p class="subhero">Genera libri e capitoli con un click.</p>
+
+      <div class="card">
+        <div class="card-head">
+          <strong>Azioni rapide</strong>
+        </div>
+        <div class="row-right">
+          <button id="btn-create-book" class="btn btn-primary">+ Crea libro</button>
+          <button id="btn-library" class="btn btn-secondary">Libreria</button>
+          <button id="btn-editor" class="btn btn-ghost">Editor</button>
+        </div>
+      </div>
+
+      <p class="footer">© EccomiBook</p>
+    </main>
+
+    <!-- IMPORTANTE: leading slash e cartella src -->
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
