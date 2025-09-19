@@ -1,108 +1,107 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>EccomiBook</title>
-    <link rel="stylesheet" href="/src/styles.css" />
-  </head>
-  <body class="app">
-    <!-- Navbar -->
-    <header class="nav">
-      <div class="nav__left">
-        <span class="logo">📚</span>
-        <span class="brand">EccomiBook</span>
-        <span id="backend-status" class="backend-chip">Backend: verifica…</span>
-      </div>
-      <div class="nav__right">
-        <button id="btn-api-key" class="btn btn--ghost btn--xs">API key</button>
-      </div>
-    </header>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EccomiBook Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <style>
+    body {
+      background: #fdfdfd;
+    }
+    header {
+      background: #00264d;
+      color: white;
+      padding: 1rem;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    .topbar-buttons button {
+      margin-right: 0.5rem;
+    }
+    #editor-card {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      border-top: 2px solid #ccc;
+      padding: 1rem;
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+    }
+    #chapterText {
+      min-height: 180px;
+      width: 100%;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.25em 0.6em;
+      font-size: 0.75em;
+      border-radius: 0.25rem;
+      margin-left: 0.5rem;
+    }
+    .badge-gray {
+      background: #999;
+      color: #fff;
+    }
+    .badge-green {
+      background: #28a745;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📚 EccomiBook
+      <span id="editor-mode-badge" class="badge badge-gray">DEMO</span>
+    </h1>
+    <div id="backend-status" style="font-size: 0.9rem; margin-top: 0.5rem;">
+      Backend: …
+    </div>
+    <div class="topbar-buttons" style="margin-top: 0.5rem;">
+      <button id="btn-create-book" class="secondary">➕ Nuovo Libro</button>
+      <button id="btn-library" class="secondary">📖 Libreria</button>
+      <button id="btn-editor" class="secondary">✏️ Editor Capitolo</button>
+    </div>
+  </header>
 
-    <!-- Hero -->
-    <section class="hero">
-      <h1 class="hero__title"><span>Crea libri professionali</span> <em>con AI</em></h1>
-      <p class="hero__subtitle">Genera capitoli, organizza la libreria, esporta in PDF.</p>
-      <div class="hero__actions">
-        <button class="btn btn--primary" id="cta-create">Crea Libro</button>
-        <button class="btn btn--neutral" id="cta-library">Libreria</button>
-        <button class="btn btn--neutral" id="cta-edit">Modifica Capitolo</button>
+  <main class="container">
+    <section>
+      <h2>Benvenuto 👋</h2>
+      <p>Gestisci i tuoi libri generati con <strong>EccomiBook AI</strong>.</p>
+
+      <div>
+        <button id="btn-quick-new">Crea un nuovo libro</button>
+        <button id="btn-lib-open">Apri libreria</button>
+        <button id="btn-go-editor">Modifica capitolo</button>
       </div>
     </section>
+  </main>
 
-    <!-- Dashboard grid -->
-    <main class="grid">
-      <!-- Quick start -->
-      <article class="card">
-        <h3 class="card__title">Quick start</h3>
-        <p class="card__text">Avvia la creazione del tuo primo libro con pochi clic.</p>
-        <div class="card__actions">
-          <button class="btn btn--primary" id="btn-new-book">Nuovo libro</button>
-        </div>
-      </article>
-
-      <!-- Libreria -->
-      <article class="card">
-        <h3 class="card__title">Libreria</h3>
-        <p class="card__text">Raccogli bozze e progetti completati in un unico posto.</p>
-        <div class="card__actions">
-          <button class="btn btn--neutral" id="btn-open-library">Apri libreria</button>
-        </div>
-      </article>
-
-      <!-- Modifica capitolo -->
-      <article class="card">
-        <h3 class="card__title">Modifica capitolo</h3>
-        <p class="card__text">Affina titoli, riassunti e contenuti AI.</p>
-        <div class="card__actions">
-          <button class="btn btn--neutral" id="btn-open-editor">Vai all’editor</button>
-        </div>
-      </article>
-
-      <!-- (Facoltativo) Quota/Export -->
-      <article class="card">
-        <h3 class="card__title">Strumenti</h3>
-        <p class="card__text">Esporta il libro in PDF o controlla lo stato del tuo piano.</p>
-        <div class="card__actions">
-          <button class="btn btn--neutral" id="btn-export-demo">Export demo</button>
-        </div>
-      </article>
-    </main>
-
-    <!-- Footer -->
-    <footer class="footer">
-      <span>© 2025 EccomiOnline — Tutti i diritti riservati</span>
-    </footer>
-
-    <!-- Modale Editor Capitolo (demo) -->
-    <div id="modal" class="modal" aria-hidden="true">
-      <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div class="modal__header">
-          <h3 id="modal-title">Editor capitolo (demo)</h3>
-          <button class="modal__close" id="modal-close" aria-label="Chiudi">×</button>
-        </div>
-        <div class="modal__body">
-          <label class="field">
-            <span class="field__label">ID libro (es. <code>book_il-mio-titolo</code>)</span>
-            <input id="f-book-id" class="field__input" placeholder="book_il-mio-titolo" />
-          </label>
-          <label class="field">
-            <span class="field__label">ID capitolo (es. <code>ch_abc12345</code>)</span>
-            <input id="f-ch-id" class="field__input" placeholder="ch_xxxxxx" />
-          </label>
-          <label class="field">
-            <span class="field__label">Testo del capitolo</span>
-            <textarea id="f-ch-text" class="field__textarea" rows="8" placeholder="Scrivi o incolla qui…"></textarea>
-          </label>
-          <p class="muted">Placeholder: collegheremo il PUT <code>/books/{id}/chapters/{id}</code>.</p>
-        </div>
-        <div class="modal__footer">
-          <button class="btn btn--primary" id="modal-save">Salva (demo)</button>
-          <button class="btn" id="modal-cancel">Chiudi</button>
-        </div>
-      </div>
+  <!-- Editor capitolo -->
+  <div id="editor-card">
+    <h3>✏️ Editor Capitolo</h3>
+    <label>
+      ID Libro:
+      <input id="bookIdInput" type="text" placeholder="book_mio-titolo" />
+    </label>
+    <label>
+      ID Capitolo:
+      <input id="chapterIdInput" type="text" placeholder="ch_0001" />
+    </label>
+    <label>
+      Testo del capitolo:
+      <textarea id="chapterText" placeholder="Scrivi qui il contenuto..."></textarea>
+    </label>
+    <div style="margin-top: 0.5rem;">
+      <button id="btn-ed-save">💾 Salva</button>
+      <button id="btn-ed-close" class="secondary">Chiudi</button>
     </div>
+  </div>
 
-    <script type="module" src="/src/main.js"></script>
-  </body>
+  <script type="module" src="/src/main.js"></script>
+</body>
 </html>
