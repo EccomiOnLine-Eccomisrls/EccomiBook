@@ -1,36 +1,38 @@
 # apps/backend/app/deps.py
 from __future__ import annotations
+from fastapi import Header, HTTPException
+from pydantic import BaseModel
 
-from fastapi import Header, HTTPException, Depends
-from .users import USERS_BY_KEY, User
+from .settings import get_settings
+from .users import get_user_by_api_key, DEMO_USER
 
-ACTIVE_STATUSES = {"active", "trialing"}
 
-def get_current_user(x_api_key: str | None = Header(default=None)) -> User:
+class CurrentUser(BaseModel):
+    id: str
+    email: str | None = None
+    plan: str = "START"
+    role: str = "USER"
+
+
+def get_current_user(x_api_key: str | None = Header(default=None)) -> CurrentUser:
     """
-    Autenticazione semplice via x-api-key.
-    - 401 se manca o non esiste
-    - 403 se l'account non è attivo
+    MVP: se c'è x-api-key valida -> utente reale.
+         se NON c'è -> se allow_public=True allora utente DEMO,
+                       altrimenti 401 'x-api-key richiesta'.
+         se è presente ma NON valida -> 401 'API key non valida'.
     """
-    if not x_api_key:
-        raise HTTPException(status_code=401, detail="x-api-key richiesta")
+    settings = get_settings()
 
-    u = USERS_BY_KEY.get(x_api_key)
-    if not u:
+    # API key fornita: validiamo
+    if x_api_key:
+        user = get_user_by_api_key(x_api_key)
+        if user:
+            return CurrentUser(**user)
         raise HTTPException(status_code=401, detail="API key non valida")
 
-    if (u.status or "").lower() not in ACTIVE_STATUSES:
-        raise HTTPException(status_code=403, detail="Account non attivo")
+    # Nessuna key: fallback pubblico se abilitato
+    if settings.allow_public:
+        return CurrentUser(**DEMO_USER)
 
-    return u
-
-def get_owner_full(user: User = Depends(get_current_user)) -> User:
-    """
-    Consente l’accesso solo a chi ha ruolo/plan OWNER_FULL.
-    Usato dagli endpoint admin.
-    """
-    role = (user.role or "").upper()
-    plan = (user.plan or "").upper()
-    if role == "OWNER_FULL" or plan == "OWNER_FULL":
-        return user
-    raise HTTPException(status_code=403, detail="Solo OWNER_FULL")
+    # Se non permesso, richiediamo la key
+    raise HTTPException(status_code=401, detail="x-api-key richiesta")
