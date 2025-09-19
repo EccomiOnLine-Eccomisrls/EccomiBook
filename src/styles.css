@@ -1,202 +1,147 @@
-:root {
-  --bg:#0f1620;
-  --panel:#0a1320;
-  --muted:#8aa0b8;
-  --text:#e8eef7;
-  --primary:#2d7ef7;
-  --secondary:#2c3e50;
-  --accent:#f73d6b;
-  --ok:#2fbf71;
+/* =========================================================
+   EccomiBook — styles.css (stile professionale EccomiOnline)
+   ========================================================= */
+
+/* ---------- Palette & base ---------- */
+:root{
+  --bg: #0b1220;          /* sfondo pagina (blu notte) */
+  --panel: #0f1728;       /* pannelli/card */
+  --panel-2: #0c1424;     /* topbar */
+  --line: #1e2a3f;        /* bordi */
+  --text: #e8eef7;        /* testo alto contrasto */
+  --muted: #9cb0c8;       /* testo secondario */
+  --brand: #2d7ef7;       /* primario eccomionline */
+  --brand-2: #6a9eff;     /* gradiente/hover */
+  --ok: #2fbf71;          /* stato ok */
+  --warn: #f8b84a;        /* badge MVP o avvisi */
+  --accent: #f73d6b;      /* accenti rari */
+  --shadow: 0 6px 22px rgba(0,0,0,.35), 0 2px 8px rgba(0,0,0,.25);
 }
 
-* {
-  box-sizing: border-box;
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:
+    radial-gradient(1100px 600px at 80% -20%, rgba(45,126,247,.10), transparent 60%),
+    radial-gradient(900px 500px at -20% 10%, rgba(247,61,107,.06), transparent 55%),
+    var(--bg);
+  color:var(--text);
+  font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial;
+/* ---------- Topbar ---------- */
+.topbar{
+  position:sticky; top:0; z-index:10;
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:14px 18px;
+  background: linear-gradient(180deg, var(--panel-2), #0b1422);
+  border-bottom:1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(0,0,0,.15);
+}
+.brand{display:flex; align-items:center; gap:12px}
+.logo{font-size:20px}
+.title{font-weight:700; font-size:18px; letter-spacing:.2px}
+
+.backend-pill{
+  font-size:13px; color:#d8e6ff;
+  background:#0f1a2b; border:1px solid var(--line); border-radius:9px;
+  padding:6px 10px; display:inline-flex; align-items:center; gap:8px;
+}
+.backend-pill .dot{
+  width:9px;height:9px;border-radius:50%; background:var(--ok);
+  box-shadow:0 0 0 3px rgba(47,191,113,.18);
+}
+.debug-url{font-size:11px; opacity:.75; margin-top:4px}
+.actions{display:flex; gap:8px; flex-wrap:wrap}
+
+/* ---------- Buttons ---------- */
+.btn{
+  --b: transparent;
+  display:inline-flex; align-items:center; gap:8px;
+  padding:9px 12px; border-radius:10px;
+  color:var(--text); border:1px solid var(--b);
+  background:transparent; cursor:pointer; text-decoration:none;
+  transition: all .15s ease;
+}
+.btn:disabled{opacity:.55; cursor:not-allowed}
+.btn:hover{transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+
+.btn-primary{
+  background: linear-gradient(180deg, var(--brand), #1f63d1);
+  border-color: #225ab6;
+  color:white; box-shadow: 0 6px 18px rgba(45,126,247,.28);
+}
+.btn-primary:hover{filter:saturate(1.08) brightness(1.03)}
+
+.btn-secondary{
+  background:#121c2e; border-color:#24334f; color:#e7f0ff;
+}
+.btn-secondary:hover{background:#15223a}
+
+.btn-ghost{
+  background:transparent; border-color:#2b3a53; color:#e7f0ff;
+}
+.btn-ghost:hover{background:#101a2b}
+
+/* ---------- Layout contenuti ---------- */
+.container{max-width:1080px; margin:40px auto; padding:0 20px}
+.hero{font-size:26px; margin:18px 0 6px}
+.subhero{margin:0; color:var(--muted)}
+
+/* ---------- Card / pannelli ---------- */
+.card{
+  margin:22px 0; padding:18px 18px 16px;
+  background: linear-gradient(180deg, var(--panel), #0e1626);
+  border:1px solid var(--line); border-radius:14px;
+  box-shadow: var(--shadow);
+}
+.card-head{
+  display:flex; align-items:center; justify-content:space-between; gap:14px;
+  margin-bottom:12px;
+}
+.card-title{font-weight:600}
+.badge{
+  padding:4px 8px; font-size:12px; border-radius:999px;
+  border:1px solid #2b3a53; background:#142136; color:#cfe0ff;
+}
+.badge-warn{ background:#2a1f0c; color:#ffdba0; border-color:#4a3717 }
+
+/* griglia 2 colonne responsive */
+.grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+@media (max-width: 860px){ .grid{grid-template-columns:1fr} }
+
+/* ---------- Form elementi (per future schermate) ---------- */
+.card label{display:block; font-size:14px; color:var(--muted)}
+.card input, .card textarea{
+  width:100%; margin-top:6px; padding:10px 12px;
+  border-radius:10px; border:1px solid #273753; background:#0b1525; color:var(--text);
+  outline:none; transition: box-shadow .15s ease, border-color .15s ease;
+}
+.card textarea{min-height:120px; resize:vertical}
+.card input:focus, .card textarea:focus{
+  border-color:#2d7ef7; box-shadow:0 0 0 3px rgba(45,126,247,.2);
+}
+.row-right{display:flex; justify-content:flex-end; gap:8px; margin-top:12px}
+
+/* ---------- Pillola modalità (se usata) ---------- */
+.mode-pill{
+  font-size:11px; padding:3px 8px; border-radius:999px;
+  color:#bcd1ff; border:1px solid #2b3a53; background:#121d31;
+}
+.mode-pill.ok{ color:#c9ffd8; background:#0f2a1f; border-color:#1c5a43 }
+
+/* ---------- Footer ---------- */
+.footer{
+  opacity:.75; text-align:center; font-size:13px;
+  margin:48px 0 24px;
 }
 
-/* ─────────────────────────────
-   TOPBAR
-   ───────────────────────────── */
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 18px;
-  background: linear-gradient(180deg,#0b192b,#0d1b2a);
-  border-bottom: 1px solid #162338;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 700;
-}
-
-.logo {
-  font-size: 20px;
-}
-
-.title {
-  font-size: 18px;
-}
-
-.backend-pill {
-  font-size: 14px;
-  background: #162338;
-  border: 1px solid #21324b;
-  border-radius: 8px;
-  padding: 6px 10px;
-  color: var(--text);
-}
-
-.debug-url {
-  font-size: 11px;
-  opacity: .8;
-  margin-top: 4px;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* ─────────────────────────────
-   BOTTONI
-   ───────────────────────────── */
-.btn {
-  border: 1px solid transparent;
-  border-radius: 10px;
-  padding: 8px 12px;
-  cursor: pointer;
-}
-
-.btn:hover {
-  opacity: .95;
-}
-
-.btn-primary {
-  background: var(--primary);
-  color: white;
-  border-color: transparent;
-}
-
-.btn-secondary {
-  background: #1f2b3c;
-  color: #e7f0ff;
-  border: 1px solid #2b3a53;
-}
-
-.btn-ghost {
-  background: transparent;
-  color: #e7f0ff;
-  border: 1px solid #2b3a53;
-}
-
-/* ─────────────────────────────
-   LAYOUT PRINCIPALE
-   ───────────────────────────── */
-.container {
-  max-width: 980px;
-  margin: 48px auto;
-  padding: 0 20px;
-}
-
-.hero {
-  font-size: 28px;
-  margin: 0 0 6px;
-}
-
-.subhero {
-  margin: 0;
-  color: var(--muted);
-}
-
-/* ─────────────────────────────
-   CARD & FORM
-   ───────────────────────────── */
-.card {
-  max-width: 980px;
-  margin: 24px auto;
-  padding: 18px;
-  border: 1px solid #22324a;
-  border-radius: 14px;
-  background: linear-gradient(180deg,#101a28,#0f1827);
-}
-
-.card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.card label {
-  display: block;
-  font-size: 14px;
-  color: var(--muted);
-}
-
-.card input,
-.card textarea {
-  width: 100%;
-  margin-top: 4px;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid #273753;
-  background: #0c1522;
-  color: var(--text);
-}
-
-/* ─────────────────────────────
-   BADGE / TAG
-   ───────────────────────────── */
-.row-right {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.badge {
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid #2b3a53;
-  font-size: 12px;
-}
-
-.badge-gray {
-  background: #1d2636;
-  color: #cbd6e5;
-}
-
-.badge-green {
-  background: #0f3d2e;
-  color: #b7f7d3;
-  border-color: #1f6b4e;
-}
-
-/* ─────────────────────────────
-   FOOTER
-   ───────────────────────────── */
-.footer {
-  opacity: .7;
-  text-align: center;
-  font-size: 13px;
-  margin: 48px 0;
-}
+/* ---------- Utility ---------- */
+.mt-0{margin-top:0} .mt-1{margin-top:6px} .mt-2{margin-top:12px}
+.mb-0{margin-bottom:0} .mb-1{margin-bottom:6px} .mb-2{margin-bottom:12px}
+.center{display:flex; align-items:center; justify-content:center}
+.hidden{display:none !important}
