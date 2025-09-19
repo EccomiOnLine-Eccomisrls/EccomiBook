@@ -1,136 +1,156 @@
 /* =========================================================
  * EccomiBook — Frontend vanilla (Vite)
- * main.js
+ * main.js (completo)
  * ========================================================= */
 
-import './styles.css';
+import "./styles.css";
+
+/* ─────────────────────────────────────────────────────────
+   Config
+   ───────────────────────────────────────────────────────── */
 
 const API_BASE_URL =
   (import.meta?.env?.VITE_API_BASE_URL) ||
   window.VITE_API_BASE_URL ||
   "https://eccomibook-backend.onrender.com";
 
-/* ────────────────────────────────────────────────
-   Utilità
-   ──────────────────────────────────────────────── */
-const $ = (sel) => document.querySelector(sel);
-const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+// Editor: per ora restiamo in DEMO (niente PUT reale)
+window.USE_DEMO_EDITOR = true;
 
-/* ────────────────────────────────────────────────
-   Backend status
-   ──────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   Utilità
+   ───────────────────────────────────────────────────────── */
+
+const $ = (sel) => document.querySelector(sel);
+
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Backend status (pillola in alto)
+   ───────────────────────────────────────────────────────── */
+
 async function pingBackend() {
   const el = document.getElementById("backend-status");
   if (!el) return;
 
   setText("backend-status", "Backend: verifico…");
   try {
-    const r = await fetch(`${API_BASE_URL}/health`);
+    const r = await fetch(`${API_BASE_URL}/health`, { method: "GET" });
     setText("backend-status", r.ok ? "Backend: ✅ OK" : `Backend: errore ${r.status}`);
   } catch {
     setText("backend-status", "Backend: non raggiungibile");
   }
 
-  // mini-debug URL
+  // mini debug: mostra l'URL API
   const dbg = document.createElement("div");
   dbg.className = "debug-url";
   dbg.innerHTML = `API: <a href="${API_BASE_URL}" target="_blank" rel="noreferrer">${API_BASE_URL}</a>`;
   el.appendChild(dbg);
 }
 
-/* ────────────────────────────────────────────────
-   Libreria
-   ──────────────────────────────────────────────── */
-/** Normalizza la risposta di /books in un array di libri {id,title,author,language,...} */
-function normalizeBooksPayload(payload) {
-  // 1) array diretto
-  if (Array.isArray(payload)) return payload;
+/* ─────────────────────────────────────────────────────────
+   Stato / toggle Libreria
+   ───────────────────────────────────────────────────────── */
 
-  // 2) { items: [...] , count: n }
-  if (payload && Array.isArray(payload.items)) return payload.items;
+let LIB_OPEN = false;
 
-  // 3) { books: [...] }  oppure  { books: { id: {...} } }
-  if (payload && payload.books) {
-    const b = payload.books;
-    if (Array.isArray(b)) return b;
-    if (typeof b === "object") {
-      return Object.keys(b).map(id => ({ id, ...(b[id] || {}) }));
-    }
-  }
-
-  // 4) dict per id
-  if (payload && typeof payload === "object") {
-    return Object.keys(payload).map(id => ({ id, ...(payload[id] || {}) }));
-  }
-
-  return [];
+function setLibOpen(v) {
+  LIB_OPEN = !!v;
+  try { localStorage.setItem("lib_open", LIB_OPEN ? "1" : "0"); } catch {}
 }
 
-async function fetchBooks() {
-  const res = await fetch(`${API_BASE_URL}/books`);
-  if (!res.ok) throw new Error(`Errore (${res.status})`);
-  const data = await res.json();
-  return normalizeBooksPayload(data);
+function reflectLibraryVisibility() {
+  const sec = $("#library-section");
+  if (!sec) return;
+  sec.style.display = LIB_OPEN ? "block" : "none";
 }
 
-function renderLibrary(books = []) {
-  const container = document.getElementById("library-list");
-  if (!container) return;
-
-  container.innerHTML = "";
-
-  if (!books.length) {
-    container.innerHTML = `<div class="card" style="opacity:.8">Nessun libro ancora. Crea il tuo primo libro con “Crea libro”.</div>`;
-    return;
-  }
-
-  books.forEach((b) => {
-    const id = b.id || b.book_id || "";
-    const title = b.title || "(senza titolo)";
-    const author = b.author || "—";
-    const language = b.language || "it";
-
-    const card = document.createElement("div");
-    card.className = "card";
-    card.style.margin = "10px 0";
-    card.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-        <div>
-          <div style="font-weight:600">${title}</div>
-          <div style="font-size:13px;opacity:.8">Autore: ${author} — Lingua: ${language}</div>
-        </div>
-        <code style="opacity:.7">${id}</code>
-      </div>
-      <div class="row-right" style="margin-top:10px">
-        <button class="btn btn-secondary" data-open-id="${id}">Apri</button>
-        <button class="btn btn-ghost" data-edit-id="${id}">Modifica</button>
-        <button class="btn btn-ghost" data-del-id="${id}">Elimina</button>
-      </div>
-    `;
-    container.appendChild(card);
-  });
-
-  // wire “Apri”
-  container.querySelectorAll("[data-open-id]").forEach(btn => {
-    btn.addEventListener("click", () => openBook(btn.getAttribute("data-open-id")));
-  });
+function showLibrary() {
+  setLibOpen(true);
+  reflectLibraryVisibility();
+  loadLibrary().catch(() => {});
 }
 
-/* mostra la sezione libreria */
-async function showLibrary() {
-  $("#library-section").style.display = "block";
+function hideLibrary() {
+  setLibOpen(false);
+  reflectLibraryVisibility();
+}
+
+function toggleLibrary() {
+  LIB_OPEN ? hideLibrary() : showLibrary();
+}
+
+/* ─────────────────────────────────────────────────────────
+   Libreria: caricamento e rendering
+   ───────────────────────────────────────────────────────── */
+
+async function loadLibrary() {
+  const box = $("#library-list");
+  if (!box) return;
+
+  box.innerHTML = `<div class="muted">Carico libreria…</div>`;
+
   try {
-    const books = await fetchBooks();
-    renderLibrary(books);
+    const res = await fetch(`${API_BASE_URL}/books`, { method: "GET" });
+    if (!res.ok) throw new Error(`Errore ${res.status}`);
+
+    const data = await res.json(); // { book_id: {…}, … } oppure []
+    // Normalizziamo a array
+    const items = Array.isArray(data)
+      ? data
+      : Object.values(data || {});
+
+    if (!items.length) {
+      box.innerHTML = `<div class="muted">Nessun libro ancora. Crea il tuo primo libro con “Crea libro”.</div>`;
+      return;
+    }
+
+    // pulisci e renderizza card
+    box.innerHTML = "";
+    items.forEach((n) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.style.margin = "10px 0";
+      card.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div>
+            <div style="font-weight:600;">${n.title || "(senza titolo)"}</div>
+            <div class="muted">Autore: ${n.author || "—"} — Lingua: ${n.language || "it"}</div>
+          </div>
+          <div class="badge">${n.id || ""}</div>
+        </div>
+        <div class="row-right" style="margin-top:10px;">
+          <button class="btn btn-secondary btn-open">Apri</button>
+          <button class="btn btn-ghost btn-edit">Modifica</button>
+          <button class="btn btn-ghost btn-delete">Elimina</button>
+        </div>
+      `;
+      // azioni
+      card.querySelector(".btn-open")?.addEventListener("click", () => {
+        openEditorFor(n.id);
+        hideLibrary();
+      });
+      card.querySelector(".btn-edit")?.addEventListener("click", () => {
+        alert("Modifica libro — funzione in arrivo (titolo, autore, lingua…).");
+      });
+      card.querySelector(".btn-delete")?.addEventListener("click", () => {
+        alert("Elimina libro — endpoint in arrivo.");
+      });
+
+      box.appendChild(card);
+    });
   } catch (e) {
-    document.getElementById("library-list").innerHTML =
-      `<div class="card" style="border-color:#5a2a2a;color:#f2b5b5">Errore di rete: ${e.message}</div>`;
+    box.innerHTML = `<div class="error">Errore di rete: ${e.message}</div>`;
   }
 }
 
-/* ────────────────────────────────────────────────
-   Crea libro
-   ──────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   Creazione libro
+   ───────────────────────────────────────────────────────── */
+
 async function createBookSimple() {
   const title = prompt("Titolo del libro:", "Manuale EccomiBook");
   if (!title) return;
@@ -154,30 +174,41 @@ async function createBookSimple() {
     }
 
     const data = await res.json();
-    const newId = data.book_id || data.id;
-    alert(`✅ Libro creato!\nID: ${newId}\nTitolo: ${data.title || title}`);
-    try { localStorage.setItem("last_book_id", newId); } catch {}
+    alert(`✅ Libro creato!\nID: ${data.book_id}\nTitolo: ${data.title}`);
+    try { localStorage.setItem("last_book_id", data.book_id); } catch {}
 
-    // aggiorna libreria a vista
+    // Dopo la creazione, mostro/aggiorno la libreria
     showLibrary();
   } catch (e) {
     alert("Errore di rete: " + e.message);
   }
 }
 
-/* ────────────────────────────────────────────────
-   Editor capitolo (placeholder)
-   ──────────────────────────────────────────────── */
-function openBook(bookId) {
+/* ─────────────────────────────────────────────────────────
+   Editor Capitolo (DEMO per ora)
+   ───────────────────────────────────────────────────────── */
+
+function openEditor() {
   const ed = $("#editor-card");
   if (ed) ed.style.display = "block";
-  const book = $("#bookIdInput");
-  const ch = $("#chapterIdInput");
-  const tx = $("#chapterText");
-  if (book) book.value = bookId || "";
+  // badge modalità
+  const mode = $("#editor-mode-badge");
+  if (mode) {
+    mode.textContent = window.USE_DEMO_EDITOR ? "DEMO" : "REALE";
+    mode.className = "badge " + (window.USE_DEMO_EDITOR ? "badge-gray" : "badge-green");
+  }
+}
+
+function openEditorFor(bookId) {
+  openEditor();
+  const b = $("#ed-book-id");
+  const ch = $("#ed-chapter-id");
+  if (b) b.value = bookId || (b.value || "");
   if (ch && !ch.value) ch.value = "ch_0001";
-  if (tx && !tx.value) tx.value = "";
-  try { localStorage.setItem("last_book_id", bookId); } catch {}
+  const tx = $("#ed-text");
+  if (tx && !tx.value) {
+    tx.value = `Scrivi qui il contenuto del capitolo...\n\n(Modalità ${window.USE_DEMO_EDITOR ? "DEMO" : "REALE"}).`;
+  }
 }
 
 function closeEditor() {
@@ -186,50 +217,82 @@ function closeEditor() {
 }
 
 async function saveChapter() {
-  alert("Salvataggio capitolo: endpoint PUT verrà abilitato nella prossima iterazione.");
+  const bookId = $("#ed-book-id")?.value?.trim();
+  const chId = $("#ed-chapter-id")?.value?.trim();
+  const text = $("#ed-text")?.value ?? "";
+
+  if (!bookId || !chId) {
+    alert("Inserisci ID libro e ID capitolo.");
+    return;
+  }
+
+  if (window.USE_DEMO_EDITOR) {
+    alert(
+      `(DEMO) Capitolo salvato!\n\nBook: ${bookId}\nChapter: ${chId}\n\nTesto:\n` +
+      text.slice(0, 200) + (text.length > 200 ? "..." : "")
+    );
+    return;
+  }
+
+  // Quando abiliteremo il PUT reale:
+  // try {
+  //   const resp = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chId)}`, {
+  //     method: "PUT",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify({ content: text }),
+  //   });
+  //   if (!resp.ok) {
+  //     const e = await resp.json().catch(() => ({}));
+  //     throw new Error(e?.detail || `Errore ${resp.status}`);
+  //   }
+  //   alert("✅ Capitolo aggiornato con successo!");
+  // } catch (err) {
+  //   alert("❌ Errore: " + (err?.message || String(err)));
+  // }
 }
 
-/* ────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    Hook UI
-   ──────────────────────────────────────────────── */
-function wireButtons() {
-  // Topbar
-  $("#btn-create-book")?.addEventListener("click", createBookSimple);
-  $("#btn-library")?.addEventListener("click", showLibrary);
-  $("#btn-editor")?.addEventListener("click", () => {
-    const last = localStorage.getItem("last_book_id");
-    if (last) openBook(last);
-    else alert("Apri prima un libro dalla libreria.");
-  });
+   ───────────────────────────────────────────────────────── */
 
-  // Azioni rapide (card) – ID diversi per evitare conflitti
-  $("#btn-create-book-2")?.addEventListener("click", createBookSimple);
-  $("#btn-library-2")?.addEventListener("click", showLibrary);
-  $("#btn-editor-2")?.addEventListener("click", () => {
-    const last = localStorage.getItem("last_book_id");
-    if (last) openBook(last);
-    else alert("Apri prima un libro dalla libreria.");
-  });
+function wireButtons() {
+  // Topbar + Azioni rapide (se presenti entrambe)
+  $("#btn-create-book")?.addEventListener("click", createBookSimple);
+  $("#btn-quick-new")?.addEventListener("click", createBookSimple);
+
+  $("#btn-library")?.addEventListener("click", toggleLibrary);
+  $("#btn-lib-open")?.addEventListener("click", toggleLibrary);
+  $("#btn-lib-close")?.addEventListener("click", hideLibrary);
+
+  $("#btn-editor")?.addEventListener("click", openEditor);
+  $("#btn-go-editor")?.addEventListener("click", openEditor);
 
   // Editor
   $("#btn-ed-save")?.addEventListener("click", saveChapter);
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
 }
 
-/* ────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    Init
-   ──────────────────────────────────────────────── */
+   ───────────────────────────────────────────────────────── */
+
 document.addEventListener("DOMContentLoaded", async () => {
   wireButtons();
   await pingBackend();
 
-  // badge modalità (placeholder)
-  const modeBadge = document.getElementById("editor-mode-badge");
-  if (modeBadge) {
-    modeBadge.textContent = "DEMO";
-    modeBadge.className = "badge badge-gray";
-  }
-
-  // mostra la libreria all’avvio (opzionale)
-  await showLibrary();
+  // ripristina stato libreria
+  try { LIB_OPEN = localStorage.getItem("lib_open") === "1"; } catch {}
+  reflectLibraryVisibility();
+  if (LIB_OPEN) loadLibrary().catch(() => {});
 });
+
+/* =========================================================
+ * Esporta (se servono inline in HTML)
+ * ========================================================= */
+window.showLibrary = showLibrary;
+window.hideLibrary = hideLibrary;
+window.toggleLibrary = toggleLibrary;
+window.openEditor = openEditor;
+window.openEditorFor = openEditorFor;
+window.closeEditor = closeEditor;
+window.saveChapter = saveChapter;
