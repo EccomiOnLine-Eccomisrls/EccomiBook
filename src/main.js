@@ -1,236 +1,170 @@
-/* =========================================================
- * EccomiBook — Frontend vanilla (Vite)
- * src/main.js
- * ========================================================= */
+// src/main.js
 
-import './styles.css';
+// =============================
+// CONFIG
+// =============================
+const API_BASE = "https://eccomibook-backend.onrender.com";
+const API_KEY = "demo_key_user"; // chiave API demo, poi sostituibile
 
-const API_BASE_URL =
-  (import.meta?.env?.VITE_API_BASE_URL) ||
-  window.VITE_API_BASE_URL ||
-  "https://eccomibook-backend.onrender.com";
-
-/* ────────────────────────────────────────────────
-   Helpers
-   ──────────────────────────────────────────────── */
-const $ = (sel) => document.querySelector(sel);
-const el = (tag, cls) => { const x = document.createElement(tag); if (cls) x.className = cls; return x; };
-const setText = (id, text) => { const x = document.getElementById(id); if (x) x.textContent = text; };
-
-/* ────────────────────────────────────────────────
-   Ping backend (badge)
-   ──────────────────────────────────────────────── */
-async function pingBackend() {
-  const badge = $("#backend-status");
-  if (!badge) return;
-  setText("backend-status", "Backend: verifico…");
-
-  try {
-    const r = await fetch(`${API_BASE_URL}/health`);
-    setText("backend-status", r.ok ? "Backend: ✅ OK" : `Backend: errore ${r.status}`);
-  } catch {
-    setText("backend-status", "Backend: non raggiungibile");
-  }
-
-  // mini-debug URL
-  const dbg = el("div", "debug-url");
-  dbg.innerHTML = `API: <a href="${API_BASE_URL}" target="_blank" rel="noreferrer">${API_BASE_URL}</a>`;
-  badge.appendChild(dbg);
+// =============================
+// UTILS
+// =============================
+function qs(sel) {
+  return document.querySelector(sel);
+}
+function ce(tag, cls) {
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  return el;
 }
 
-/* ────────────────────────────────────────────────
-   Libreria
-   ──────────────────────────────────────────────── */
-async function fetchBooks() {
+// =============================
+// BACKEND STATUS
+// =============================
+async function checkBackend() {
   try {
-    const r = await fetch(`${API_BASE_URL}/books`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return await r.json();
+    const res = await fetch(`${API_BASE}/health`);
+    if (!res.ok) throw new Error("Errore backend");
+    qs("#backend-status").innerHTML = `Backend: ✅ OK <br><small>API: ${API_BASE}</small>`;
+    qs("#backend-status").style.background = "rgba(0,200,0,0.2)";
   } catch (e) {
-    return { error: e.message };
+    qs("#backend-status").textContent = "Backend: ❌ OFFLINE";
+    qs("#backend-status").style.background = "rgba(200,0,0,0.2)";
   }
 }
 
-function renderLibraryList(listEl, books) {
-  listEl.innerHTML = "";
-  if (!Array.isArray(books) || books.length === 0) {
-    const empty = el("div"); empty.style.opacity = ".75";
-    empty.textContent = "Nessun libro ancora. Crea il tuo primo libro con “Crea libro”.";
-    listEl.appendChild(empty);
-    return;
-  }
-
-  books.forEach((b) => {
-    const card = el("div", "card"); card.style.margin = "10px 0";
-    card.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-        <div>
-          <div style="font-weight:600">${b.title || "(senza titolo)"}</div>
-          <div style="font-size:13px;opacity:.8">Autore: ${b.author || "—"} — Lingua: ${b.language || "it"}</div>
-          <div><span class="badge" style="margin-top:6px">${b.id}</span></div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-secondary" data-action="open" data-id="${b.id}">Apri</button>
-          <button class="btn btn-ghost" data-action="edit" data-id="${b.id}">Modifica</button>
-          <button class="btn btn-ghost" data-action="delete" data-id="${b.id}">Elimina</button>
-        </div>
-      </div>
-    `;
-    listEl.appendChild(card);
+// =============================
+// CREA LIBRO
+// =============================
+async function createBook(title, author, language) {
+  const res = await fetch(`${API_BASE}/books/create`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": API_KEY,
+    },
+    body: JSON.stringify({ title, author, language }),
   });
-
-  // wire azioni
-  listEl.querySelectorAll("button[data-action='open']").forEach(btn => {
-    btn.addEventListener("click", () => openEditorForBook(btn.dataset.id));
-  });
+  if (!res.ok) throw new Error(`Errore HTTP ${res.status}`);
+  return await res.json();
 }
 
-/* Toggle libreria */
-function toggleLibrary(show) {
-  const sec = $("#library-section");
-  if (!sec) return;
-  sec.style.display = show ? "block" : "none";
-  const toggleBtn = $("#btn-library-toggle");
-  if (toggleBtn) toggleBtn.textContent = show ? "Chiudi libreria" : "Apri libreria";
-}
-
-async function openLibraryAndReload() {
-  toggleLibrary(true);
-  const list = $("#library-list");
-  list.innerHTML = "Carico…";
-  const data = await fetchBooks();
-  if (data?.error) {
-    list.innerHTML = `<div style="color:#f77">Errore: ${data.error}</div>`;
-  } else {
-    renderLibraryList(list, data);
-  }
-}
-
-/* ────────────────────────────────────────────────
-   Crea libro (modale semplice via prompt)
-   ──────────────────────────────────────────────── */
-async function createBookSimple() {
-  const title = prompt("Titolo del libro:", "Manuale EccomiBook");
-  if (!title) return;
+async function handleCreateBook() {
+  const title = prompt("Titolo del libro:", "Nuovo libro") || "EccomiBook";
+  const author = "EccomiBook";
+  const language = "it";
 
   try {
-    const res = await fetch(`${API_BASE_URL}/books/create`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        author: "EccomiBook",
-        language: "it",
-        chapters: []
-      })
-    });
+    await createBook(title, author, language);
+    await loadLibrary();
+  } catch (err) {
+    alert("Errore creazione libro: " + err.message);
+  }
+}
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      alert(`Errore (${res.status}): ${err.detail || JSON.stringify(err)}`);
+// =============================
+// LIBRERIA
+// =============================
+async function fetchBooks() {
+  const res = await fetch(`${API_BASE}/books`, {
+    headers: { "x-api-key": API_KEY },
+  });
+  if (!res.ok) throw new Error(`Errore HTTP ${res.status}`);
+  return await res.json();
+}
+
+async function loadLibrary() {
+  const list = qs("#library-list");
+  list.innerHTML = "Caricamento...";
+
+  try {
+    const books = await fetchBooks();
+    list.innerHTML = "";
+
+    if (!books || Object.keys(books).length === 0) {
+      list.textContent = "Nessun libro ancora. Crea il tuo primo libro con “Crea libro”.";
       return;
     }
 
-    const data = await res.json();
-    try { localStorage.setItem("last_book_id", data.book_id); } catch {}
-    await openLibraryAndReload();
-    openEditorForBook(data.book_id);     // apri editor direttamente
-  } catch (e) {
-    alert("Errore di rete: " + e.message);
-  }
-}
+    Object.values(books).forEach((b) => {
+      const card = ce("div", "card");
+      card.innerHTML = `
+        <strong>${b.title || "(senza titolo)"}</strong><br>
+        Autore: ${b.author || "—"} — Lingua: ${b.language || "?"}<br>
+        <small>${b.id}</small><br>
+      `;
 
-/* ────────────────────────────────────────────────
-   Editor capitolo (REALE)
-   ──────────────────────────────────────────────── */
-function openEditor() {
-  const ed = $("#editor-card");
-  if (ed) ed.style.display = "block";
-}
+      const row = ce("div", "row-right");
+      const btnApri = ce("button", "btn btn-ghost");
+      btnApri.textContent = "Apri";
+      btnApri.onclick = () => openEditor(b.id);
 
-function closeEditor() {
-  const ed = $("#editor-card");
-  if (ed) ed.style.display = "none";
-}
+      const btnEdit = ce("button", "btn btn-secondary");
+      btnEdit.textContent = "Modifica";
+      btnEdit.onclick = () => alert("Funzione modifica WIP");
 
-function openEditorForBook(bookId) {
-  openEditor();
-  const b = $("#bookIdInput");
-  const ch = $("#chapterIdInput");
-  const tx = $("#chapterText");
-  if (b) b.value = bookId || (localStorage.getItem("last_book_id") || "");
-  if (ch && !ch.value) ch.value = "ch_0001";
-  if (tx && !tx.value) tx.value = "";
-}
+      const btnDel = ce("button", "btn btn-danger");
+      btnDel.textContent = "Elimina";
+      btnDel.onclick = () => alert("Funzione elimina WIP");
 
-async function saveChapter() {
-  const bookId = $("#bookIdInput")?.value?.trim();
-  const chId = $("#chapterIdInput")?.value?.trim();
-  const text = $("#chapterText")?.value ?? "";
+      row.appendChild(btnApri);
+      row.appendChild(btnEdit);
+      row.appendChild(btnDel);
+      card.appendChild(row);
 
-  if (!bookId || !chId) {
-    alert("Inserisci ID libro e ID capitolo.");
-    return;
-  }
-
-  try {
-    const resp = await fetch(
-      `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chId)}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: text, title: null }),
-      }
-    );
-
-    if (!resp.ok) {
-      let msg = `Errore ${resp.status}`;
-      try {
-        const j = await resp.json();
-        if (j?.detail) msg = j.detail;
-      } catch {}
-      throw new Error(msg);
-    }
-
-    alert("✅ Capitolo salvato!");
+      list.appendChild(card);
+    });
   } catch (err) {
-    alert("❌ Errore: " + (err?.message || String(err)));
+    list.innerHTML = `<span style="color:red;">Errore: ${err.message}</span>`;
   }
 }
 
-/* ────────────────────────────────────────────────
-   Hook UI
-   ──────────────────────────────────────────────── */
-function wireButtons() {
-  $("#btn-create-book")?.addEventListener("click", createBookSimple);
-  $("#btn-library-toggle")?.addEventListener("click", () => {
-    const sec = $("#library-section");
-    toggleLibrary(sec?.style.display !== "block");
-    if (sec?.style.display === "block") openLibraryAndReload();
-  });
-  $("#btn-editor")?.addEventListener("click", () => openEditorForBook(localStorage.getItem("last_book_id")||""));
-
-  $("#btn-ed-save")?.addEventListener("click", saveChapter);
-  $("#btn-ed-close")?.addEventListener("click", closeEditor);
-
-  // “Azioni rapide”
-  $("#btn-quick-new")?.addEventListener("click", createBookSimple);
-  $("#btn-quick-lib")?.addEventListener("click", () => {
-    toggleLibrary(true); openLibraryAndReload();
-  });
-  $("#btn-quick-editor")?.addEventListener("click", () => openEditorForBook(localStorage.getItem("last_book_id")||""));
+// =============================
+// EDITOR
+// =============================
+function openEditor(bookId) {
+  const editor = qs("#editor-section");
+  editor.style.display = "block";
+  qs("#editor-book-id").value = bookId;
+  qs("#editor-chapter-id").value = "ch_0001";
+}
+function closeEditor() {
+  qs("#editor-section").style.display = "none";
 }
 
-/* ────────────────────────────────────────────────
-   Init
-   ──────────────────────────────────────────────── */
-document.addEventListener("DOMContentLoaded", async () => {
-  wireButtons();
-  await pingBackend();
-  // Apri libreria all’avvio (opzionale: metti false se la vuoi chiusa di default)
-  toggleLibrary(true);
-  openLibraryAndReload();
-});
+// =============================
+// NAVIGAZIONE
+// =============================
+function goLibrary() {
+  const lib = qs("#library-section");
+  lib.style.display = lib.style.display === "none" ? "block" : "none";
+  if (lib.style.display === "block") loadLibrary();
+}
+function goEditor() {
+  openEditor("");
+}
 
-/* Esporta in window se servisse inline */
-window.openEditorForBook = openEditorForBook;
+// =============================
+// EVENT LISTENERS
+// =============================
+document.addEventListener("DOMContentLoaded", () => {
+  checkBackend();
+
+  // Topbar
+  qs("#btn-create-book").addEventListener("click", handleCreateBook);
+  qs("#btn-library").addEventListener("click", goLibrary);
+  qs("#btn-editor").addEventListener("click", goEditor);
+
+  // Azioni rapide
+  const quickCreate = document.querySelector(".card .btn.btn-primary");
+  if (quickCreate) quickCreate.addEventListener("click", handleCreateBook);
+
+  const quickLibrary = document.querySelector(".card .btn.btn-secondary");
+  if (quickLibrary) quickLibrary.addEventListener("click", goLibrary);
+
+  const quickEditor = document.querySelector(".card .btn.btn-ghost");
+  if (quickEditor) quickEditor.addEventListener("click", goEditor);
+
+  // Editor
+  qs("#btn-close-editor").addEventListener("click", closeEditor);
+});
