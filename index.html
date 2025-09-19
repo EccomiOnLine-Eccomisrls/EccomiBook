@@ -11,12 +11,9 @@
         <span class="logo">📚</span>
         <span class="title">EccomiBook</span>
       </div>
+
+      <!-- Solo stato backend, NIENTE bottoni qui -->
       <div id="backend-status" class="backend-pill">Backend: …</div>
-      <div class="actions">
-        <button id="btn-create-book" class="btn btn-primary">+ Crea libro</button>
-        <button id="btn-library" class="btn btn-secondary">Libreria</button>
-        <button id="btn-editor" class="btn btn-ghost">Editor</button>
-      </div>
     </header>
 
     <main class="container">
@@ -33,15 +30,17 @@
           <button id="btn-editor" class="btn btn-ghost">Editor</button>
         </div>
       </div>
+
       <!-- Libreria -->
-<div id="library-section" style="display:none; margin-top:20px;">
-  <h2>📚 La tua libreria</h2>
-  <div id="library-list"></div>
-</div>
+      <div id="library-section" style="display:none; margin-top:20px;">
+        <h2>📚 La tua libreria</h2>
+        <div id="library-list"></div>
+      </div>
+
       <p class="footer">© EccomiBook</p>
     </main>
 
-    <!-- IMPORTANTE: leading slash e cartella src -->
+    <!-- Vite: importa lo script dal folder src -->
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
