@@ -1,52 +1,14 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EccomiBook</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <!-- NIENTE <link href="./styles.css">: lo importiamo in /src/main.js -->
   </head>
   <body>
-    <header class="topbar">
-      <div class="brand">
-        <span class="logo">📚</span>
-        <span class="title">EccomiBook</span>
-      </div>
-      <div class="backend-pill" id="backend-status">Backend: …</div>
-    </header>
-
-    <main class="container">
-      <h1 class="hero">Benvenuto in EccomiBook</h1>
-      <p class="subhero">
-        Genera libri e manuali con l’assistente AI. Crea subito un nuovo progetto oppure apri la tua libreria.
-      </p>
-
-      <section class="card">
-        <h2>Azioni rapide</h2>
-        <div class="grid">
-          <div>
-            <h3>Creazione rapida</h3>
-            <p>Clicca “Crea libro” per avviare un progetto base (titolo e autore).</p>
-            <button id="btn-create-book" class="btn btn-primary">+ Crea libro</button>
-          </div>
-          <div>
-            <h3>Libreria</h3>
-            <p>Visualizza i libri creati e riprendi il lavoro.</p>
-            <button id="btn-library" class="btn btn-secondary">Apri libreria</button>
-          </div>
-        </div>
-        <div>
-          <h3>Editor capitolo</h3>
-          <p>Accedi all’editor dei capitoli (funzione in arrivo nella prossima iterazione).</p>
-          <button id="btn-editor" class="btn btn-ghost">Apri editor</button>
-        </div>
-      </section>
-    </main>
-
-    <footer class="footer">
-      © 2025 EccomiBook — Tutti i diritti riservati
-    </footer>
-
-    <script type="module" src="./main.js"></script>
+    <div id="app"></div>
+    <!-- Correzione fondamentale: punta a /src/main.js -->
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>
