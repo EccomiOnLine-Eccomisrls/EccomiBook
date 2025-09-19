@@ -80,3 +80,53 @@ document.addEventListener("DOMContentLoaded", async () => {
   wireButtons();
   await pingBackend();
 });
+
+/* ────────────────────────────────────────────────
+   Libreria
+   ──────────────────────────────────────────────── */
+async function loadLibrary() {
+  const container = document.getElementById("library-list");
+  if (!container) return;
+
+  container.innerHTML = "<p>📚 Caricamento libreria...</p>";
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/books`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" }
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      container.innerHTML = `<p style="color:red">Errore (${res.status}): ${err.detail || "Impossibile caricare i libri"}</p>`;
+      return;
+    }
+
+    const data = await res.json();
+    if (!data || Object.keys(data).length === 0) {
+      container.innerHTML = "<p>📭 Nessun libro trovato.</p>";
+      return;
+    }
+
+    // Mostra lista libri
+    container.innerHTML = "";
+    Object.values(data).forEach(book => {
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `
+        <div class="card-head"><strong>${book.title}</strong></div>
+        <p><small>ID: ${book.id}</small></p>
+        <p>Autore: ${book.author || "-"}</p>
+      `;
+      container.appendChild(div);
+    });
+  } catch (e) {
+    container.innerHTML = `<p style="color:red">❌ Errore di rete: ${e.message}</p>`;
+  }
+}
+
+function goLibrary() {
+  const lib = document.getElementById("library-section");
+  if (lib) lib.style.display = "block";
+  loadLibrary();
+}
