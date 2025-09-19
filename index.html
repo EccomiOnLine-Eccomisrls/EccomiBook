@@ -13,7 +13,6 @@
       <div class="brand">
         <img src="/favicon.svg" class="logo" alt="" />
         <span class="brand-title">EccomiBook</span>
-        <span id="editor-mode-badge" class="badge">DEMO</span>
       </div>
       <div class="toolbar">
         <button id="btn-api-key" class="btn btn-outline">API key</button>
@@ -26,37 +25,38 @@
     <!-- Stato backend + URL -->
     <div id="backend-status" class="backend-status"></div>
 
-    <!-- Hero (compatto, senza CTA) -->
+    <!-- Hero compatto -->
     <section class="hero hero-compact">
       <h1>Crea libri professionali con AI</h1>
       <p>Genera capitoli, organizza la libreria, esporta in PDF.</p>
     </section>
 
-    <!-- Editor Capitolo (pannello flottante, nascosto finché non clicchi "Editor Capitolo") -->
+    <!-- Editor Capitolo (reale) -->
     <section id="editor-card" class="card editor-card" style="display:none;">
       <div class="card-head">
         <h3>Editor capitolo</h3>
         <button id="btn-ed-close" class="btn btn-outline sm">Chiudi</button>
       </div>
+
       <div class="form-row">
         <label>ID libro</label>
-        <input id="bookIdInput" placeholder="es. book_titolo-di-prova" />
+        <input id="bookIdInput" placeholder="es. book_il-titolo_xxxxxx" />
       </div>
+
       <div class="form-row">
         <label>ID capitolo</label>
         <input id="chapterIdInput" placeholder="es. ch_0001" />
       </div>
+
       <div class="form-row">
         <label>Testo</label>
-        <textarea id="chapterText" rows="8" placeholder="Scrivi qui il contenuto del capitolo..."></textarea>
+        <textarea id="chapterText" rows="10"
+          placeholder="Scrivi qui il contenuto del capitolo..."></textarea>
       </div>
+
       <div class="actions">
         <button id="btn-ed-save" class="btn btn-primary">Salva</button>
       </div>
-      <p class="muted note">
-        Questo editor è <b>DEMO</b> finché non abilitiamo l’endpoint
-        <code>PUT /books/{id}/chapters/{id}</code>.
-      </p>
     </section>
 
     <footer class="footer">© 2025 EccomiOnline — Tutti i diritti riservati</footer>
