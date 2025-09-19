@@ -1,20 +1,26 @@
 /* =========================================================
  * EccomiBook — Frontend vanilla (Vite)
- * main.js (completo)
+ * main.js
  * ========================================================= */
 
 import './styles.css';
-
 const API_BASE_URL =
   (import.meta?.env?.VITE_API_BASE_URL) ||
   window.VITE_API_BASE_URL ||
   "https://eccomibook-backend.onrender.com";
 
-/* ───────────── Util ───────────── */
-const $ = (sel) => document.querySelector(sel);
-const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+/* ────────────────────────────────────────────────
+   Utilità
+   ──────────────────────────────────────────────── */
+function $(sel) { return document.querySelector(sel); }
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
 
-/* ──────────── Backend badge ──────────── */
+/* ────────────────────────────────────────────────
+   Ping backend
+   ──────────────────────────────────────────────── */
 async function pingBackend() {
   const el = document.getElementById("backend-status");
   if (!el) return;
@@ -27,14 +33,16 @@ async function pingBackend() {
     setText("backend-status", "Backend: non raggiungibile");
   }
 
-  // mini debug con URL API
+  // debug URL
   const dbg = document.createElement("div");
   dbg.className = "debug-url";
   dbg.innerHTML = `API: <a href="${API_BASE_URL}" target="_blank">${API_BASE_URL}</a>`;
   el.appendChild(dbg);
 }
 
-/* ─────────── Azioni ─────────── */
+/* ────────────────────────────────────────────────
+   Azioni
+   ──────────────────────────────────────────────── */
 async function createBookSimple() {
   const title = prompt("Titolo del libro:", "Manuale EccomiBook");
   if (!title) return;
@@ -59,76 +67,73 @@ async function createBookSimple() {
 
     const data = await res.json();
     alert(`✅ Libro creato!\nID: ${data.book_id}\nTitolo: ${data.title}`);
+
     try { localStorage.setItem("last_book_id", data.book_id); } catch {}
-    await loadLibrary();        // aggiorna subito la libreria
-    showLibrarySection();       // e assicurati che sia visibile
+    await loadLibrary(); // aggiorna subito la libreria
   } catch (e) {
     alert("Errore di rete: " + e.message);
   }
 }
 
-function showLibrarySection() {
-  const lib = document.getElementById("library-section");
-  if (lib) lib.style.display = "block";
-}
-
 async function loadLibrary() {
-  const box = document.getElementById("library-list");
-  if (!box) return;
+  const list = document.getElementById("library-list");
+  if (!list) return;
 
-  box.innerHTML = "Carico libreria…";
+  list.innerHTML = "Caricamento…";
+
   try {
     const res = await fetch(`${API_BASE_URL}/books`);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      box.innerHTML = `<span style="color:#ff6b6b;">Errore (${res.status}): ${err.detail || 'Not Found'}</span>`;
+    if (!res.ok) throw new Error(`Errore ${res.status}`);
+
+    const data = await res.json();
+    const books = data.items || []; // FIX QUI ✅
+
+    if (books.length === 0) {
+      list.innerHTML = "<em>Nessun libro ancora. Crea il tuo primo libro!</em>";
       return;
     }
-    const items = await res.json();
 
-    if (!items || items.length === 0) {
-      box.innerHTML = `<div class="card">Nessun libro ancora. Crea il tuo primo libro con “+ Crea libro”.</div>`;
-      return;
-    }
-
-    // Render semplice: lista dei libri (titolo + id)
-    const ul = document.createElement("ul");
-    ul.style.listStyle = "none";
-    ul.style.padding = "0";
-    ul.style.margin = "0";
-
-    items.forEach(b => {
-      const li = document.createElement("li");
-      li.className = "card";
-      li.style.margin = "10px 0";
-      li.innerHTML = `
-        <div class="card-head">
-          <strong>${b.title || '(senza titolo)'}</strong>
-          <span class="badge badge-gray">${b.id}</span>
-        </div>
-        <div style="opacity:.8">${b.author ? `Autore: ${b.author} — ` : ""}Lingua: ${b.language || 'it'}</div>
+    list.innerHTML = "";
+    books.forEach(b => {
+      const o = document.createElement("div");
+      o.className = "card";
+      o.style.margin = "10px 0";
+      o.innerHTML = `
+        <strong>${b.title || "(senza titolo)"}</strong><br>
+        Autore: ${b.author || "-"} — Lingua: ${b.language || "-"}<br>
+        <small>${b.id}</small>
       `;
-      ul.appendChild(li);
+      list.appendChild(o);
     });
 
-    box.innerHTML = "";
-    box.appendChild(ul);
   } catch (e) {
-    box.innerHTML = `<span style="color:#ff6b6b;">Errore di rete: ${e.message}</span>`;
+    list.innerHTML = `<span style="color:red">Errore di rete: ${e.message}</span>`;
   }
 }
 
-/* ─────────── UI Hooks ─────────── */
-function wireButtons() {
-  $("#btn-create-book")?.addEventListener("click", createBookSimple);
-  $("#btn-library")?.addEventListener("click", () => { showLibrarySection(); loadLibrary(); });
-  $("#btn-editor")?.addEventListener("click", () => alert("Editor capitolo — in arrivo"));
+function goLibrary() {
+  const lib = document.getElementById("library-section");
+  if (lib) lib.style.display = "block";
+  loadLibrary();
 }
 
-/* ─────────── Init ─────────── */
+function goEditor() {
+  alert("✏️ Editor capitolo — funzione in arrivo");
+}
+
+/* ────────────────────────────────────────────────
+   Hook UI
+   ──────────────────────────────────────────────── */
+function wireButtons() {
+  $("#btn-create-book")?.addEventListener("click", createBookSimple);
+  $("#btn-library")?.addEventListener("click", goLibrary);
+  $("#btn-editor")?.addEventListener("click", goEditor);
+}
+
+/* ────────────────────────────────────────────────
+   Init
+   ──────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", async () => {
   wireButtons();
   await pingBackend();
-  // opzionale: carica la libreria all'avvio
-  // showLibrarySection(); await loadLibrary();
 });
