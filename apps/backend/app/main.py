@@ -10,24 +10,13 @@ from .routers import books as books_router
 from .routers import generate as generate_router
 from .routers import auth as auth_router
 from .routers import admin as admin_router   # pannello OWNER_FULL
-
 from .users import load_users, seed_demo_users  # gestione utenti/piani
-
-# --- Metadati tag (solo per organizzare la doc, tutto in IT) ---
-OPENAPI_TAGS = [
-    {"name": "default",  "description": "Endpoint generali: health, test, download e diagnostica storage."},
-    {"name": "books",    "description": "Gestione libri e capitoli (creazione, elenco, ecc.)."},
-    {"name": "generate", "description": "Generazione AI di capitoli e export PDF del libro."},
-    {"name": "admin",    "description": "Pannello amministratore (OWNER_FULL): gestione utenti e piani."},
-]
 
 app = FastAPI(
     title="EccomiBook Backend",
-    description="API per gestire libri, capitoli e generazione AI con EccomiBook. Documentazione in italiano.",
-    version="0.1.0",
+    version="0.1.1",
     openapi_url="/openapi.json",
-    docs_url="/",               # Swagger UI sulla root
-    openapi_tags=OPENAPI_TAGS,  # <- metadati in italiano
+    docs_url="/",
 )
 
 # Mount statici sul DISCO PERSISTENTE
@@ -56,9 +45,10 @@ def on_startup() -> None:
     # directory persistenti
     storage.ensure_dirs()
 
-    # piccolo DB in memoria
-    app.state.books = {}          # {book_id: {...}}
-    app.state.counters = {"books": 0}
+    # carica “DB” libri da disco (persistenza)
+    app.state.books = storage.load_books_from_disk()
+    # contatori opzionali (se ti servono)
+    app.state.counters = {"books": len(app.state.books)}
 
     # utenti/piani: carica da disco + seed demo (solo MVP)
     load_users()
@@ -69,6 +59,12 @@ def on_startup() -> None:
     settings = get_settings()
     print(f"✅ APP STARTED | ENV: {settings.environment} | STORAGE_ROOT={storage.BASE_DIR}")
 
+@app.on_event("shutdown")
+def on_shutdown() -> None:
+    # salva i libri su disco alla chiusura
+    storage.save_books_to_disk(app.state.books)
+    print("💾 Books salvati su disco in shutdown.")
+
 @app.get("/health", tags=["default"])
 def health():
     return {"ok": True}
@@ -78,7 +74,7 @@ def test_page():
     return {"ok": True, "msg": "test"}
 
 # Download file esportati (supporta sottocartelle)
-@app.get("/downloads/{subpath:path}", tags=["default"], summary="Download file")
+@app.get("/downloads/{subpath:path}", tags=["default"], summary="Download File")
 def download_file(subpath: str):
     full_path = (storage.BASE_DIR / subpath).resolve()
     if not str(full_path).startswith(str(storage.BASE_DIR.resolve())):
@@ -88,7 +84,7 @@ def download_file(subpath: str):
     return FileResponse(full_path)
 
 # Diagnostica storage (utile per verificare Render Disk)
-@app.get("/debug/storage", tags=["default"], summary="Diagnostica storage")
+@app.get("/debug/storage", tags=["default"])
 def debug_storage():
     root = storage.BASE_DIR
     total, used, free = shutil.disk_usage(root)
