@@ -177,6 +177,41 @@ async function saveChapter() {
   }
 }
 
+// ── Crea libro (chiamata reale al backend) ─────────────────
+async function createBookSimple() {
+  const title = prompt("Titolo del libro:", "Manuale EccomiBook");
+  if (!title) return;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/books/create`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": getApiKey() || "demo_key_user", // o demo_key_owner in dev
+      },
+      body: JSON.stringify({
+        title,
+        author: "EccomiBook",
+        language: "it",
+        chapters: []
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(`Errore (${res.status}): ${err.detail || JSON.stringify(err)}`);
+      return;
+    }
+
+    const data = await res.json();
+    alert(`✅ Libro creato!\nID: ${data.book_id}\nTitolo: ${data.title}`);
+    // opzionale: salva ultimo ID per usarlo altrove
+    try { localStorage.setItem("last_book_id", data.book_id); } catch {}
+  } catch (e) {
+    alert("Errore di rete: " + e.message);
+  }
+}
+
 /* ─────────────────────────────────────────────────────────
    Hook UI
    ───────────────────────────────────────────────────────── */
