@@ -1,19 +1,17 @@
 # apps/backend/app/routers/books.py
-from fastapi import APIRouter, HTTPException, Body, Request, Path
-from pydantic import BaseModel, Field
-import uuid
-import re
-from datetime import datetime
+from fastapi import APIRouter, HTTPException, Body, Request, Header, Depends
+from pydantic import BaseModel
+import uuid, re
 
+from ..settings import get_settings
 from .. import storage
+from ..deps import get_current_user
+from ..plans import PLANS
 
 router = APIRouter()
 
-
-# ------------------------------ Models ---------------------------------
-
 class BookIn(BaseModel):
-    title: str = Field(..., min_length=1)
+    title: str
     author: str | None = None
     abstract: str | None = None
     description: str | None = None
@@ -22,130 +20,91 @@ class BookIn(BaseModel):
     plan: str | None = None
     chapters: list[dict] = []
 
-
-class ChapterIn(BaseModel):
-    title: str | None = None
-    content: str = Field(..., min_length=1)
-
-
-# ------------------------------ Utils ----------------------------------
-
-def _slugify(text: str) -> str:
-    text = (text or "").lower()
+def slugify(text: str) -> str:
+    text = text.lower()
     text = re.sub(r"[^a-z0-9]+", "-", text)
     return text.strip("-")
 
-
-def _now_iso() -> str:
-    return datetime.utcnow().isoformat(timespec="seconds") + "Z"
-
-
-# ------------------------------ Routes ---------------------------------
-
 @router.get("/books", tags=["books"])
-def list_books(request: Request):
+def list_books(request: Request, user=Depends(get_current_user)):
     """
-    Restituisce la libreria intera (array di libri).
+    Ritorna tutti i libri dell'utente (MVP: nessun filtro per owner).
     """
-    books_db: dict = request.app.state.books
-    # ordina per updated_at desc se presente
-    def _sort_key(b: dict):
-        return b.get("updated_at") or b.get("created_at") or ""
-    out = list(books_db.values())
-    out.sort(key=_sort_key, reverse=True)
-    return out
-
+    books_db = request.app.state.books
+    # opzionale: filtra per piano/utente se vorrai
+    return list(books_db.values())
 
 @router.post("/books/create", tags=["books"])
 def create_book(
     request: Request,
     payload: BookIn = Body(...),
+    x_api_key: str | None = Header(default=None),
+    user=Depends(get_current_user),
 ):
-    """
-    Crea un libro base. (Nessuna auth in questa MVP.)
-    """
-    books_db: dict = request.app.state.books
+    # Regole piano
+    rules = PLANS.get((user.plan or "START").upper(), PLANS["START"])
+    if not rules.allow_books:
+        raise HTTPException(status_code=403, detail="Il tuo piano non consente la creazione di libri")
 
-    slug = _slugify(payload.title) or "senza-titolo"
+    # ID leggibile
+    slug = slugify(payload.title) or "senza-titolo"
     random_part = uuid.uuid4().hex[:6]
     book_id = f"book_{slug}_{random_part}"
 
-    now = _now_iso()
-    book = {
+    # Salva in memoria
+    books_db = request.app.state.books
+    books_db[book_id] = {
         "id": book_id,
-        "title": payload.title,
-        "author": payload.author,
-        "abstract": payload.abstract,
-        "description": payload.description,
-        "genre": payload.genre,
-        "language": payload.language,
-        "plan": payload.plan,
+        "title": payload.title or "",
+        "author": payload.author or "",
+        "abstract": payload.abstract or "",
+        "description": payload.description or "",
+        "genre": payload.genre or "",
+        "language": payload.language or "it",
+        "plan": payload.plan or (user.plan or "START"),
         "chapters": payload.chapters or [],
-        "created_at": now,
-        "updated_at": now,
     }
 
-    books_db[book_id] = book
-    storage.save_books_to_disk(books_db)  # persistiamo subito
+    # 👉 Salva SUBITO su disco (persistenza post-deploy)
+    storage.save_books_to_disk(books_db)
 
-    return {
-        "book_id": book_id,
-        "title": payload.title,
-        "chapters_count": len(book["chapters"]),
-        "created_at": now,
-    }
-
+    return {"book_id": book_id, "title": payload.title, "chapters_count": len(payload.chapters or [])}
 
 @router.put("/books/{book_id}/chapters/{chapter_id}", tags=["books"])
-def upsert_chapter(
+def update_chapter(
     request: Request,
-    book_id: str = Path(..., description="ID del libro"),
-    chapter_id: str = Path(..., description="ID del capitolo (es. ch_0001)"),
-    payload: ChapterIn = Body(...),
+    book_id: str,
+    chapter_id: str,
+    body: dict = Body(...),
+    user=Depends(get_current_user),
 ):
     """
-    Crea/Aggiorna un capitolo:
-    - salva il file su disco: /chapters/<book_id>/<chapter_id>.md
-    - aggiorna l'entry del capitolo nel libro (title, path, updated_at)
+    Aggiorna/salva un capitolo. MVP: accetta { "content": "<testo>" } e
+    salva anche su file markdown sul disco persistente.
     """
-    books_db: dict = request.app.state.books
+    books_db = request.app.state.books
     book = books_db.get(book_id)
     if not book:
         raise HTTPException(status_code=404, detail="Libro non trovato")
 
-    # 1) Salva il contenuto a disco
-    rel_path = storage.save_chapter_file(book_id, chapter_id, payload.content or "")
+    content = (body or {}).get("content", "")
+    # salva file capitolo
+    rel_path = storage.save_chapter_file(book_id, chapter_id, content)
 
-    # 2) Aggiorna la entry capitolo nel libro
-    chapters = book.setdefault("chapters", [])
-    found = None
-    for ch in chapters:
+    # aggiorna struttura libro (MVP: chapters come array di dict)
+    # se esiste, aggiorno; se no, aggiungo.
+    if "chapters" not in book or not isinstance(book["chapters"], list):
+        book["chapters"] = []
+    found = False
+    for ch in book["chapters"]:
         if ch.get("id") == chapter_id:
-            found = ch
+            ch["path"] = rel_path
+            found = True
             break
+    if not found:
+        book["chapters"].append({"id": chapter_id, "path": rel_path})
 
-    now = _now_iso()
-    if found:
-        found["title"] = payload.title or found.get("title")
-        found["path"] = rel_path
-        found["updated_at"] = now
-    else:
-        chapters.append({
-            "id": chapter_id,
-            "title": payload.title or f"Capitolo {chapter_id}",
-            "path": rel_path,
-            "created_at": now,
-            "updated_at": now,
-        })
-
-    book["updated_at"] = now
-    books_db[book_id] = book
+    # persisti DB libri
     storage.save_books_to_disk(books_db)
 
-    return {
-        "ok": True,
-        "book_id": book_id,
-        "chapter_id": chapter_id,
-        "path": rel_path,
-        "updated_at": now,
-    }
+    return {"ok": True, "book_id": book_id, "chapter_id": chapter_id, "path": rel_path}
