@@ -1,22 +1,23 @@
 /* =========================================================
  * EccomiBook — Frontend vanilla (Vite)
- * Modalità REALE (niente DEMO)
+ * main.js (completo, “concreto”)
  * ========================================================= */
 
-/* ─────────────────────────────────────────────────────────
-   Config
-   ───────────────────────────────────────────────────────── */
+/* ───────────── Config ───────────── */
 
-// API base (Render ENV: VITE_API_BASE_URL) → fallback pubblico
+// URL backend: da ENV Vite (Render) oppure fallback pubblico
 const API_BASE_URL =
   (import.meta?.env?.VITE_API_BASE_URL) ||
   window.VITE_API_BASE_URL ||
   "https://eccomibook-backend.onrender.com";
 
-/* ─────────────────────────────────────────────────────────
-   Utils
-   ───────────────────────────────────────────────────────── */
-const $ = (sel) => document.querySelector(sel);
+// (per ora l’editor capitolo resta “demo” sul PUT; quando abiliti l’endpoint, metti a false)
+window.USE_DEMO_EDITOR = true;
+
+/* ───────────── Util ───────────── */
+
+const $  = (sel) => document.querySelector(sel);
+const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
 
 function getApiKey() {
   try { return localStorage.getItem("eccomibook_api_key") || ""; } catch { return ""; }
@@ -24,11 +25,9 @@ function getApiKey() {
 function setApiKey(k) {
   try { localStorage.setItem("eccomibook_api_key", k || ""); } catch {}
 }
-function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
 
-/* ─────────────────────────────────────────────────────────
-   Ping backend + tasto API key
-   ───────────────────────────────────────────────────────── */
+/* ───────────── Header: stato backend ───────────── */
+
 async function pingBackend() {
   const el = document.getElementById("backend-status");
   if (!el) return;
@@ -41,141 +40,154 @@ async function pingBackend() {
     setText("backend-status", "Backend: non raggiungibile");
   }
 
-  // URL visibile per debug
-  const a = document.createElement("a");
-  a.href = API_BASE_URL; a.target = "_blank"; a.rel = "noreferrer";
-  a.textContent = API_BASE_URL;
-  const wrap = document.createElement("div");
-  wrap.style.fontSize = "12px"; wrap.style.opacity = ".8"; wrap.style.marginTop = "4px";
-  wrap.append("API: "); wrap.appendChild(a);
-  el.appendChild(wrap);
-
-  // Impostazione API key
-  $("#btn-api-key")?.addEventListener("click", () => {
-    const cur = getApiKey();
-    const val = prompt("Imposta la tua x-api-key:", cur || "demo_key_owner");
-    if (val != null) {
-      setApiKey(val.trim());
-      alert("API key salvata.");
-    }
-  });
+  // mini debug: URL API
+  const dbg = document.createElement("div");
+  dbg.className = "debug-url";
+  dbg.innerHTML = `API: <a href="${API_BASE_URL}" target="_blank" rel="noreferrer">${API_BASE_URL}</a>`;
+  el.appendChild(dbg);
 }
 
-/* ─────────────────────────────────────────────────────────
-   Azioni toolbar
-   ───────────────────────────────────────────────────────── */
+/* ───────────── Azioni UI ───────────── */
 
-// Crea libro → POST /books/create
-async function createBook() {
+function askApiKey() {
+  const cur = getApiKey();
+  const val = prompt("Imposta la tua x-api-key:", cur || "demo_key_owner");
+  if (val != null) {
+    setApiKey(val.trim());
+    alert("API key salvata.");
+  }
+}
+
+async function createBookSimple() {
+  const API = API_BASE_URL;
+  const KEY = getApiKey() || "demo_key_owner";
+
+  // 1) test chiave
+  try {
+    const who = await fetch(`${API}/_whoami`, { headers: { "x-api-key": KEY } });
+    if (!who.ok) {
+      const body = await who.text().catch(()=>"");
+      alert(`❌ _whoami -> ${who.status}\n${body}`);
+      return;
+    }
+  } catch (e) {
+    alert(`❌ _whoami: errore di rete (${e?.message || e})\nURL: ${API}/_whoami`);
+    return;
+  }
+
+  // 2) titolo
   const title = prompt("Titolo del libro:", "Manuale EccomiBook");
   if (!title) return;
 
-  const apiKey = getApiKey();
-  if (!apiKey) { alert("Imposta prima la tua API key (in alto a sinistra)."); return; }
-
+  // 3) crea libro
   try {
-    const res = await fetch(`${API_BASE_URL}/books/create`, {
+    const res = await fetch(`${API}/books/create`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
+        "x-api-key": KEY
       },
       body: JSON.stringify({
         title,
         author: "EccomiBook",
         language: "it",
-        chapters: [],
-      }),
+        chapters: []
+      })
     });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      alert(`Errore (${res.status}): ${err.detail || JSON.stringify(err)}`);
+      let msg = "";
+      try { msg = JSON.stringify(await res.json()); }
+      catch { msg = await res.text(); }
+      alert(`❌ /books/create -> ${res.status}\n${msg}`);
       return;
     }
 
     const data = await res.json();
-    alert(`✅ Libro creato!\nID: ${data.book_id}\nTitolo: ${data.title}`);
     try { localStorage.setItem("last_book_id", data.book_id); } catch {}
+    alert(`✅ Libro creato!\nID: ${data.book_id}\nTitolo: ${data.title}`);
   } catch (e) {
-    alert("Errore di rete: " + e.message);
+    alert(`❌ Errore di rete: ${e?.message || e}\nURL: ${API}/books/create`);
   }
 }
 
-// Libreria (placeholder per ora)
 function openLibrary() {
-  alert("Libreria in arrivo: mostreremo l’elenco dei libri creati.");
+  // Placeholder: quando aggiungiamo GET /books lo colleghiamo
+  const last = (()=>{ try { return localStorage.getItem("last_book_id") || "(nessuno)"; } catch { return "(nessuno)"; }})();
+  alert(`Libreria (demo): ultimo ID salvato = ${last}\n(Collegheremo GET /books per l’elenco reale.)`);
 }
 
-// Editor Capitolo (reale)
 function openEditor() {
   const ed = $("#editor-card");
   if (ed) ed.style.display = "block";
-  const book = $("#bookIdInput");
-  if (book && !book.value) book.value = localStorage.getItem("last_book_id") || "";
+
+  // riempi campi se vuoti
+  const b = $("#bookIdInput"), c = $("#chapterIdInput"), t = $("#chapterText");
+  if (b && !b.value) b.value = (localStorage.getItem("last_book_id") || "book_il-mio-libro_xxxxxx");
+  if (c && !c.value) c.value = "ch_0001";
+  if (t && !t.value) t.value = "Scrivi qui il contenuto del capitolo...";
 }
 
 function closeEditor() {
-  const ed = $("#editor-card"); if (ed) ed.style.display = "none";
+  const ed = $("#editor-card");
+  if (ed) ed.style.display = "none";
 }
 
-// PUT /books/{bookId}/chapters/{chapterId}
 async function saveChapter() {
-  const apiKey = getApiKey();
-  if (!apiKey) { alert("Imposta prima la tua API key (in alto a sinistra)."); return; }
-
   const bookId = $("#bookIdInput")?.value?.trim();
-  const chId = $("#chapterIdInput")?.value?.trim();
-  const text = $("#chapterText")?.value ?? "";
+  const chId   = $("#chapterIdInput")?.value?.trim();
+  const text   = $("#chapterText")?.value ?? "";
 
-  if (!bookId || !chId) {
-    alert("Inserisci ID libro e ID capitolo.");
+  if (!bookId || !chId) { alert("Inserisci ID libro e ID capitolo."); return; }
+
+  if (window.USE_DEMO_EDITOR) {
+    alert(`(DEMO) Salvataggio simulato.\nBook: ${bookId}\nChapter: ${chId}\nTesto: ${text.slice(0,200)}${text.length>200?"...":""}`);
     return;
   }
 
+  // quando abiliterai il PUT backend, decommenta qui sotto:
+  /*
   try {
-    const resp = await fetch(
-      `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chId)}`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-        },
-        body: JSON.stringify({ content: text }),
-      }
-    );
-
-    if (!resp.ok) {
-      let msg = `Errore ${resp.status}`;
-      try { const j = await resp.json(); if (j?.detail) msg = j.detail; } catch {}
-      throw new Error(msg);
+    const res = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chId)}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": getApiKey() || "demo_key_owner"
+      },
+      body: JSON.stringify({ content: text })
+    });
+    if (!res.ok) {
+      let msg = "";
+      try { msg = JSON.stringify(await res.json()); }
+      catch { msg = await res.text(); }
+      alert(`❌ PUT capitolo -> ${res.status}\n${msg}`);
+      return;
     }
-
-    alert("✅ Capitolo aggiornato con successo!");
-  } catch (err) {
-    alert("❌ Errore: " + (err?.message || String(err)));
+    alert("✅ Capitolo aggiornato!");
+  } catch(e) {
+    alert(`❌ Errore di rete PUT: ${e?.message || e}`);
   }
+  */
 }
 
-/* ─────────────────────────────────────────────────────────
-   Wiring + Init
-   ───────────────────────────────────────────────────────── */
-function wireUI() {
-  $("#btn-create-book")?.addEventListener("click", createBook);
+/* ───────────── Hook UI & Init ───────────── */
+
+function wireButtons() {
+  $("#btn-api-key")?.addEventListener("click", askApiKey);
+  $("#btn-new-book")?.addEventListener("click", createBookSimple);
   $("#btn-library")?.addEventListener("click", openLibrary);
   $("#btn-editor")?.addEventListener("click", openEditor);
+
   $("#btn-ed-save")?.addEventListener("click", saveChapter);
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  wireUI();
+  wireButtons();
   await pingBackend();
+  const badge = document.getElementById("editor-mode-badge");
+  if (badge) {
+    badge.textContent = window.USE_DEMO_EDITOR ? "DEMO" : "REALE";
+    badge.className = "badge " + (window.USE_DEMO_EDITOR ? "badge-gray" : "badge-green");
+  }
 });
-
-// (opzionale) export global, se servisse inline
-window.createBook = createBook;
-window.openEditor = openEditor;
-window.saveChapter = saveChapter;
-window.closeEditor = closeEditor;
