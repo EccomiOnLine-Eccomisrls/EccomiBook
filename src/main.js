@@ -1,16 +1,13 @@
 /* =========================================================
  * EccomiBook — Frontend vanilla (Vite)
- * main.js (completo)
+ * Modalità REALE (niente DEMO)
  * ========================================================= */
 
 /* ─────────────────────────────────────────────────────────
    Config
    ───────────────────────────────────────────────────────── */
 
-// Modalità editor: DEMO (true) finché non abilitiamo il PUT reale
-window.USE_DEMO_EDITOR = true;
-
-// API base da env (Render → VITE_API_BASE_URL) o fallback pubblico
+// API base (Render ENV: VITE_API_BASE_URL) → fallback pubblico
 const API_BASE_URL =
   (import.meta?.env?.VITE_API_BASE_URL) ||
   window.VITE_API_BASE_URL ||
@@ -30,7 +27,7 @@ function setApiKey(k) {
 function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
 
 /* ─────────────────────────────────────────────────────────
-   Header: ping backend + tasto API key
+   Ping backend + tasto API key
    ───────────────────────────────────────────────────────── */
 async function pingBackend() {
   const el = document.getElementById("backend-status");
@@ -53,7 +50,7 @@ async function pingBackend() {
   wrap.append("API: "); wrap.appendChild(a);
   el.appendChild(wrap);
 
-  // Pulsante API key (memorizza in localStorage)
+  // Impostazione API key
   $("#btn-api-key")?.addEventListener("click", () => {
     const cur = getApiKey();
     const val = prompt("Imposta la tua x-api-key:", cur || "demo_key_owner");
@@ -65,20 +62,23 @@ async function pingBackend() {
 }
 
 /* ─────────────────────────────────────────────────────────
-   Azioni principali (toolbar)
+   Azioni toolbar
    ───────────────────────────────────────────────────────── */
 
-// 1) Crea libro (chiama il backend)
-async function createBookSimple() {
+// Crea libro → POST /books/create
+async function createBook() {
   const title = prompt("Titolo del libro:", "Manuale EccomiBook");
   if (!title) return;
+
+  const apiKey = getApiKey();
+  if (!apiKey) { alert("Imposta prima la tua API key (in alto a sinistra)."); return; }
 
   try {
     const res = await fetch(`${API_BASE_URL}/books/create`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": getApiKey() || "demo_key_owner",
+        "x-api-key": apiKey,
       },
       body: JSON.stringify({
         title,
@@ -102,52 +102,56 @@ async function createBookSimple() {
   }
 }
 
-// 2) Apri Libreria (placeholder)
-function goLibrary() {
+// Libreria (placeholder per ora)
+function openLibrary() {
   alert("Libreria in arrivo: mostreremo l’elenco dei libri creati.");
 }
 
-// 3) Mostra Editor capitolo (pannello)
-function goEditor() {
+// Editor Capitolo (reale)
+function openEditor() {
   const ed = $("#editor-card");
   if (ed) ed.style.display = "block";
   const book = $("#bookIdInput");
-  const ch = $("#chapterIdInput");
-  const tx = $("#chapterText");
-  if (book && !book.value) book.value = localStorage.getItem("last_book_id") || "book_titolo-di-prova";
-  if (ch && !ch.value) ch.value = "ch_0001";
-  if (tx && !tx.value) tx.value =
-    "Scrivi qui il contenuto del capitolo...\n\n(Modalità " +
-    (window.USE_DEMO_EDITOR ? "DEMO" : "REALE") + ").";
+  if (book && !book.value) book.value = localStorage.getItem("last_book_id") || "";
 }
 
-/* ─────────────────────────────────────────────────────────
-   Editor Capitolo (DEMO / REALE)
-   ───────────────────────────────────────────────────────── */
-function closeEditor() { const ed = $("#editor-card"); if (ed) ed.style.display = "none"; }
+function closeEditor() {
+  const ed = $("#editor-card"); if (ed) ed.style.display = "none";
+}
 
+// PUT /books/{bookId}/chapters/{chapterId}
 async function saveChapter() {
+  const apiKey = getApiKey();
+  if (!apiKey) { alert("Imposta prima la tua API key (in alto a sinistra)."); return; }
+
   const bookId = $("#bookIdInput")?.value?.trim();
   const chId = $("#chapterIdInput")?.value?.trim();
   const text = $("#chapterText")?.value ?? "";
-  if (!bookId || !chId) { alert("Inserisci ID libro e ID capitolo."); return; }
 
-  if (window.USE_DEMO_EDITOR) {
-    alert(`(DEMO) Capitolo salvato!\n\nBook: ${bookId}\nChapter: ${chId}\n\n${text.slice(0,200)}${text.length>200?"...":""}`);
+  if (!bookId || !chId) {
+    alert("Inserisci ID libro e ID capitolo.");
     return;
   }
 
   try {
-    const resp = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chId)}`, {
-      method: "PUT",
-      headers: { "Content-Type":"application/json", "x-api-key": getApiKey() || "demo_key_owner" },
-      body: JSON.stringify({ content: text }),
-    });
+    const resp = await fetch(
+      `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chId)}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+        },
+        body: JSON.stringify({ content: text }),
+      }
+    );
+
     if (!resp.ok) {
       let msg = `Errore ${resp.status}`;
       try { const j = await resp.json(); if (j?.detail) msg = j.detail; } catch {}
       throw new Error(msg);
     }
+
     alert("✅ Capitolo aggiornato con successo!");
   } catch (err) {
     alert("❌ Errore: " + (err?.message || String(err)));
@@ -157,28 +161,21 @@ async function saveChapter() {
 /* ─────────────────────────────────────────────────────────
    Wiring + Init
    ───────────────────────────────────────────────────────── */
-function wireToolbar() {
-  $("#btn-create-book")?.addEventListener("click", createBookSimple);
-  $("#btn-library")?.addEventListener("click", goLibrary);
-  $("#btn-editor")?.addEventListener("click", goEditor);
+function wireUI() {
+  $("#btn-create-book")?.addEventListener("click", createBook);
+  $("#btn-library")?.addEventListener("click", openLibrary);
+  $("#btn-editor")?.addEventListener("click", openEditor);
   $("#btn-ed-save")?.addEventListener("click", saveChapter);
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  wireToolbar();
+  wireUI();
   await pingBackend();
-
-  // Pillola modalità editor
-  const badge = document.getElementById("editor-mode-badge");
-  if (badge) {
-    badge.textContent = window.USE_DEMO_EDITOR ? "DEMO" : "REALE";
-    badge.className = "badge";
-  }
 });
 
-/* Esporta (se servisse inline) */
-window.createBookSimple = createBookSimple;
-window.goEditor = goEditor;
+// (opzionale) export global, se servisse inline
+window.createBook = createBook;
+window.openEditor = openEditor;
 window.saveChapter = saveChapter;
 window.closeEditor = closeEditor;
