@@ -24,9 +24,7 @@ function setText(id, text) {
   if (el) el.textContent = text;
 }
 
-function toast(msg) {
-  alert(msg); // MVP
-}
+function toast(msg) { alert(msg); } // MVP
 
 function rememberLastBook(id) {
   try { localStorage.setItem("last_book_id", id || ""); } catch {}
@@ -82,20 +80,8 @@ async function fetchBooks() {
       const txt = await res.text().catch(() => "");
       throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
     }
-
-    const data = await res.json();
-
-    // Normalizza nei 3 formati possibili: array, {items:[]}, dizionario {id:book}
-    let list = [];
-    if (Array.isArray(data)) {
-      list = data;
-    } else if (data && Array.isArray(data.items)) {
-      list = data.items;
-    } else if (data && typeof data === "object") {
-      list = Object.values(data);
-    }
-
-    renderLibrary(list);
+    const data = await res.json(); // può essere array o {items:[]}
+    renderLibrary(Array.isArray(data) ? data : (data?.items || []));
   } catch (e) {
     if (box) box.innerHTML = `<div class="error">Errore: ${e.message || e}</div>`;
   }
@@ -138,7 +124,7 @@ function renderLibrary(books) {
 }
 
 /* ───────────────────────────────────────────────
-   Azioni: crea / elimina / apri editor
+   Azioni: crea / elimina / editor
    ─────────────────────────────────────────────── */
 async function createBookSimple() {
   const title = prompt("Titolo del libro:", "Manuale EccomiBook");
@@ -166,7 +152,6 @@ async function createBookSimple() {
     rememberLastBook(newId);
 
     alert("✅ Libro creato!");
-
     // apri/aggiorna libreria subito
     await toggleLibrary(true);
     await fetchBooks();
@@ -214,6 +199,34 @@ function closeEditor() {
   if (ed) ed.style.display = "none";
 }
 
+// Salvataggio capitolo (nuovo)
+async function saveChapter() {
+  const bookId = $("#bookIdInput")?.value?.trim();
+  const chapterId = $("#chapterIdInput")?.value?.trim() || "ch_0001";
+  const content = $("#chapterText")?.value ?? "";
+
+  if (!bookId) {
+    alert("Inserisci un Book ID valido.");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/chapters/save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ book_id: bookId, chapter_id: chapterId, content }),
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
+    }
+    alert("💾 Capitolo salvato!");
+    rememberLastBook(bookId);
+  } catch (e) {
+    alert("Errore salvataggio: " + (e?.message || e));
+  }
+}
+
 /* ───────────────────────────────────────────────
    Libreria: toggle visibilità
    ─────────────────────────────────────────────── */
@@ -240,16 +253,14 @@ function wireButtons() {
   $("#btn-library")?.addEventListener("click", () => toggleLibrary());
   $("#btn-editor")?.addEventListener("click", () => goEditor());
 
-  // Azioni rapide (ID richiesti)
+  // Azioni rapide — stessi comportamenti della topbar
   $("#btn-quick-create")?.addEventListener("click", createBookSimple);
-  $("#btn-quick-library")?.addEventListener("click", () => toggleLibrary(true));
+  $("#btn-quick-library")?.addEventListener("click", () => toggleLibrary());
   $("#btn-quick-editor")?.addEventListener("click", () => goEditor());
 
   // Editor
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
-  $("#btn-ed-save")?.addEventListener("click", () => {
-    toast("💾 Demo salvataggio capitolo (endpoint reale in una prossima iterazione).");
-  });
+  $("#btn-ed-save")?.addEventListener("click", saveChapter);
 
   // Delega eventi sulla libreria (Apri / Elimina / Modifica)
   $("#library-list")?.addEventListener("click", async (ev) => {
