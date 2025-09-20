@@ -9,6 +9,7 @@ from . import storage
 from .routers import books as books_router
 from .routers import generate as generate_router
 from .routers import auth as auth_router
+from .routers import chapters as chapters_router
 from .routers import admin as admin_router   # pannello OWNER_FULL
 from .users import load_users, seed_demo_users  # gestione utenti/piani
 
@@ -104,4 +105,5 @@ def debug_storage():
 app.include_router(auth_router.router, tags=["default"])
 app.include_router(books_router.router, tags=["books"])
 app.include_router(generate_router.router, tags=["generate"])
+app.include_router(chapters_router.router, tags=["chapters"])
 app.include_router(admin_router.router, tags=["admin"])  # pannello OWNER_FULL
