@@ -82,8 +82,20 @@ async function fetchBooks() {
       const txt = await res.text().catch(() => "");
       throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
     }
-    const data = await res.json(); // può essere array o {items:[]}
-    renderLibrary(Array.isArray(data) ? data : (data?.items || []));
+
+    const data = await res.json();
+
+    // Normalizza nei 3 formati possibili: array, {items:[]}, dizionario {id:book}
+    let list = [];
+    if (Array.isArray(data)) {
+      list = data;
+    } else if (data && Array.isArray(data.items)) {
+      list = data.items;
+    } else if (data && typeof data === "object") {
+      list = Object.values(data);
+    }
+
+    renderLibrary(list);
   } catch (e) {
     if (box) box.innerHTML = `<div class="error">Errore: ${e.message || e}</div>`;
   }
