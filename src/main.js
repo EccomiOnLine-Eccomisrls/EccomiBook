@@ -1,17 +1,21 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — COMPLETO (con salvataggio REALE capitolo)
+ * src/main.js — COMPLETO
  * ========================================================= */
 
 import "./styles.css";
 
-/* Config */
+/* ───────────────────────────────────────────────
+   Config
+   ─────────────────────────────────────────────── */
 const API_BASE_URL =
   (import.meta?.env?.VITE_API_BASE_URL) ||
   window.VITE_API_BASE_URL ||
   "https://eccomibook-backend.onrender.com";
 
-/* Util */
+/* ───────────────────────────────────────────────
+   Util
+   ─────────────────────────────────────────────── */
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
@@ -19,7 +23,10 @@ function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
-function toast(msg) { alert(msg); }
+
+function toast(msg) {
+  alert(msg); // MVP
+}
 
 function rememberLastBook(id) {
   try { localStorage.setItem("last_book_id", id || ""); } catch {}
@@ -28,6 +35,7 @@ function loadLastBook() {
   try { return localStorage.getItem("last_book_id") || ""; } catch { return ""; }
 }
 
+// escape
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, m => (
     {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]
@@ -35,10 +43,14 @@ function escapeHtml(s) {
 }
 function escapeAttr(s) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 
-/* Stato UI */
-const uiState = { libraryVisible: false };
+/* ───────────────────────────────────────────────
+   Stato UI
+   ─────────────────────────────────────────────── */
+const uiState = { libraryVisible: true };
 
-/* Backend ping + badge */
+/* ───────────────────────────────────────────────
+   Backend ping + badge
+   ─────────────────────────────────────────────── */
 async function pingBackend() {
   const el = document.getElementById("backend-status");
   if (!el) return;
@@ -57,19 +69,32 @@ async function pingBackend() {
   el.appendChild(dbg);
 }
 
-/* Libreria: API + render */
+/* ───────────────────────────────────────────────
+   Libreria: API + render
+   ─────────────────────────────────────────────── */
+
+// 1) fetchBooks senza cache, con log utile
 async function fetchBooks() {
-  const box = $("#library-list");
+  const box = document.getElementById("library-list");
   if (box) box.innerHTML = '<div class="muted">Carico libreria…</div>';
 
   try {
-    const res = await fetch(`${API_BASE_URL}/books`, { method: "GET" });
+    // no-store + cache-buster per evitare risposte “vecchie” da CDN/browser
+    const res = await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`, {
+      method: "GET",
+      cache: "no-store",
+      headers: { "Accept": "application/json" },
+    });
+
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
       throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
     }
-    const data = await res.json(); // array o {items:[]}
-    renderLibrary(Array.isArray(data) ? data : (data?.items || []));
+
+    const data = await res.json();
+    const items = Array.isArray(data) ? data : (data?.items || []);
+    console.log("[LIBRERIA] libri letti:", items);  // 👈 debug utile
+    renderLibrary(items);
   } catch (e) {
     if (box) box.innerHTML = `<div class="error">Errore: ${e.message || e}</div>`;
   }
@@ -111,7 +136,11 @@ function renderLibrary(books) {
   });
 }
 
-/* Azioni: crea / elimina / editor */
+/* ───────────────────────────────────────────────
+   Azioni: crea / elimina / apri editor
+   ─────────────────────────────────────────────── */
+
+// 2) dopo creazione, forzo apertura libreria + due fetch ravvicinati (aggira cache aggressiva)
 async function createBookSimple() {
   const title = prompt("Titolo del libro:", "Manuale EccomiBook");
   if (title == null) return;
@@ -120,8 +149,9 @@ async function createBookSimple() {
     const res = await fetch(`${API_BASE_URL}/books/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      cache: "no-store",
       body: JSON.stringify({
-        title: title.trim() || "Senza titolo",
+        title: (title.trim() || "Senza titolo"),
         author: "EccomiBook",
         language: "it",
         chapters: []
@@ -137,12 +167,14 @@ async function createBookSimple() {
     const newId = data?.book_id || data?.id || "";
     rememberLastBook(newId);
 
-    toast("✅ Libro creato!");
-    // apri/aggiorna libreria subito
+    alert("✅ Libro creato!");
+
+    // apro libreria e ricarico subito (x2 per essere sicuri contro cache lente)
     await toggleLibrary(true);
     await fetchBooks();
+    setTimeout(fetchBooks, 400); // piccolo secondo pass
   } catch (e) {
-    toast("Errore di rete: " + (e?.message || e));
+    alert("Errore di rete: " + (e?.message || e));
   }
 }
 
@@ -178,8 +210,6 @@ function goEditor(bookId) {
   if (inputBook) inputBook.value = id;
   if (inputCh && !inputCh.value) inputCh.value = "ch_0001";
   if (ta && !ta.value) ta.value = "Scrivi qui il contenuto del capitolo…";
-
-  ed?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function closeEditor() {
@@ -187,44 +217,9 @@ function closeEditor() {
   if (ed) ed.style.display = "none";
 }
 
-/* Salvataggio REALE capitolo (PUT) */
-async function saveChapter() {
-  const bookId = $("#bookIdInput")?.value?.trim();
-  const chapterId = $("#chapterIdInput")?.value?.trim();
-  const content = $("#chapterText")?.value ?? "";
-
-  if (!bookId || !chapterId) {
-    toast("Inserisci Book ID e Chapter ID.");
-    return;
-  }
-
-  try {
-    const res = await fetch(
-      `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      }
-    );
-
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
-    }
-
-    const data = await res.json().catch(() => ({}));
-    rememberLastBook(bookId);
-    toast("✅ Capitolo salvato!");
-
-    // dopo salvataggio aggiorno libreria (così vedi il capitolo nell’oggetto)
-    if (uiState.libraryVisible) await fetchBooks();
-  } catch (e) {
-    toast("❌ Errore salvataggio: " + (e?.message || e));
-  }
-}
-
-/* Libreria: toggle visibilità */
+/* ───────────────────────────────────────────────
+   Libreria: toggle visibilità
+   ─────────────────────────────────────────────── */
 async function toggleLibrary(force) {
   const lib = $("#library-section");
   if (!lib) return;
@@ -239,26 +234,32 @@ async function toggleLibrary(force) {
   if (uiState.libraryVisible) await fetchBooks();
 }
 
-/* Wiring bottoni */
+/* ───────────────────────────────────────────────
+   Wiring bottoni
+   ─────────────────────────────────────────────── */
 function wireButtons() {
   // Topbar
   $("#btn-create-book")?.addEventListener("click", createBookSimple);
   $("#btn-library")?.addEventListener("click", () => toggleLibrary());
   $("#btn-editor")?.addEventListener("click", () => goEditor());
 
-  // Azioni rapide (toggle anche qui)
+  // Azioni rapide (IDs richiesti)
   $("#btn-quick-create")?.addEventListener("click", createBookSimple);
+  // come richiesto: toggle (non forzare apertura)
   $("#btn-quick-library")?.addEventListener("click", () => toggleLibrary());
   $("#btn-quick-editor")?.addEventListener("click", () => goEditor());
 
   // Editor
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
-  $("#btn-ed-save")?.addEventListener("click", saveChapter);
+  $("#btn-ed-save")?.addEventListener("click", () => {
+    toast("💾 Demo salvataggio capitolo (endpoint reale in una prossima iterazione).");
+  });
 
-  // Delega Libreria
+  // Delega eventi sulla libreria (Apri / Elimina / Modifica)
   $("#library-list")?.addEventListener("click", async (ev) => {
     const btn = ev.target.closest("button[data-action]");
     if (!btn) return;
+
     const action = btn.getAttribute("data-action");
     const bookId = btn.getAttribute("data-bookid") || "";
 
@@ -268,15 +269,17 @@ function wireButtons() {
     } else if (action === "delete") {
       await deleteBook(bookId);
     } else if (action === "edit") {
-      toast("✏️ Modifica libro: in arrivo.");
+      toast("✏️ Modifica libro: arriverà a breve.");
     }
   });
 }
 
-/* Init */
+/* ───────────────────────────────────────────────
+   Init
+   ─────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", async () => {
   wireButtons();
   await pingBackend();
-  // avvio con libreria chiusa; la apri con i bottoni
-  await toggleLibrary(false);
+  // mostro e carico libreria all’avvio
+  await toggleLibrary(true);
 });
