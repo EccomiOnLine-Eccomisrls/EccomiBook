@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * main.js — COMPLETO
+ * src/main.js — COMPLETO
  * ========================================================= */
 
 import "./styles.css";
@@ -23,7 +23,10 @@ function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
-function toast(msg) { alert(msg); }
+
+function toast(msg) {
+  alert(msg); // MVP
+}
 
 function rememberLastBook(id) {
   try { localStorage.setItem("last_book_id", id || ""); } catch {}
@@ -32,13 +35,18 @@ function loadLastBook() {
   try { return localStorage.getItem("last_book_id") || ""; } catch { return ""; }
 }
 
-function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+// escape
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, m => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]
+  ));
+}
 function escapeAttr(s) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 
 /* ───────────────────────────────────────────────
    Stato UI
    ─────────────────────────────────────────────── */
-const uiState = { libraryVisible: false };
+const uiState = { libraryVisible: true };
 
 /* ───────────────────────────────────────────────
    Backend ping + badge
@@ -49,7 +57,7 @@ async function pingBackend() {
 
   setText("backend-status", "Backend: verifico…");
   try {
-    const r = await fetch(`${API_BASE_URL}/health`, { method: "GET" });
+    const r = await fetch(`${API_BASE_URL}/health`);
     setText("backend-status", r.ok ? "Backend: ✅ OK" : `Backend: errore ${r.status}`);
   } catch {
     setText("backend-status", "Backend: non raggiungibile");
@@ -74,7 +82,7 @@ async function fetchBooks() {
       const txt = await res.text().catch(() => "");
       throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
     }
-    const data = await res.json();
+    const data = await res.json(); // può essere array o {items:[]}
     renderLibrary(Array.isArray(data) ? data : (data?.items || []));
   } catch (e) {
     if (box) box.innerHTML = `<div class="error">Errore: ${e.message || e}</div>`;
@@ -91,6 +99,10 @@ function renderLibrary(books) {
   }
 
   box.innerHTML = "";
+  const grid = document.createElement("div");
+  grid.className = "library-grid";
+  box.appendChild(grid);
+
   books.forEach((b) => {
     const id = b?.id || b?.book_id || "";
     const title = b?.title || "(senza titolo)";
@@ -98,21 +110,18 @@ function renderLibrary(books) {
     const lang = b?.language || "it";
 
     const card = document.createElement("div");
-    card.className = "card";
-    card.style.margin = "10px 0";
+    card.className = "book-card";
     card.innerHTML = `
-      <div class="card-head">
-        <strong>${escapeHtml(title)}</strong>
-        <span class="badge">${escapeHtml(id)}</span>
-      </div>
-      <div class="muted">Autore: ${escapeHtml(author)} — Lingua: ${escapeHtml(lang)}</div>
+      <div class="book-title">${escapeHtml(title)}</div>
+      <div class="book-meta">Autore: ${escapeHtml(author)} — Lingua: ${escapeHtml(lang)}</div>
+      <div class="book-id">${escapeHtml(id)}</div>
       <div class="row-right" style="margin-top:10px">
         <button class="btn btn-secondary" data-action="open" data-bookid="${escapeAttr(id)}">Apri</button>
         <button class="btn btn-ghost" data-action="edit" data-bookid="${escapeAttr(id)}">Modifica</button>
         <button class="btn btn-ghost" data-action="delete" data-bookid="${escapeAttr(id)}">Elimina</button>
       </div>
     `;
-    box.appendChild(card);
+    grid.appendChild(card);
   });
 }
 
@@ -128,7 +137,7 @@ async function createBookSimple() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title: (title || "").trim() || "Senza titolo",
+        title: title.trim() || "Senza titolo",
         author: "EccomiBook",
         language: "it",
         chapters: []
@@ -143,14 +152,14 @@ async function createBookSimple() {
     const data = await res.json();
     const newId = data?.book_id || data?.id || "";
     rememberLastBook(newId);
-    toast("✅ Libro creato!");
 
-    // 👉 Mostra SUBITO la Libreria, ricarica e scrolla in vista
+    alert("✅ Libro creato!");
+
+    // apri/aggiorna libreria subito
     await toggleLibrary(true);
     await fetchBooks();
-    $("#library-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
-    toast("Errore di rete: " + (e?.message || e));
+    alert("Errore di rete: " + (e?.message || e));
   }
 }
 
@@ -207,9 +216,7 @@ async function toggleLibrary(force) {
   }
   lib.style.display = uiState.libraryVisible ? "block" : "none";
 
-  if (uiState.libraryVisible) {
-    await fetchBooks();
-  }
+  if (uiState.libraryVisible) await fetchBooks();
 }
 
 /* ───────────────────────────────────────────────
@@ -221,7 +228,7 @@ function wireButtons() {
   $("#btn-library")?.addEventListener("click", () => toggleLibrary());
   $("#btn-editor")?.addEventListener("click", () => goEditor());
 
-  // Azioni rapide (ID dedicati)
+  // Azioni rapide (ID richiesti)
   $("#btn-quick-create")?.addEventListener("click", createBookSimple);
   $("#btn-quick-library")?.addEventListener("click", () => toggleLibrary(true));
   $("#btn-quick-editor")?.addEventListener("click", () => goEditor());
@@ -229,7 +236,7 @@ function wireButtons() {
   // Editor
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
   $("#btn-ed-save")?.addEventListener("click", () => {
-    toast("Demo salvataggio capitolo (endpoint reale in una prossima iterazione).");
+    toast("💾 Demo salvataggio capitolo (endpoint reale in una prossima iterazione).");
   });
 
   // Delega eventi sulla libreria (Apri / Elimina / Modifica)
@@ -257,6 +264,6 @@ function wireButtons() {
 document.addEventListener("DOMContentLoaded", async () => {
   wireButtons();
   await pingBackend();
-  // Avvio: Libreria nascosta; la carico solo quando l’utente la apre
-  await toggleLibrary(false);
+  // mostro e carico libreria all’avvio
+  await toggleLibrary(true);
 });
