@@ -23,11 +23,7 @@ function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
-
-function toast(msg) {
-  // mvp: semplice alert
-  alert(msg);
-}
+function toast(msg) { alert(msg); }
 
 function rememberLastBook(id) {
   try { localStorage.setItem("last_book_id", id || ""); } catch {}
@@ -36,12 +32,13 @@ function loadLastBook() {
   try { return localStorage.getItem("last_book_id") || ""; } catch { return ""; }
 }
 
+function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function escapeAttr(s) { return escapeHtml(s).replace(/"/g, "&quot;"); }
+
 /* ───────────────────────────────────────────────
    Stato UI
    ─────────────────────────────────────────────── */
-const uiState = {
-  libraryVisible: true,
-};
+const uiState = { libraryVisible: false };
 
 /* ───────────────────────────────────────────────
    Backend ping + badge
@@ -95,15 +92,15 @@ function renderLibrary(books) {
 
   box.innerHTML = "";
   books.forEach((b) => {
-    const id = b?.id || "";
+    const id = b?.id || b?.book_id || "";
     const title = b?.title || "(senza titolo)";
     const author = b?.author || "—";
     const lang = b?.language || "it";
 
-    const li = document.createElement("div");
-    li.className = "card";
-    li.style.margin = "10px 0";
-    li.innerHTML = `
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.margin = "10px 0";
+    card.innerHTML = `
       <div class="card-head">
         <strong>${escapeHtml(title)}</strong>
         <span class="badge">${escapeHtml(id)}</span>
@@ -115,13 +112,9 @@ function renderLibrary(books) {
         <button class="btn btn-ghost" data-action="delete" data-bookid="${escapeAttr(id)}">Elimina</button>
       </div>
     `;
-    box.appendChild(li);
+    box.appendChild(card);
   });
 }
-
-// piccole utility di escape
-function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-function escapeAttr(s) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 
 /* ───────────────────────────────────────────────
    Azioni: crea / elimina / apri editor
@@ -135,7 +128,7 @@ async function createBookSimple() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title: title.trim() || "Senza titolo",
+        title: (title || "").trim() || "Senza titolo",
         author: "EccomiBook",
         language: "it",
         chapters: []
@@ -148,11 +141,14 @@ async function createBookSimple() {
     }
 
     const data = await res.json();
-    rememberLastBook(data?.book_id || data?.id || "");
+    const newId = data?.book_id || data?.id || "";
+    rememberLastBook(newId);
     toast("✅ Libro creato!");
 
-    // aggiorna libreria se visibile
-    if (uiState.libraryVisible) await fetchBooks();
+    // 👉 Mostra SUBITO la Libreria, ricarica e scrolla in vista
+    await toggleLibrary(true);
+    await fetchBooks();
+    $("#library-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
     toast("Errore di rete: " + (e?.message || e));
   }
@@ -211,7 +207,9 @@ async function toggleLibrary(force) {
   }
   lib.style.display = uiState.libraryVisible ? "block" : "none";
 
-  if (uiState.libraryVisible) await fetchBooks();
+  if (uiState.libraryVisible) {
+    await fetchBooks();
+  }
 }
 
 /* ───────────────────────────────────────────────
@@ -223,7 +221,7 @@ function wireButtons() {
   $("#btn-library")?.addEventListener("click", () => toggleLibrary());
   $("#btn-editor")?.addEventListener("click", () => goEditor());
 
-  // Azioni rapide (devono avere ID dedicati)
+  // Azioni rapide (ID dedicati)
   $("#btn-quick-create")?.addEventListener("click", createBookSimple);
   $("#btn-quick-library")?.addEventListener("click", () => toggleLibrary(true));
   $("#btn-quick-editor")?.addEventListener("click", () => goEditor());
@@ -231,7 +229,6 @@ function wireButtons() {
   // Editor
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
   $("#btn-ed-save")?.addEventListener("click", () => {
-    // MVP: solo feedback
     toast("Demo salvataggio capitolo (endpoint reale in una prossima iterazione).");
   });
 
@@ -260,6 +257,6 @@ function wireButtons() {
 document.addEventListener("DOMContentLoaded", async () => {
   wireButtons();
   await pingBackend();
-  // all’avvio mostro la libreria e la carico
-  await toggleLibrary(true);
+  // Avvio: Libreria nascosta; la carico solo quando l’utente la apre
+  await toggleLibrary(false);
 });
