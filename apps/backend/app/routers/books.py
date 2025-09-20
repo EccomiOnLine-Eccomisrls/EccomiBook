@@ -1,73 +1,127 @@
-from __future__ import annotations
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any
-from uuid import uuid4
+# apps/backend/app/routers/books.py
+from fastapi import APIRouter, HTTPException, Body, Request
+from pydantic import BaseModel
+import uuid
+import re
+from typing import Any
+
 from .. import storage
 
-router = APIRouter(prefix="/books", tags=["books"])
+router = APIRouter()
+
 
 # ─────────────────────────────────────────────────────────
-# Models
+# Modelli
 # ─────────────────────────────────────────────────────────
-class ChapterRef(BaseModel):
-    id: str
-    title: str | None = None
-    path: str | None = None
-
-class BookCreateIn(BaseModel):
-    title: str = Field(..., min_length=1)
-    author: str = "EccomiBook"
+class BookIn(BaseModel):
+    title: str
+    author: str | None = None
+    abstract: str | None = None
+    description: str | None = None
+    genre: str | None = None
     language: str = "it"
-    chapters: List[ChapterRef] = Field(default_factory=list)
+    plan: str | None = None
+    chapters: list[dict] = []  # [{id, path?, ...}]
+
+
+class ChapterUpdate(BaseModel):
+    content: str
+
 
 # ─────────────────────────────────────────────────────────
-# Helpers
+# Util
 # ─────────────────────────────────────────────────────────
-def _get_db(req: Request) -> Dict[str, Dict[str, Any]]:
-    # assicura che l'app abbia il DB in memoria
-    if not hasattr(req.app.state, "books") or not isinstance(req.app.state.books, dict):
-        req.app.state.books = storage.load_books_from_disk()
-    return req.app.state.books  # dict: {book_id: book_dict}
+def slugify(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    return text.strip("-")
+
+
+def _books_db(request: Request) -> dict[str, dict[str, Any]]:
+    # "DB" in-memory popolato in app.main.on_startup()
+    return request.app.state.books
+
 
 # ─────────────────────────────────────────────────────────
-# Routes
+# Endpoints
 # ─────────────────────────────────────────────────────────
-@router.get("")
-def list_books(req: Request):
-    db = _get_db(req)
-    # ritorna lista di libri
-    return list(db.values())
+@router.get("/books", tags=["books"])
+def list_books(request: Request):
+    books_db = _books_db(request)
+    # ritorno come lista per semplicità
+    return list(books_db.values())
 
-@router.post("/create")
-def create_book(req: Request, payload: BookCreateIn):
-    db = _get_db(req)
 
-    book_id = f"book_{payload.title.lower().replace(' ', '-')[:24]}_{uuid4().hex[:6]}"
-    book = {
+@router.post("/books/create", tags=["books"])
+def create_book(request: Request, payload: BookIn = Body(...)):
+    # Genera ID leggibile
+    slug = slugify(payload.title) or "senza-titolo"
+    random_part = uuid.uuid4().hex[:6]
+    book_id = f"book_{slug}_{random_part}"
+
+    # Salva in memoria
+    books_db = _books_db(request)
+    books_db[book_id] = {
         "id": book_id,
         "title": payload.title,
         "author": payload.author,
+        "abstract": payload.abstract,
+        "description": payload.description,
+        "genre": payload.genre,
         "language": payload.language,
-        "chapters": [c.model_dump() for c in payload.chapters],
+        "plan": payload.plan or "START",
+        "chapters": payload.chapters or [],
     }
 
-    db[book_id] = book
-    # PERSISTENZA SUBITO
-    storage.save_books_to_disk(db)
+    # Persisti su disco
+    storage.save_books_to_disk(books_db)
 
-    return {
-        "ok": True,
-        "book_id": book_id,
-        **book,
-    }
+    return {"book_id": book_id, "title": payload.title, "chapters_count": len(payload.chapters or [])}
 
-@router.delete("/{book_id}")
-def delete_book(req: Request, book_id: str):
-    db = _get_db(req)
-    if book_id not in db:
+
+@router.delete("/books/{book_id}", tags=["books"], status_code=204)
+def delete_book(request: Request, book_id: str):
+    books_db = _books_db(request)
+    if book_id not in books_db:
         raise HTTPException(status_code=404, detail="Libro non trovato")
 
-    del db[book_id]
-    storage.save_books_to_disk(db)
-    return {"ok": True, "deleted": book_id}
+    # Per MVP rimuoviamo solo dal "DB" (i file capitolo restano)
+    books_db.pop(book_id, None)
+    storage.save_books_to_disk(books_db)
+    return  # 204
+
+
+@router.put("/books/{book_id}/chapters/{chapter_id}", tags=["books"])
+def upsert_chapter(
+    request: Request,
+    book_id: str,
+    chapter_id: str,
+    payload: ChapterUpdate = Body(...),
+):
+    """
+    Crea/aggiorna un capitolo:
+    - scrive il contenuto su disco (…/chapters/<book_id>/<chapter_id>.md)
+    - registra/aggiorna l'entry nel libro (chapters[])
+    """
+    books_db = _books_db(request)
+    book = books_db.get(book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+
+    # 1) Salva file su disco e ottieni path relativo (p.es. chapters/book_…/ch_0001.md)
+    rel_path = storage.save_chapter_file(book_id, chapter_id, payload.content or "")
+
+    # 2) Aggiorna o inserisce l'entry del capitolo nel libro
+    chapters = book.setdefault("chapters", [])
+    idx = next((i for i, ch in enumerate(chapters) if (ch.get("id") == chapter_id)), -1)
+    chapter_obj = {"id": chapter_id, "path": rel_path}
+    if idx >= 0:
+        # aggiorna mantenendo eventuali campi extra
+        chapters[idx].update(chapter_obj)
+    else:
+        chapters.append(chapter_obj)
+
+    # 3) Persisti su disco tutto il "DB" libri
+    storage.save_books_to_disk(books_db)
+
+    return {"ok": True, "book_id": book_id, "chapter": chapter_obj}
