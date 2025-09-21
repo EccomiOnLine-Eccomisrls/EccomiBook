@@ -49,15 +49,39 @@
         <div class="card-head">
           <strong>✏️ Editor capitolo</strong>
         </div>
+
         <label>Book ID</label>
         <input id="bookIdInput" type="text" placeholder="ID libro" />
-        <label>Chapter ID</label>
-        <input id="chapterIdInput" type="text" placeholder="es. ch_0001" />
+
+        <div class="grid">
+          <div>
+            <label>Chapter ID</label>
+            <input id="chapterIdInput" type="text" placeholder="es. ch_0001" />
+          </div>
+          <div>
+            <label>Topic (per AI)</label>
+            <input id="topicInput" type="text" placeholder="Di cosa parla il capitolo?" />
+          </div>
+        </div>
+
         <label>Contenuto</label>
-        <textarea id="chapterText" rows="8" placeholder="Scrivi qui..."></textarea>
-        <div class="row-right">
+        <textarea id="chapterText" rows="10" placeholder="Scrivi qui..."></textarea>
+
+        <div class="row-right" style="flex-wrap:wrap">
+          <button id="btn-ai-generate" class="btn btn-secondary">✨ Scrivi con AI</button>
           <button id="btn-ed-save" class="btn btn-primary">💾 Salva</button>
+          <button id="btn-ed-delete" class="btn btn-ghost">🗑️ Elimina capitolo</button>
+          <button id="btn-dl-md" class="btn btn-ghost">⬇️ MD</button>
+          <button id="btn-dl-txt" class="btn btn-ghost">⬇️ TXT</button>
+          <button id="btn-dl-pdf" class="btn btn-ghost">⬇️ PDF</button>
           <button id="btn-ed-close" class="btn btn-secondary">Chiudi</button>
+        </div>
+
+        <div id="chapter-list" class="card" style="margin-top:12px;">
+          <div class="card-head">
+            <strong>Capitoli del libro</strong>
+          </div>
+          <div id="chapter-list-body" class="muted">Nessun capitolo ancora.</div>
         </div>
       </div>
 
