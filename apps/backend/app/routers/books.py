@@ -84,18 +84,24 @@ def delete_book(request: Request, book_id: str):
     storage.save_books_to_disk(books_db)
     return  # 204
 
-# ── LETTURA CAPITOLO (usato dal frontend quando premi "Apri")
 @router.get("/books/{book_id}/chapters/{chapter_id}", tags=["books"])
 def get_chapter(book_id: str, chapter_id: str, request: Request):
     books_db = _books_db(request)
     if book_id not in books_db:
         raise HTTPException(status_code=404, detail="Libro non trovato")
-    try:
-        content = storage.read_chapter_file(book_id, chapter_id)
-    except FileNotFoundError:
-        # capitolo non ancora salvato su disco → 404 coerente
+
+    # storage.read_chapter_file -> (exists, content, rel_path)
+    exists, content, rel_path = storage.read_chapter_file(book_id, chapter_id)
+    if not exists:
         raise HTTPException(status_code=404, detail="Capitolo non trovato")
-    return {"book_id": book_id, "chapter_id": chapter_id, "content": content, "exists": True}
+
+    return {
+        "book_id": book_id,
+        "chapter_id": chapter_id,
+        "path": rel_path,
+        "content": content,
+        "exists": True,
+    }
 
 # ── CREAZIONE/AGGIORNAMENTO CAPITOLO
 @router.put("/books/{book_id}/chapters/{chapter_id}", tags=["books"])
