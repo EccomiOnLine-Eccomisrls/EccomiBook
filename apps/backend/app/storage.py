@@ -3,27 +3,28 @@ from __future__ import annotations
 from pathlib import Path
 import json
 
-# Radice dello storage persistente su Render
+# PDF
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import cm
+
+# Radice storage persistente
 BASE_DIR = Path("/opt/render/project/data/eccomibook")
 
 def ensure_dirs() -> None:
-    """Crea le cartelle necessarie sul disco persistente."""
     BASE_DIR.mkdir(parents=True, exist_ok=True)
     (BASE_DIR / "chapters").mkdir(exist_ok=True)
     (BASE_DIR / "books").mkdir(exist_ok=True)
-    (BASE_DIR / "admin").mkdir(exist_ok=True)   # per users.json, ecc.
+    (BASE_DIR / "admin").mkdir(exist_ok=True)
 
 def file_path(rel: str) -> Path:
-    """Path dentro BASE_DIR (compat per altri moduli)."""
     ensure_dirs()
     return (BASE_DIR / rel).resolve()
 
-# ── Persistenza libri ────────────────────────────────────────────────────────
-
+# ── Persistenza libri ───────────────────────────────────
 BOOKS_FILE = BASE_DIR / "books.json"
 
 def load_books_from_disk() -> dict:
-    """Carica il 'DB' libri (dict) da disco; se non esiste ritorna {}."""
     ensure_dirs()
     try:
         if BOOKS_FILE.exists():
@@ -35,7 +36,6 @@ def load_books_from_disk() -> dict:
     return {}
 
 def save_books_to_disk(books: dict) -> None:
-    """Salva il 'DB' libri su disco in modo atomico."""
     ensure_dirs()
     try:
         tmp = BOOKS_FILE.with_suffix(".tmp")
@@ -45,32 +45,19 @@ def save_books_to_disk(books: dict) -> None:
     except Exception:
         print("⚠️  Impossibile salvare books.json")
 
-# ── File capitoli ────────────────────────────────────────────────────────────
-
+# ── File capitoli ───────────────────────────────────────
 def chapter_path(book_id: str, chapter_id: str) -> Path:
-    """
-    Percorso ASSOLUTO del file capitolo.
-    Es: /data/eccomibook/chapters/<book_id>/<chapter_id>.md
-    """
     ensure_dirs()
     folder = BASE_DIR / "chapters" / book_id
     folder.mkdir(parents=True, exist_ok=True)
     return folder / f"{chapter_id}.md"
 
 def save_chapter_file(book_id: str, chapter_id: str, content: str) -> str:
-    """
-    Salva il contenuto su disco e ritorna il PERCORSO RELATIVO
-    (es. 'chapters/<book_id>/<chapter_id>.md').
-    """
     p = chapter_path(book_id, chapter_id)
     p.write_text(content or "", encoding="utf-8")
     return p.relative_to(BASE_DIR).as_posix()
 
 def read_chapter_file(book_id: str, chapter_id: str) -> tuple[bool, str, str]:
-    """
-    Legge il capitolo da disco.
-    Ritorna (exists, content, rel_path).
-    """
     p = chapter_path(book_id, chapter_id)
     rel = p.relative_to(BASE_DIR).as_posix()
     if not p.exists():
@@ -81,12 +68,32 @@ def read_chapter_file(book_id: str, chapter_id: str) -> tuple[bool, str, str]:
         txt = ""
     return True, txt, rel
 
-def delete_chapter_file(book_id: str, chapter_id: str) -> bool:
-    p = chapter_path(book_id, chapter_id)
-    if p.exists():
-        try:
-            p.unlink()
-            return True
-        except Exception:
-            return False
-    return False
+# ── Export PDF ───────────────────────────────────────────
+def make_chapter_pdf(book_id: str, chapter_id: str, content: str) -> Path:
+    """
+    Crea un PDF semplice dal contenuto del capitolo e ritorna il Path del PDF.
+    """
+    folder = BASE_DIR / "chapters" / book_id
+    folder.mkdir(parents=True, exist_ok=True)
+    pdf_path = folder / f"{chapter_id}.pdf"
+
+    c = canvas.Canvas(str(pdf_path), pagesize=A4)
+    width, height = A4
+    x = 2 * cm
+    y = height - 2 * cm
+
+    title = f"{chapter_id} — {book_id}"
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(x, y, title)
+    y -= 1 * cm
+
+    c.setFont("Helvetica", 10)
+    for line in (content or "").splitlines() or [""]:
+        if y < 2 * cm:
+            c.showPage()
+            y = height - 2 * cm
+            c.setFont("Helvetica", 10)
+        c.drawString(x, y, line[:95])
+        y -= 14
+    c.save()
+    return pdf_path
