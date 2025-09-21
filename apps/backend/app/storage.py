@@ -1,14 +1,9 @@
-# apps/backend/app/storage.py
 from __future__ import annotations
 from pathlib import Path
 import json
+from typing import Tuple
 
-# PDF
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import cm
-
-# Radice storage persistente
+# Radice dello storage persistente su Render
 BASE_DIR = Path("/opt/render/project/data/eccomibook")
 
 def ensure_dirs() -> None:
@@ -21,7 +16,7 @@ def file_path(rel: str) -> Path:
     ensure_dirs()
     return (BASE_DIR / rel).resolve()
 
-# ── Persistenza libri ───────────────────────────────────
+# ── Persistenza libri ────────────────────────────────────────────────────────
 BOOKS_FILE = BASE_DIR / "books.json"
 
 def load_books_from_disk() -> dict:
@@ -45,7 +40,7 @@ def save_books_to_disk(books: dict) -> None:
     except Exception:
         print("⚠️  Impossibile salvare books.json")
 
-# ── File capitoli ───────────────────────────────────────
+# ── File capitoli ────────────────────────────────────────────────────────────
 def chapter_path(book_id: str, chapter_id: str) -> Path:
     ensure_dirs()
     folder = BASE_DIR / "chapters" / book_id
@@ -57,43 +52,26 @@ def save_chapter_file(book_id: str, chapter_id: str, content: str) -> str:
     p.write_text(content or "", encoding="utf-8")
     return p.relative_to(BASE_DIR).as_posix()
 
-def read_chapter_file(book_id: str, chapter_id: str) -> tuple[bool, str, str]:
+def read_chapter_file(book_id: str, chapter_id: str) -> Tuple[bool, str, str]:
     p = chapter_path(book_id, chapter_id)
     rel = p.relative_to(BASE_DIR).as_posix()
     if not p.exists():
-        return False, "", rel
+        return (False, "", rel)
     try:
         txt = p.read_text(encoding="utf-8")
     except Exception:
         txt = ""
-    return True, txt, rel
+    return (True, txt, rel)
 
-# ── Export PDF ───────────────────────────────────────────
-def make_chapter_pdf(book_id: str, chapter_id: str, content: str) -> Path:
-    """
-    Crea un PDF semplice dal contenuto del capitolo e ritorna il Path del PDF.
-    """
-    folder = BASE_DIR / "chapters" / book_id
-    folder.mkdir(parents=True, exist_ok=True)
-    pdf_path = folder / f"{chapter_id}.pdf"
-
-    c = canvas.Canvas(str(pdf_path), pagesize=A4)
-    width, height = A4
-    x = 2 * cm
-    y = height - 2 * cm
-
-    title = f"{chapter_id} — {book_id}"
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(x, y, title)
-    y -= 1 * cm
-
-    c.setFont("Helvetica", 10)
-    for line in (content or "").splitlines() or [""]:
-        if y < 2 * cm:
-            c.showPage()
-            y = height - 2 * cm
-            c.setFont("Helvetica", 10)
-        c.drawString(x, y, line[:95])
-        y -= 14
-    c.save()
-    return pdf_path
+def delete_chapter_file(book_id: str, chapter_id: str) -> bool:
+    p = chapter_path(book_id, chapter_id)
+    try:
+        if p.exists():
+            p.unlink()
+        # se la cartella è vuota, rimuovila (non critico)
+        folder = p.parent
+        if folder.exists() and not any(folder.iterdir()):
+            folder.rmdir()
+        return True
+    except Exception:
+        return False
