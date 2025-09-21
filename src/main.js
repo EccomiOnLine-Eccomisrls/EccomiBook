@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — COMPLETO
+ * src/main.js — COMPLETO (con lettura/salvataggio capitoli)
  * ========================================================= */
 
 import "./styles.css";
@@ -24,9 +24,7 @@ function setText(id, text) {
   if (el) el.textContent = text;
 }
 
-function toast(msg) {
-  alert(msg); // MVP
-}
+function toast(msg) { alert(msg); }
 
 function rememberLastBook(id) {
   try { localStorage.setItem("last_book_id", id || ""); } catch {}
@@ -73,13 +71,12 @@ async function pingBackend() {
    Libreria: API + render
    ─────────────────────────────────────────────── */
 
-// 1) fetchBooks senza cache, con log utile
+// fetchBooks senza cache, con log utile
 async function fetchBooks() {
   const box = document.getElementById("library-list");
   if (box) box.innerHTML = '<div class="muted">Carico libreria…</div>';
 
   try {
-    // no-store + cache-buster per evitare risposte “vecchie” da CDN/browser
     const res = await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`, {
       method: "GET",
       cache: "no-store",
@@ -93,7 +90,7 @@ async function fetchBooks() {
 
     const data = await res.json();
     const items = Array.isArray(data) ? data : (data?.items || []);
-    console.log("[LIBRERIA] libri letti:", items);  // 👈 debug utile
+    console.log("[LIBRERIA] libri letti:", items);
     renderLibrary(items);
   } catch (e) {
     if (box) box.innerHTML = `<div class="error">Errore: ${e.message || e}</div>`;
@@ -137,10 +134,57 @@ function renderLibrary(books) {
 }
 
 /* ───────────────────────────────────────────────
+   Capitoli: lettura & salvataggio
+   ─────────────────────────────────────────────── */
+async function loadChapter(bookId, chapterId) {
+  if (!bookId || !chapterId) return { content: "", exists: false };
+  try {
+    const res = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?ts=${Date.now()}`, {
+      method: "GET",
+      cache: "no-store",
+      headers: { "Accept": "application/json" },
+    });
+    if (!res.ok) {
+      // Se il backend torna 404, editor parte vuoto
+      return { content: "", exists: false };
+    }
+    const data = await res.json();
+    return { content: data?.content || "", exists: !!data?.exists };
+  } catch {
+    return { content: "", exists: false };
+  }
+}
+
+async function saveChapter() {
+  const bookId = $("#bookIdInput")?.value?.trim();
+  const chId   = $("#chapterIdInput")?.value?.trim();
+  const text   = $("#chapterText")?.value ?? "";
+
+  if (!bookId || !chId) {
+    toast("Inserisci Book ID e Chapter ID.");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: text }),
+    });
+
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}${t ? `: ${t}` : ""}`);
+    }
+    toast("💾 Capitolo salvato.");
+  } catch (e) {
+    toast("Errore salvataggio: " + (e?.message || e));
+  }
+}
+
+/* ───────────────────────────────────────────────
    Azioni: crea / elimina / apri editor
    ─────────────────────────────────────────────── */
-
-// 2) dopo creazione, forzo apertura libreria + due fetch ravvicinati (aggira cache aggressiva)
 async function createBookSimple() {
   const title = prompt("Titolo del libro:", "Manuale EccomiBook");
   if (title == null) return;
@@ -169,10 +213,10 @@ async function createBookSimple() {
 
     alert("✅ Libro creato!");
 
-    // apro libreria e ricarico subito (x2 per essere sicuri contro cache lente)
+    // apro libreria e ricarico subito (x2 contro cache aggressive)
     await toggleLibrary(true);
     await fetchBooks();
-    setTimeout(fetchBooks, 400); // piccolo secondo pass
+    setTimeout(fetchBooks, 400);
   } catch (e) {
     alert("Errore di rete: " + (e?.message || e));
   }
@@ -198,18 +242,25 @@ async function deleteBook(bookId) {
   }
 }
 
-function goEditor(bookId) {
+async function goEditor(bookId) {
   const ed = $("#editor-card");
   if (ed) ed.style.display = "block";
 
   const inputBook = $("#bookIdInput");
-  const inputCh = $("#chapterIdInput");
-  const ta = $("#chapterText");
+  const inputCh   = $("#chapterIdInput");
+  const ta        = $("#chapterText");
 
   const id = bookId || loadLastBook() || "";
   if (inputBook) inputBook.value = id;
   if (inputCh && !inputCh.value) inputCh.value = "ch_0001";
-  if (ta && !ta.value) ta.value = "Scrivi qui il contenuto del capitolo…";
+
+  // carica contenuto capitolo (se esiste)
+  const finalBookId = inputBook?.value?.trim();
+  const finalChId   = inputCh?.value?.trim();
+  if (finalBookId && finalChId) {
+    const { content } = await loadChapter(finalBookId, finalChId);
+    if (ta) ta.value = content || "";
+  }
 }
 
 function closeEditor() {
@@ -243,17 +294,14 @@ function wireButtons() {
   $("#btn-library")?.addEventListener("click", () => toggleLibrary());
   $("#btn-editor")?.addEventListener("click", () => goEditor());
 
-  // Azioni rapide (IDs richiesti)
+  // Azioni rapide (toggle, come richiesto)
   $("#btn-quick-create")?.addEventListener("click", createBookSimple);
-  // come richiesto: toggle (non forzare apertura)
   $("#btn-quick-library")?.addEventListener("click", () => toggleLibrary());
   $("#btn-quick-editor")?.addEventListener("click", () => goEditor());
 
   // Editor
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
-  $("#btn-ed-save")?.addEventListener("click", () => {
-    toast("💾 Demo salvataggio capitolo (endpoint reale in una prossima iterazione).");
-  });
+  $("#btn-ed-save")?.addEventListener("click", saveChapter);
 
   // Delega eventi sulla libreria (Apri / Elimina / Modifica)
   $("#library-list")?.addEventListener("click", async (ev) => {
@@ -265,7 +313,7 @@ function wireButtons() {
 
     if (action === "open") {
       rememberLastBook(bookId);
-      goEditor(bookId);
+      await goEditor(bookId);
     } else if (action === "delete") {
       await deleteBook(bookId);
     } else if (action === "edit") {
