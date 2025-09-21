@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — COMPLETO (con lettura/salvataggio capitoli)
+ * src/main.js — COMPLETO
  * ========================================================= */
 
 import "./styles.css";
@@ -23,17 +23,10 @@ function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
-
 function toast(msg) { alert(msg); }
+function rememberLastBook(id) { try { localStorage.setItem("last_book_id", id || ""); } catch {} }
+function loadLastBook() { try { return localStorage.getItem("last_book_id") || ""; } catch { return ""; } }
 
-function rememberLastBook(id) {
-  try { localStorage.setItem("last_book_id", id || ""); } catch {}
-}
-function loadLastBook() {
-  try { return localStorage.getItem("last_book_id") || ""; } catch { return ""; }
-}
-
-// escape
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, m => (
     {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]
@@ -70,8 +63,6 @@ async function pingBackend() {
 /* ───────────────────────────────────────────────
    Libreria: API + render
    ─────────────────────────────────────────────── */
-
-// fetchBooks senza cache, con log utile
 async function fetchBooks() {
   const box = document.getElementById("library-list");
   if (box) box.innerHTML = '<div class="muted">Carico libreria…</div>';
@@ -134,25 +125,18 @@ function renderLibrary(books) {
 }
 
 /* ───────────────────────────────────────────────
-   Capitoli: lettura & salvataggio
+   Capitoli: read + save
    ─────────────────────────────────────────────── */
-async function loadChapter(bookId, chapterId) {
-  if (!bookId || !chapterId) return { content: "", exists: false };
-  try {
-    const res = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?ts=${Date.now()}`, {
-      method: "GET",
-      cache: "no-store",
-      headers: { "Accept": "application/json" },
-    });
-    if (!res.ok) {
-      // Se il backend torna 404, editor parte vuoto
-      return { content: "", exists: false };
-    }
-    const data = await res.json();
-    return { content: data?.content || "", exists: !!data?.exists };
-  } catch {
-    return { content: "", exists: false };
+async function readChapter(bookId, chapterId) {
+  const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?ts=${Date.now()}`;
+  const res = await fetch(url, { method: "GET", cache: "no-store" });
+  if (res.status === 404) return { exists: false, content: "" };
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
   }
+  const data = await res.json();
+  return { exists: !!data.exists, content: data.content || "" };
 }
 
 async function saveChapter() {
@@ -161,25 +145,23 @@ async function saveChapter() {
   const text   = $("#chapterText")?.value ?? "";
 
   if (!bookId || !chId) {
-    toast("Inserisci Book ID e Chapter ID.");
+    alert("Inserisci ID libro e ID capitolo.");
     return;
   }
 
-  try {
-    const res = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chId)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: text }),
-    });
-
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status}${t ? `: ${t}` : ""}`);
-    }
-    toast("💾 Capitolo salvato.");
-  } catch (e) {
-    toast("Errore salvataggio: " + (e?.message || e));
+  const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chId)}`;
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({ content: text }),
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    alert(`❌ Errore salvataggio — HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
+    return;
   }
+  alert("✅ Capitolo salvato!");
 }
 
 /* ───────────────────────────────────────────────
@@ -212,8 +194,6 @@ async function createBookSimple() {
     rememberLastBook(newId);
 
     alert("✅ Libro creato!");
-
-    // apro libreria e ricarico subito (x2 contro cache aggressive)
     await toggleLibrary(true);
     await fetchBooks();
     setTimeout(fetchBooks, 400);
@@ -252,14 +232,16 @@ async function goEditor(bookId) {
 
   const id = bookId || loadLastBook() || "";
   if (inputBook) inputBook.value = id;
-  if (inputCh && !inputCh.value) inputCh.value = "ch_0001";
 
-  // carica contenuto capitolo (se esiste)
-  const finalBookId = inputBook?.value?.trim();
-  const finalChId   = inputCh?.value?.trim();
-  if (finalBookId && finalChId) {
-    const { content } = await loadChapter(finalBookId, finalChId);
-    if (ta) ta.value = content || "";
+  const chId = (inputCh?.value?.trim()) || "ch_0001";
+  if (inputCh) inputCh.value = chId;
+
+  try {
+    const { exists, content } = await readChapter(id, chId);
+    if (ta) ta.value = exists ? content : "";
+  } catch (e) {
+    console.warn("readChapter error:", e);
+    if (ta && !ta.value) ta.value = "";
   }
 }
 
@@ -294,7 +276,7 @@ function wireButtons() {
   $("#btn-library")?.addEventListener("click", () => toggleLibrary());
   $("#btn-editor")?.addEventListener("click", () => goEditor());
 
-  // Azioni rapide (toggle, come richiesto)
+  // Azioni rapide (toggle anche qui, come richiesto)
   $("#btn-quick-create")?.addEventListener("click", createBookSimple);
   $("#btn-quick-library")?.addEventListener("click", () => toggleLibrary());
   $("#btn-quick-editor")?.addEventListener("click", () => goEditor());
@@ -303,7 +285,7 @@ function wireButtons() {
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
   $("#btn-ed-save")?.addEventListener("click", saveChapter);
 
-  // Delega eventi sulla libreria (Apri / Elimina / Modifica)
+  // Delega eventi libreria
   $("#library-list")?.addEventListener("click", async (ev) => {
     const btn = ev.target.closest("button[data-action]");
     if (!btn) return;
@@ -328,6 +310,5 @@ function wireButtons() {
 document.addEventListener("DOMContentLoaded", async () => {
   wireButtons();
   await pingBackend();
-  // mostro e carico libreria all’avvio
-  await toggleLibrary(true);
+  await toggleLibrary(true); // mostra e carica la libreria all’avvio
 });
