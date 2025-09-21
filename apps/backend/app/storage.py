@@ -72,10 +72,21 @@ def read_chapter_file(book_id: str, chapter_id: str) -> tuple[bool, str, str]:
     Ritorna (exists, content, rel_path).
     """
     p = chapter_path(book_id, chapter_id)
+    rel = p.relative_to(BASE_DIR).as_posix()
     if not p.exists():
-        return False, "", p.relative_to(BASE_DIR).as_posix()
+        return False, "", rel
     try:
         txt = p.read_text(encoding="utf-8")
     except Exception:
         txt = ""
-    return True, txt, p.relative_to(BASE_DIR).as_posix()
+    return True, txt, rel
+
+def delete_chapter_file(book_id: str, chapter_id: str) -> bool:
+    p = chapter_path(book_id, chapter_id)
+    if p.exists():
+        try:
+            p.unlink()
+            return True
+        except Exception:
+            return False
+    return False
