@@ -4,11 +4,11 @@ from pydantic import BaseModel
 import uuid
 import re
 from typing import Any
+from datetime import datetime
 
 from .. import storage
 
 router = APIRouter()
-
 
 # ─────────────────────────────────────────────────────────
 # Modelli
@@ -21,12 +21,10 @@ class BookIn(BaseModel):
     genre: str | None = None
     language: str = "it"
     plan: str | None = None
-    chapters: list[dict] = []  # [{id, path?, ...}]
-
+    chapters: list[dict] = []  # [{id, path?, title?, updated_at?}]
 
 class ChapterUpdate(BaseModel):
     content: str
-
 
 # ─────────────────────────────────────────────────────────
 # Util
@@ -36,11 +34,9 @@ def slugify(text: str) -> str:
     text = re.sub(r"[^a-z0-9]+", "-", text)
     return text.strip("-")
 
-
 def _books_db(request: Request) -> dict[str, dict[str, Any]]:
     # "DB" in-memory popolato in app.main.on_startup()
     return request.app.state.books
-
 
 # ─────────────────────────────────────────────────────────
 # Endpoints
@@ -50,7 +46,6 @@ def list_books(request: Request):
     books_db = _books_db(request)
     # ritorno come lista per semplicità
     return list(books_db.values())
-
 
 @router.post("/books/create", tags=["books"])
 def create_book(request: Request, payload: BookIn = Body(...)):
@@ -78,7 +73,6 @@ def create_book(request: Request, payload: BookIn = Body(...)):
 
     return {"book_id": book_id, "title": payload.title, "chapters_count": len(payload.chapters or [])}
 
-
 @router.delete("/books/{book_id}", tags=["books"], status_code=204)
 def delete_book(request: Request, book_id: str):
     books_db = _books_db(request)
@@ -90,7 +84,20 @@ def delete_book(request: Request, book_id: str):
     storage.save_books_to_disk(books_db)
     return  # 204
 
+# ── LETTURA CAPITOLO (usato dal frontend quando premi "Apri")
+@router.get("/books/{book_id}/chapters/{chapter_id}", tags=["books"])
+def get_chapter(book_id: str, chapter_id: str, request: Request):
+    books_db = _books_db(request)
+    if book_id not in books_db:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    try:
+        content = storage.read_chapter_file(book_id, chapter_id)
+    except FileNotFoundError:
+        # capitolo non ancora salvato su disco → 404 coerente
+        raise HTTPException(status_code=404, detail="Capitolo non trovato")
+    return {"book_id": book_id, "chapter_id": chapter_id, "content": content, "exists": True}
 
+# ── CREAZIONE/AGGIORNAMENTO CAPITOLO
 @router.put("/books/{book_id}/chapters/{chapter_id}", tags=["books"])
 def upsert_chapter(
     request: Request,
@@ -113,15 +120,22 @@ def upsert_chapter(
 
     # 2) Aggiorna o inserisce l'entry del capitolo nel libro
     chapters = book.setdefault("chapters", [])
+    now = datetime.utcnow().isoformat() + "Z"
     idx = next((i for i, ch in enumerate(chapters) if (ch.get("id") == chapter_id)), -1)
-    chapter_obj = {"id": chapter_id, "path": rel_path}
+
     if idx >= 0:
-        # aggiorna mantenendo eventuali campi extra
-        chapters[idx].update(chapter_obj)
+        # aggiorna mantenendo eventuali campi extra (es. title)
+        chapters[idx]["path"] = rel_path
+        chapters[idx]["updated_at"] = now
     else:
-        chapters.append(chapter_obj)
+        chapters.append({
+            "id": chapter_id,
+            "title": chapter_id,  # titolo provvisorio
+            "path": rel_path,
+            "updated_at": now,
+        })
 
     # 3) Persisti su disco tutto il "DB" libri
     storage.save_books_to_disk(books_db)
 
-    return {"ok": True, "book_id": book_id, "chapter": chapter_obj}
+    return {"ok": True, "book_id": book_id, "chapter": {"id": chapter_id, "path": rel_path, "updated_at": now}}
