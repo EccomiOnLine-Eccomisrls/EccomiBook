@@ -21,16 +21,13 @@
       </div>
     </header>
 
-    <!-- Main -->
     <main class="container">
       <h1 class="hero">Benvenuto in EccomiBook</h1>
       <p class="subhero">Genera libri e capitoli con un click.</p>
 
-      <!-- Card Azioni rapide -->
+      <!-- Azioni rapide -->
       <div class="card">
-        <div class="card-head">
-          <strong>Azioni rapide</strong>
-        </div>
+        <div class="card-head"><strong>Azioni rapide</strong></div>
         <div class="row-right">
           <button id="btn-quick-create" class="btn btn-primary">+ Crea libro</button>
           <button id="btn-quick-library" class="btn btn-secondary">Libreria</button>
@@ -44,11 +41,9 @@
         <div id="library-list"></div>
       </div>
 
-      <!-- Editor -->
+      <!-- Editor capitolo -->
       <div id="editor-card" class="card" style="display:none; margin-top:20px;">
-        <div class="card-head">
-          <strong>✏️ Editor capitolo</strong>
-        </div>
+        <div class="card-head"><strong>✏️ Editor capitolo</strong></div>
 
         <label>Book ID</label>
         <input id="bookIdInput" type="text" placeholder="ID libro" />
@@ -60,35 +55,33 @@
           </div>
           <div>
             <label>Topic (per AI)</label>
-            <input id="topicInput" type="text" placeholder="Di cosa parla il capitolo?" />
+            <input id="chapterTopicInput" type="text" placeholder="es. Introduzione EccomiBook" />
           </div>
         </div>
 
         <label>Contenuto</label>
-        <textarea id="chapterText" rows="10" placeholder="Scrivi qui..."></textarea>
+        <textarea id="chapterText" rows="10" placeholder="Scrivi qui il contenuto del capitolo..."></textarea>
 
-        <div class="row-right" style="flex-wrap:wrap">
-          <button id="btn-ai-generate" class="btn btn-secondary">✨ Scrivi con AI</button>
+        <div class="row-right">
+          <button id="btn-ai" class="btn btn-secondary">✨ Scrivi con AI</button>
           <button id="btn-ed-save" class="btn btn-primary">💾 Salva</button>
-          <button id="btn-ed-delete" class="btn btn-ghost">🗑️ Elimina capitolo</button>
-          <button id="btn-dl-md" class="btn btn-ghost">⬇️ MD</button>
-          <button id="btn-dl-txt" class="btn btn-ghost">⬇️ TXT</button>
-          <button id="btn-dl-pdf" class="btn btn-ghost">⬇️ PDF</button>
+          <button id="btn-ed-del" class="btn btn-ghost">🗑️ Elimina capitolo</button>
+          <a id="btn-exp-md"  class="btn btn-ghost" href="#" target="_blank">📄 MD</a>
+          <a id="btn-exp-txt" class="btn btn-ghost" href="#" target="_blank">📝 TXT</a>
+          <a id="btn-exp-pdf" class="btn btn-ghost" href="#" target="_blank">🧾 PDF</a>
           <button id="btn-ed-close" class="btn btn-secondary">Chiudi</button>
         </div>
+      </div>
 
-        <div id="chapter-list" class="card" style="margin-top:12px;">
-          <div class="card-head">
-            <strong>Capitoli del libro</strong>
-          </div>
-          <div id="chapter-list-body" class="muted">Nessun capitolo ancora.</div>
-        </div>
+      <!-- Lista capitoli -->
+      <div id="chapters-panel" class="card" style="display:none; margin-top:20px;">
+        <div class="card-head"><strong>Capitoli del libro</strong></div>
+        <div id="chapters-list"><div class="muted">Nessun capitolo ancora.</div></div>
       </div>
 
       <p class="footer">© EccomiBook</p>
     </main>
 
-    <!-- JS -->
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
