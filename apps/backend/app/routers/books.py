@@ -1,10 +1,13 @@
 # apps/backend/app/routers/books.py
-from fastapi import APIRouter, HTTPException, Body, Request
+from fastapi import APIRouter, HTTPException, Body, Request, Response
 from pydantic import BaseModel
 import uuid
 import re
 from typing import Any
 from datetime import datetime
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from io import BytesIO
 
 from .. import storage
 
@@ -38,23 +41,31 @@ def _books_db(request: Request) -> dict[str, dict[str, Any]]:
     # "DB" in-memory popolato in app.main.on_startup()
     return request.app.state.books
 
+def _get_book_or_404(request: Request, book_id: str) -> dict[str, Any]:
+    books_db = _books_db(request)
+    book = books_db.get(book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    return book
+
 # ─────────────────────────────────────────────────────────
 # Endpoints
 # ─────────────────────────────────────────────────────────
 @router.get("/books", tags=["books"])
 def list_books(request: Request):
     books_db = _books_db(request)
-    # ritorno come lista per semplicità
     return list(books_db.values())
+
+@router.get("/books/{book_id}", tags=["books"])
+def get_book(request: Request, book_id: str):
+    return _get_book_or_404(request, book_id)
 
 @router.post("/books/create", tags=["books"])
 def create_book(request: Request, payload: BookIn = Body(...)):
-    # Genera ID leggibile
     slug = slugify(payload.title) or "senza-titolo"
     random_part = uuid.uuid4().hex[:6]
     book_id = f"book_{slug}_{random_part}"
 
-    # Salva in memoria
     books_db = _books_db(request)
     books_db[book_id] = {
         "id": book_id,
@@ -68,9 +79,7 @@ def create_book(request: Request, payload: BookIn = Body(...)):
         "chapters": payload.chapters or [],
     }
 
-    # Persisti su disco
     storage.save_books_to_disk(books_db)
-
     return {"book_id": book_id, "title": payload.title, "chapters_count": len(payload.chapters or [])}
 
 @router.delete("/books/{book_id}", tags=["books"], status_code=204)
@@ -78,32 +87,26 @@ def delete_book(request: Request, book_id: str):
     books_db = _books_db(request)
     if book_id not in books_db:
         raise HTTPException(status_code=404, detail="Libro non trovato")
-
-    # Per MVP rimuoviamo solo dal "DB" (i file capitolo restano)
     books_db.pop(book_id, None)
     storage.save_books_to_disk(books_db)
-    return  # 204
+    return
 
+# ── CAPITOLI: lista
+@router.get("/books/{book_id}/chapters", tags=["books"])
+def list_chapters(request: Request, book_id: str):
+    book = _get_book_or_404(request, book_id)
+    return book.get("chapters", [])
+
+# ── CAPITOLI: lettura
 @router.get("/books/{book_id}/chapters/{chapter_id}", tags=["books"])
-def get_chapter(book_id: str, chapter_id: str, request: Request):
-    books_db = _books_db(request)
-    if book_id not in books_db:
-        raise HTTPException(status_code=404, detail="Libro non trovato")
-
-    # storage.read_chapter_file -> (exists, content, rel_path)
+def get_chapter(request: Request, book_id: str, chapter_id: str):
+    _get_book_or_404(request, book_id)
     exists, content, rel_path = storage.read_chapter_file(book_id, chapter_id)
     if not exists:
         raise HTTPException(status_code=404, detail="Capitolo non trovato")
+    return {"book_id": book_id, "chapter_id": chapter_id, "path": rel_path, "content": content, "exists": True}
 
-    return {
-        "book_id": book_id,
-        "chapter_id": chapter_id,
-        "path": rel_path,
-        "content": content,
-        "exists": True,
-    }
-
-# ── CREAZIONE/AGGIORNAMENTO CAPITOLO
+# ── CAPITOLI: creazione/aggiornamento
 @router.put("/books/{book_id}/chapters/{chapter_id}", tags=["books"])
 def upsert_chapter(
     request: Request,
@@ -111,37 +114,87 @@ def upsert_chapter(
     chapter_id: str,
     payload: ChapterUpdate = Body(...),
 ):
-    """
-    Crea/aggiorna un capitolo:
-    - scrive il contenuto su disco (…/chapters/<book_id>/<chapter_id>.md)
-    - registra/aggiorna l'entry nel libro (chapters[])
-    """
     books_db = _books_db(request)
     book = books_db.get(book_id)
     if not book:
         raise HTTPException(status_code=404, detail="Libro non trovato")
 
-    # 1) Salva file su disco e ottieni path relativo (p.es. chapters/book_…/ch_0001.md)
     rel_path = storage.save_chapter_file(book_id, chapter_id, payload.content or "")
 
-    # 2) Aggiorna o inserisce l'entry del capitolo nel libro
     chapters = book.setdefault("chapters", [])
     now = datetime.utcnow().isoformat() + "Z"
     idx = next((i for i, ch in enumerate(chapters) if (ch.get("id") == chapter_id)), -1)
 
     if idx >= 0:
-        # aggiorna mantenendo eventuali campi extra (es. title)
         chapters[idx]["path"] = rel_path
         chapters[idx]["updated_at"] = now
     else:
         chapters.append({
             "id": chapter_id,
-            "title": chapter_id,  # titolo provvisorio
+            "title": chapter_id,
             "path": rel_path,
             "updated_at": now,
         })
 
-    # 3) Persisti su disco tutto il "DB" libri
     storage.save_books_to_disk(books_db)
-
     return {"ok": True, "book_id": book_id, "chapter": {"id": chapter_id, "path": rel_path, "updated_at": now}}
+
+# ── CAPITOLI: eliminazione
+@router.delete("/books/{book_id}/chapters/{chapter_id}", tags=["books"], status_code=204)
+def delete_chapter(request: Request, book_id: str, chapter_id: str):
+    books_db = _books_db(request)
+    book = books_db.get(book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+
+    # rimuovi dal file system (best-effort)
+    storage.delete_chapter_file(book_id, chapter_id)
+
+    # rimuovi dal "DB"
+    chapters = book.get("chapters", [])
+    book["chapters"] = [c for c in chapters if c.get("id") != chapter_id]
+    storage.save_books_to_disk(books_db)
+    return
+
+# ── CAPITOLI: export TXT/MD/PDF
+@router.get("/books/{book_id}/chapters/{chapter_id}/export", tags=["books"])
+def export_chapter(request: Request, book_id: str, chapter_id: str, fmt: str = "md"):
+    _get_book_or_404(request, book_id)
+    exists, content, _ = storage.read_chapter_file(book_id, chapter_id)
+    if not exists:
+        raise HTTPException(status_code=404, detail="Capitolo non trovato")
+
+    filename_base = f"{book_id}_{chapter_id}"
+    fmt = (fmt or "md").lower()
+
+    if fmt in ("md", "txt"):
+        media = "text/markdown" if fmt == "md" else "text/plain"
+        ext = "md" if fmt == "md" else "txt"
+        return Response(
+            content=content,
+            media_type=media,
+            headers={"Content-Disposition": f'attachment; filename="{filename_base}.{ext}"'}
+        )
+
+    if fmt == "pdf":
+        buf = BytesIO()
+        c = canvas.Canvas(buf, pagesize=A4)
+        width, height = A4
+        y = height - 72
+        for line in (content or "").splitlines() or [""]:
+            c.drawString(40, y, line[:110])
+            y -= 16
+            if y < 40:
+                c.showPage()
+                y = height - 72
+        c.showPage()
+        c.save()
+        pdf_bytes = buf.getvalue()
+        buf.close()
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename_base}.pdf"'}
+        )
+
+    raise HTTPException(status_code=400, detail="Formato non supportato. Usa md|txt|pdf.")
