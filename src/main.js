@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — COMPLETO (AI + capitoli)
+ * src/main.js — COMPLETO (AI integrata + fix libreria/chapters)
  * ========================================================= */
 
 import "./styles.css";
@@ -74,7 +74,10 @@ async function fetchBooks() {
       cache: "no-store",
       headers: { Accept: "application/json" },
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
+    }
     const data = await res.json();
     const items = Array.isArray(data) ? data : (data?.items || []);
     renderLibrary(items);
@@ -131,12 +134,15 @@ function showEditor(bookId) {
   $("#editor-card").style.display = "block";
   $("#bookIdInput").value = uiState.currentBookId;
 
+  // default per nuovo capitolo
   const chInput = $("#chapterIdInput");
   if (!chInput.value) chInput.value = "ch_0001";
 
+  // placeholder
   const ta = $("#chapterText");
   if (!ta.value) ta.value = "Scrivi qui il contenuto del capitolo…";
 
+  // carica lista capitoli del libro
   refreshChaptersList(uiState.currentBookId);
 }
 
@@ -144,22 +150,18 @@ function closeEditor() {
   $("#editor-card").style.display = "none";
 }
 
-/* Lista capitoli (sempre da /books, niente endpoint fantasma) */
+/* Lista capitoli — sempre da /books (robusto) */
 async function refreshChaptersList(bookId) {
   const list = $("#chapters-list");
   if (list) list.innerHTML = '<div class="muted">Carico capitoli…</div>';
 
   try {
-    const resBooks = await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`, {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    if (!resBooks.ok) throw new Error(`HTTP ${resBooks.status}`);
-    const all = await resBooks.json();
+    const r = await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const all = await r.json();
     const arr = Array.isArray(all) ? all : (all?.items || []);
-    const found = arr.find((x) => (x?.id || x?.book_id) === bookId);
-    const chapters = found?.chapters || [];
-    renderChaptersList(bookId, chapters);
+    const found = arr.find(x => (x?.id || x?.book_id) === bookId);
+    renderChaptersList(bookId, found?.chapters || []);
   } catch (e) {
     if (list) list.innerHTML = `<div class="error">Errore: ${e.message || e}</div>`;
   }
@@ -190,7 +192,7 @@ function renderChaptersList(bookId, chapters) {
         <div class="row-right">
           <button class="btn btn-secondary" data-ch-open="${escapeAttr(cid)}">Apri</button>
           <button class="btn btn-ghost" data-ch-del="${escapeAttr(cid)}">Elimina</button>
-          <a class="btn btn-ghost" href="${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(cid)}/md"  target="_blank" rel="noreferrer">MD</a>
+          <a class="btn btn-ghost" href="${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(cid)}/md" target="_blank" rel="noreferrer">MD</a>
           <a class="btn btn-ghost" href="${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(cid)}/txt" target="_blank" rel="noreferrer">TXT</a>
           <a class="btn btn-ghost" href="${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(cid)}/pdf" target="_blank" rel="noreferrer">PDF</a>
         </div>
@@ -200,19 +202,19 @@ function renderChaptersList(bookId, chapters) {
   });
 }
 
-/* Apri un capitolo */
+/* Apri un capitolo dalla lista */
 async function openChapter(bookId, chapterId) {
   try {
     const r = await fetch(
       `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?ts=${Date.now()}`,
-      { cache: "no-store", headers: { Accept: "application/json" } }
+      { cache: "no-store" }
     );
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
 
     $("#bookIdInput").value = bookId;
     $("#chapterIdInput").value = chapterId;
-    $("#chapterText").value = (data?.content ?? "");
+    $("#chapterText").value = data?.content || "";
   } catch (e) {
     toast("Impossibile aprire il capitolo: " + (e?.message || e));
   }
@@ -228,7 +230,7 @@ async function deleteChapter(bookId, chapterId) {
     );
     if (!r.ok && r.status !== 204) throw new Error(`HTTP ${r.status}`);
     toast("Capitolo eliminato.");
-    refreshChaptersList(bookId);
+    await refreshChaptersList(bookId);
   } catch (e) {
     toast("Errore eliminazione: " + (e?.message || e));
   }
@@ -240,26 +242,28 @@ async function saveCurrentChapter() {
   const chapterId = $("#chapterIdInput").value.trim();
   const content = $("#chapterText").value;
 
-  if (!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
+  if (!bookId || !chapterId) {
+    toast("Inserisci Book ID e Chapter ID.");
+    return;
+  }
 
   try {
     const r = await fetch(
       `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,
       {
         method: "PUT",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
       }
     );
     if (!r.ok) {
       const t = await r.text().catch(() => "");
-      throw new Error(`Salvataggio fallito (HTTP ${r.status})${t ? `\n\n${t}` : ""}`);
+      throw new Error(`HTTP ${r.status}${t ? `: ${t}` : ""}`);
     }
     toast("💾 Capitolo salvato.");
     await refreshChaptersList(bookId);
   } catch (e) {
-    toast(String(e?.message || e));
+    toast("Errore salvataggio: " + (e?.message || e));
   }
 }
 
@@ -269,29 +273,30 @@ async function generateWithAI() {
   const chapterId = $("#chapterIdInput").value.trim();
   const topic = $("#topicInput")?.value?.trim() || "";
 
-  if (!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
+  if (!bookId || !chapterId) {
+    toast("Inserisci Book ID e Chapter ID.");
+    return;
+  }
 
   try {
+    // 1) genera testo
     const r = await fetch(`${API_BASE_URL}/generate/chapter`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({
-        book_id: bookId,
-        chapter_id: chapterId,
-        topic,
-        prompt: topic,   // compat
-        language: "it",  // compat
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ book_id: bookId, chapter_id: chapterId, topic }),
     });
     if (!r.ok) {
       const t = await r.text().catch(() => "");
-      throw new Error(`AI fallita (HTTP ${r.status})${t ? `\n\n${t}` : ""}`);
+      throw new Error(`HTTP ${r.status}${t ? `: ${t}` : ""}`);
     }
     const data = await r.json();
-    $("#chapterText").value = data?.content || "";
-    await saveCurrentChapter(); // salva quello che l’AI ha scritto
+    $("#chapterText").value = data?.content || data?.text || "";
+
+    // 2) salva subito e ricarica lista
+    await saveCurrentChapter();
+    await refreshChaptersList(bookId);
   } catch (e) {
-    toast(String(e?.message || e));
+    toast("Errore AI: " + (e?.message || e));
   }
 }
 
@@ -330,7 +335,10 @@ async function createBookSimple() {
         chapters: [],
       }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ""}`);
+    }
     const data = await res.json();
     const newId = data?.book_id || data?.id || "";
     rememberLastBook(newId);
@@ -376,7 +384,7 @@ function wireButtons() {
   $("#btn-ed-save")?.addEventListener("click", saveCurrentChapter);
   $("#btn-ai-generate")?.addEventListener("click", generateWithAI);
 
-  // Elimina capitolo (pulsante dentro editor, per l’ID attuale)
+  // Elimina capitolo corrente (pulsante nell’editor)
   $("#btn-ed-delete")?.addEventListener("click", async () => {
     const bookId = $("#bookIdInput").value.trim();
     const chapterId = $("#chapterIdInput").value.trim();
@@ -384,7 +392,7 @@ function wireButtons() {
     await deleteChapter(bookId, chapterId);
   });
 
-  // Deleghe su lista LIBRI (Apri/Elimina/Modifica)
+  // Deleghe su lista LIBRI
   $("#library-list")?.addEventListener("click", async (ev) => {
     const btn = ev.target.closest("button[data-action]");
     if (!btn) return;
