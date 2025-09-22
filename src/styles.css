@@ -66,3 +66,8 @@ body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-ap
 .book-title{font-weight:700;margin-bottom:4px}
 .book-meta{color:var(--muted);font-size:14px}
 .book-id{font-family:ui-monospace, Menlo, Consolas, monospace;opacity:.85;margin-top:6px}
+
+#editor-toolbar, .row-right { 
+  justify-content: flex-start; 
+  gap: 8px; 
+}
