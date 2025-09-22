@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v2.4 (conteggio capitoli + autore in creazione)
+ * src/main.js — v2.4.1 (Bozza Libro + Nome artista)
  * ========================================================= */
 
 import "./styles.css";
@@ -24,8 +24,9 @@ const loadLastBook      = ()=>{ try{ return localStorage.getItem("last_book_id")
 const rememberLastLang = (lang)=>{ try{ localStorage.setItem("last_language", String(lang||"").toLowerCase()); }catch{} };
 const loadLastLang     = ()=>{ try{ return (localStorage.getItem("last_language")||"it").toLowerCase(); }catch{ return "it"; } };
 
-const rememberLastAuthor = (a)=>{ try{ localStorage.setItem("last_author", a||"EccomiBook"); }catch{} };
-const loadLastAuthor     = ()=>{ try{ return localStorage.getItem("last_author") || "EccomiBook"; }catch{ return "EccomiBook"; } };
+/* >>> cambiato default autore a "Nome artista" <<< */
+const rememberLastAuthor = (a)=>{ try{ localStorage.setItem("last_author", a||"Nome artista"); }catch{} };
+const loadLastAuthor     = ()=>{ try{ return localStorage.getItem("last_author") || "Nome artista"; }catch{ return "Nome artista"; } };
 
 /* UI state */
 const uiState = {
@@ -77,7 +78,6 @@ function renderLibrary(books){
     const title  = b?.title || "(senza titolo)";
     const author = b?.author || "—";
     const lang   = (b?.language || "it").toUpperCase();
-    // conteggio capitoli (compatibile con b.chapters o b.chapters_count)
     const chCount = Array.isArray(b?.chapters) ? b.chapters.length
                    : (typeof b?.chapters_count === "number" ? b.chapters_count : 0);
 
@@ -295,14 +295,14 @@ async function toggleLibrary(force){
 
 /* Azioni globali */
 async function createBookSimple(){
-  // 1) titolo
-  const title=prompt("Inserisci il titolo del libro:", "Manuale EccomiBook");
+  // 1) titolo —>>> default aggiornato
+  const title=prompt("Inserisci il titolo del libro:", "Bozza Libro");
   if(title==null) return;
 
-  // 2) autore (precompilato con ultimo usato)
-  let author = prompt("Inserisci il nome dell’autore:", loadLastAuthor())?.trim();
-  if(author==null) return;                 // se annulla, esce
-  author = author || loadLastAuthor();     // se vuoto, usa ultimo
+  // 2) autore —>>> prompt semplificato e default “Nome artista”
+  let author = prompt("Nome artista", loadLastAuthor())?.trim();
+  if(author==null) return;
+  author = author || loadLastAuthor();
   rememberLastAuthor(author);
 
   // 3) lingua (precompilata con ultima lingua)
@@ -328,14 +328,13 @@ async function deleteBook(bookId){
   if(!confirm("Eliminare il libro?")) return;
   try{
     const res=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}`,{method:"DELETE"});
-    if(!res.ok && res.status!==204) throw new Error(`HTTP ${res.status}`);
+    if(!res.ok && res.status!==204) throw new Error(`HTTP ${r.status}`);
     toast("🗑️ Libro eliminato."); await fetchBooks();
   }catch(e){ toast("Errore: "+(e?.message||e)); }
 }
 async function renameBook(bookId, oldTitle){
   const newTitle=prompt("Nuovo titolo libro:",oldTitle||"")?.trim();
   if(!newTitle || newTitle===oldTitle) return;
-  // TODO: endpoint rename lato backend
   toast("✏️ Titolo modificato (endpoint reale in arrivo).");
 }
 
@@ -356,7 +355,6 @@ function wireButtons(){
     if(!bookId||!chapterId) return toast("Inserisci Book ID e Chapter ID."); await deleteChapter(bookId,chapterId);
   });
 
-  // autosave “debounced”
   $("#chapterText")?.addEventListener("input",()=>{
     if(uiState.saveSoon) clearTimeout(uiState.saveSoon);
     uiState.saveSoon=setTimeout(maybeAutosaveNow,1500);
@@ -367,13 +365,11 @@ function wireButtons(){
     uiState.lastSavedSnapshot=$("#chapterText").value;
   });
 
-  // lingua input -> stato
   $("#languageInput")?.addEventListener("change",()=>{
     const v=$("#languageInput").value.trim().toLowerCase()||"it";
     uiState.currentLanguage=v; rememberLastLang(v);
   });
 
-  // Deleghe LIBRI
   $("#library-list")?.addEventListener("click",async(ev)=>{
     const btn=ev.target.closest("button[data-action]"); if(!btn) return;
     const action=btn.getAttribute("data-action"); const bookId=btn.getAttribute("data-bookid")||""; if(!bookId) return;
@@ -383,7 +379,6 @@ function wireButtons(){
     else if(action==="export"){ await exportBook(bookId); }
   });
 
-  // Deleghe CAPITOLI
   $("#chapters-list")?.addEventListener("click",async(ev)=>{
     const openBtn=ev.target.closest("[data-ch-open]"),
           editBtn=ev.target.closest("[data-ch-edit]"),
