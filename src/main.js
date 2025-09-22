@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v2.3 (lingua auto, nav capitoli, autosave, export)
+ * src/main.js — v2.4 (conteggio capitoli + autore in creazione)
  * ========================================================= */
 
 import "./styles.css";
@@ -23,6 +23,9 @@ const loadLastBook      = ()=>{ try{ return localStorage.getItem("last_book_id")
 
 const rememberLastLang = (lang)=>{ try{ localStorage.setItem("last_language", String(lang||"").toLowerCase()); }catch{} };
 const loadLastLang     = ()=>{ try{ return (localStorage.getItem("last_language")||"it").toLowerCase(); }catch{ return "it"; } };
+
+const rememberLastAuthor = (a)=>{ try{ localStorage.setItem("last_author", a||"EccomiBook"); }catch{} };
+const loadLastAuthor     = ()=>{ try{ return localStorage.getItem("last_author") || "EccomiBook"; }catch{ return "EccomiBook"; } };
 
 /* UI state */
 const uiState = {
@@ -61,23 +64,39 @@ async function fetchBooks(){
     const data=await res.json(); renderLibrary(Array.isArray(data)?data:(data?.items||[]));
   }catch(e){ if(box) box.innerHTML=`<div class="error">Errore: ${e.message||e}</div>`; }
 }
+
 function renderLibrary(books){
   const box=$("#library-list"); if(!box) return;
   if(!books?.length){ box.innerHTML=`<div class="muted">Nessun libro ancora. Crea il tuo primo libro con “Crea libro”.</div>`; return; }
   box.innerHTML="";
+
   const grid=document.createElement("div"); grid.className="library-grid"; box.appendChild(grid);
+
   books.forEach(b=>{
-    const id=b?.id||b?.book_id||"", title=b?.title||"(senza titolo)", author=b?.author||"—", lang=(b?.language||"it").toUpperCase();
-    const card=document.createElement("div"); card.className="book-card";
+    const id     = b?.id || b?.book_id || "";
+    const title  = b?.title || "(senza titolo)";
+    const author = b?.author || "—";
+    const lang   = (b?.language || "it").toUpperCase();
+    // conteggio capitoli (compatibile con b.chapters o b.chapters_count)
+    const chCount = Array.isArray(b?.chapters) ? b.chapters.length
+                   : (typeof b?.chapters_count === "number" ? b.chapters_count : 0);
+
+    const card=document.createElement("div");
+    card.className="book-card";
     card.innerHTML=`
       <div class="book-title">${escapeHtml(title)}</div>
       <div class="book-meta">Autore: ${escapeHtml(author)} — Lingua: ${escapeHtml(lang)}</div>
       <div class="book-id">${escapeHtml(id)}</div>
+
+      <div class="row-right" style="margin-top:8px;justify-content:flex-start;gap:8px;flex-wrap:wrap">
+        <span class="badge">Capitoli: ${chCount}</span>
+      </div>
+
       <div class="row-right" style="margin-top:10px;justify-content:flex-start;gap:8px">
-        <button class="btn btn-secondary" data-action="open" data-bookid="${escapeAttr(id)}">Apri</button>
-        <button class="btn btn-ghost" data-action="rename" data-bookid="${escapeAttr(id)}" data-oldtitle="${escapeAttr(title)}">Modifica</button>
-        <button class="btn btn-ghost" data-action="export" data-bookid="${escapeAttr(id)}">Scarica</button>
-        <button class="btn btn-ghost" data-action="delete" data-bookid="${escapeAttr(id)}">Elimina</button>
+        <button class="btn btn-secondary" data-action="open"    data-bookid="${escapeAttr(id)}">Apri</button>
+        <button class="btn btn-ghost"     data-action="rename"  data-bookid="${escapeAttr(id)}" data-oldtitle="${escapeAttr(title)}">Modifica</button>
+        <button class="btn btn-ghost"     data-action="export"  data-bookid="${escapeAttr(id)}">Scarica</button>
+        <button class="btn btn-ghost"     data-action="delete"  data-bookid="${escapeAttr(id)}">Elimina</button>
       </div>`;
     grid.appendChild(card);
   });
@@ -94,7 +113,7 @@ async function showEditor(bookId){
   const ta=$("#chapterText"); if(!ta.value) ta.value="Scrivi qui il contenuto del capitolo…";
   uiState.currentChapterId=ch.value.trim(); uiState.lastSavedSnapshot=ta.value;
 
-  await loadBookLanguage(uiState.currentBookId);   // carica lingua del libro e popola #languageInput
+  await loadBookLanguage(uiState.currentBookId);
   refreshChaptersList(uiState.currentBookId).then(()=>{
     if(uiState.chapters.some(c=>c.id===uiState.currentChapterId)) openChapter(uiState.currentBookId, uiState.currentChapterId);
   });
@@ -218,7 +237,6 @@ async function generateWithAI(){
   const language = ($("#languageInput")?.value?.trim().toLowerCase()||uiState.currentLanguage||"it");
   if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
 
-  // sincronizza allo stato + salva preferenza
   uiState.currentLanguage = language;
   rememberLastLang(language);
 
@@ -277,23 +295,35 @@ async function toggleLibrary(force){
 
 /* Azioni globali */
 async function createBookSimple(){
-  const title=prompt("Titolo del libro:","Manuale EccomiBook"); if(title==null) return;
+  // 1) titolo
+  const title=prompt("Inserisci il titolo del libro:", "Manuale EccomiBook");
+  if(title==null) return;
+
+  // 2) autore (precompilato con ultimo usato)
+  let author = prompt("Inserisci il nome dell’autore:", loadLastAuthor())?.trim();
+  if(author==null) return;                 // se annulla, esce
+  author = author || loadLastAuthor();     // se vuoto, usa ultimo
+  rememberLastAuthor(author);
+
+  // 3) lingua (precompilata con ultima lingua)
   let defaultLang = loadLastLang();
   let language=prompt("Lingua (es. it, en, es, fr…):", defaultLang)?.trim().toLowerCase()||defaultLang||"it";
   language=language.replace(/[^a-z-]/gi,"").slice(0,10)||"it";
+  rememberLastLang(language);
+
   try{
     const res=await fetch(`${API_BASE_URL}/books/create`,{
       method:"POST", headers:{ "Content-Type":"application/json" }, cache:"no-store",
-      body:JSON.stringify({ title:(title.trim()||"Senza titolo"), author:"EccomiBook", language, chapters:[] }),
+      body:JSON.stringify({ title:(title.trim()||"Senza titolo"), author, language, chapters:[] }),
     });
     if(!res.ok){ const txt=await res.text().catch(()=> ""); throw new Error(`HTTP ${res.status}${txt?`: ${txt}`:""}`); }
     const data=await res.json();
     rememberLastBook(data?.book_id||data?.id||"");
-    rememberLastLang(language);
-    toast(`✅ Libro creato (${language.toUpperCase()})!`);
+    toast(`✅ Libro creato (${language.toUpperCase()}) — Autore: ${author}`);
     await toggleLibrary(true); await fetchBooks(); setTimeout(fetchBooks,300);
   }catch(e){ toast("Errore di rete: "+(e?.message||e)); }
 }
+
 async function deleteBook(bookId){
   if(!confirm("Eliminare il libro?")) return;
   try{
@@ -305,6 +335,7 @@ async function deleteBook(bookId){
 async function renameBook(bookId, oldTitle){
   const newTitle=prompt("Nuovo titolo libro:",oldTitle||"")?.trim();
   if(!newTitle || newTitle===oldTitle) return;
+  // TODO: endpoint rename lato backend
   toast("✏️ Titolo modificato (endpoint reale in arrivo).");
 }
 
@@ -325,7 +356,7 @@ function wireButtons(){
     if(!bookId||!chapterId) return toast("Inserisci Book ID e Chapter ID."); await deleteChapter(bookId,chapterId);
   });
 
-  // autosave “debounced” mentre scrivi
+  // autosave “debounced”
   $("#chapterText")?.addEventListener("input",()=>{
     if(uiState.saveSoon) clearTimeout(uiState.saveSoon);
     uiState.saveSoon=setTimeout(maybeAutosaveNow,1500);
@@ -336,7 +367,7 @@ function wireButtons(){
     uiState.lastSavedSnapshot=$("#chapterText").value;
   });
 
-  // sincronizza lingua input → stato + localStorage
+  // lingua input -> stato
   $("#languageInput")?.addEventListener("change",()=>{
     const v=$("#languageInput").value.trim().toLowerCase()||"it";
     uiState.currentLanguage=v; rememberLastLang(v);
