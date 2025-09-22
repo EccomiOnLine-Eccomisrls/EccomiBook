@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — COMPLETO (AI integrata)
+ * src/main.js — COMPLETO (AI + capitoli)
  * ========================================================= */
 
 import "./styles.css";
@@ -131,15 +131,12 @@ function showEditor(bookId) {
   $("#editor-card").style.display = "block";
   $("#bookIdInput").value = uiState.currentBookId;
 
-  // default per nuovo capitolo
   const chInput = $("#chapterIdInput");
   if (!chInput.value) chInput.value = "ch_0001";
 
-  // pulizia placeholder
   const ta = $("#chapterText");
   if (!ta.value) ta.value = "Scrivi qui il contenuto del capitolo…";
 
-  // carica lista capitoli
   refreshChaptersList(uiState.currentBookId);
 }
 
@@ -147,33 +144,22 @@ function closeEditor() {
   $("#editor-card").style.display = "none";
 }
 
-/* Lista capitoli */
+/* Lista capitoli (sempre da /books, niente endpoint fantasma) */
 async function refreshChaptersList(bookId) {
   const list = $("#chapters-list");
   if (list) list.innerHTML = '<div class="muted">Carico capitoli…</div>';
 
   try {
-    // preferito: endpoint dedicato; in alternativa ricadi su /books e prendi .chapters
-    let chapters = [];
-
-    const r = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters?ts=${Date.now()}`, {
+    const resBooks = await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`, {
       cache: "no-store",
+      headers: { Accept: "application/json" },
     });
-
-    if (r.ok) {
-      chapters = await r.json();
-    } else {
-      // fallback: prendo i libri e cerco quello giusto
-      const resBooks = await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`, { cache: "no-store" });
-      if (resBooks.ok) {
-        const all = await resBooks.json();
-        const arr = Array.isArray(all) ? all : (all?.items || []);
-        const found = arr.find((x) => (x?.id || x?.book_id) === bookId);
-        chapters = found?.chapters || [];
-      }
-    }
-
-    renderChaptersList(bookId, chapters || []);
+    if (!resBooks.ok) throw new Error(`HTTP ${resBooks.status}`);
+    const all = await resBooks.json();
+    const arr = Array.isArray(all) ? all : (all?.items || []);
+    const found = arr.find((x) => (x?.id || x?.book_id) === bookId);
+    const chapters = found?.chapters || [];
+    renderChaptersList(bookId, chapters);
   } catch (e) {
     if (list) list.innerHTML = `<div class="error">Errore: ${e.message || e}</div>`;
   }
@@ -204,7 +190,7 @@ function renderChaptersList(bookId, chapters) {
         <div class="row-right">
           <button class="btn btn-secondary" data-ch-open="${escapeAttr(cid)}">Apri</button>
           <button class="btn btn-ghost" data-ch-del="${escapeAttr(cid)}">Elimina</button>
-          <a class="btn btn-ghost" href="${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(cid)}/md" target="_blank" rel="noreferrer">MD</a>
+          <a class="btn btn-ghost" href="${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(cid)}/md"  target="_blank" rel="noreferrer">MD</a>
           <a class="btn btn-ghost" href="${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(cid)}/txt" target="_blank" rel="noreferrer">TXT</a>
           <a class="btn btn-ghost" href="${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(cid)}/pdf" target="_blank" rel="noreferrer">PDF</a>
         </div>
@@ -214,19 +200,19 @@ function renderChaptersList(bookId, chapters) {
   });
 }
 
-/* Apri un capitolo dalla lista */
+/* Apri un capitolo */
 async function openChapter(bookId, chapterId) {
   try {
     const r = await fetch(
       `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?ts=${Date.now()}`,
-      { cache: "no-store" }
+      { cache: "no-store", headers: { Accept: "application/json" } }
     );
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
 
     $("#bookIdInput").value = bookId;
     $("#chapterIdInput").value = chapterId;
-    $("#chapterText").value = data?.content || "";
+    $("#chapterText").value = (data?.content ?? "");
   } catch (e) {
     toast("Impossibile aprire il capitolo: " + (e?.message || e));
   }
@@ -254,28 +240,26 @@ async function saveCurrentChapter() {
   const chapterId = $("#chapterIdInput").value.trim();
   const content = $("#chapterText").value;
 
-  if (!bookId || !chapterId) {
-    toast("Inserisci Book ID e Chapter ID.");
-    return;
-  }
+  if (!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
 
   try {
     const r = await fetch(
       `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,
       {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ content }),
       }
     );
     if (!r.ok) {
       const t = await r.text().catch(() => "");
-      throw new Error(`HTTP ${r.status}${t ? `: ${t}` : ""}`);
+      throw new Error(`Salvataggio fallito (HTTP ${r.status})${t ? `\n\n${t}` : ""}`);
     }
     toast("💾 Capitolo salvato.");
-    refreshChaptersList(bookId);
+    await refreshChaptersList(bookId);
   } catch (e) {
-    toast("Errore salvataggio: " + (e?.message || e));
+    toast(String(e?.message || e));
   }
 }
 
@@ -285,29 +269,29 @@ async function generateWithAI() {
   const chapterId = $("#chapterIdInput").value.trim();
   const topic = $("#topicInput")?.value?.trim() || "";
 
-  if (!bookId || !chapterId) {
-    toast("Inserisci Book ID e Chapter ID.");
-    return;
-  }
+  if (!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
 
   try {
-    // 1) genera testo
     const r = await fetch(`${API_BASE_URL}/generate/chapter`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ book_id: bookId, chapter_id: chapterId, topic }),
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        book_id: bookId,
+        chapter_id: chapterId,
+        topic,
+        prompt: topic,   // compat
+        language: "it",  // compat
+      }),
     });
     if (!r.ok) {
       const t = await r.text().catch(() => "");
-      throw new Error(`HTTP ${r.status}${t ? `: ${t}` : ""}`);
+      throw new Error(`AI fallita (HTTP ${r.status})${t ? `\n\n${t}` : ""}`);
     }
     const data = await r.json();
     $("#chapterText").value = data?.content || "";
-
-    // 2) salva subito (opzionale ma comodo)
-    await saveCurrentChapter();
+    await saveCurrentChapter(); // salva quello che l’AI ha scritto
   } catch (e) {
-    toast("Errore AI: " + (e?.message || e));
+    toast(String(e?.message || e));
   }
 }
 
