@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v2.9 (Hero CTA + Status LED)
+ * src/main.js — v3.0 (Hero CTA + Status LED con auto-refresh)
  * ========================================================= */
 
 import "./styles.css";
@@ -40,7 +40,7 @@ const uiState = {
   saveSoon: null,
 };
 
-/* ISO → dd/mm/yyyy hh:mm */
+/* Date utils */
 const fmtLast = (iso)=>{
   if(!iso) return "";
   const d = new Date(iso);
@@ -48,7 +48,6 @@ const fmtLast = (iso)=>{
   const pad = n=>String(n).padStart(2,"0");
   return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-/* HH:MM */
 const fmtHHMM = (d=new Date())=>{
   const pad=n=>String(n).padStart(2,"0");
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -77,8 +76,8 @@ function renderStatus({mode,title,sub}){
   const el=$("#backend-status"); if(!el) return;
   const ledClass = mode==="ok" ? "led--ok" : mode==="warn" ? "led--warn" : "led--ko";
   el.innerHTML = `
-    <div class="statusbox">
-      <span class="statusbox__led ${ledClass}"></span>
+    <div class="statusbox" role="status" aria-live="polite">
+      <span class="statusbox__led ${ledClass}" aria-hidden="true"></span>
       <div class="statusbox__text">
         <span class="statusbox__title">${escapeHtml(title)}</span>
         <span class="statusbox__sub">${escapeHtml(sub)}</span>
@@ -153,7 +152,7 @@ function renderLibrary(books){
 
       <div class="row-right" style="margin-top:8px;justify-content:flex-start;gap:8px;flex-wrap:wrap">
         <span class="badge ${chBadgeClass}">📄 Capitoli: ${chCount}</span>
-        <span class="badge badge-neutral" title="${escapeAttr(getLastUpdated(b) || '—')}">
+        <span class="badge badge-neutral" title="${escapeAttr(lastUpdated || '—')}">
           🕑 Ultima mod.: ${escapeHtml(fmtLast(lastUpdated) || "—")}
         </span>
       </div>
@@ -490,7 +489,7 @@ async function deleteBook(bookId){
   if(!confirm("Eliminare il libro?")) return;
   try{
     const res=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}`,{method:"DELETE"});
-    if(!res.ok && res.status!==204) throw new Error(`HTTP ${res.status}`);
+    if(!res.ok && r.status!==204) throw new Error(`HTTP ${res.status}`);
     toast("🗑️ Libro eliminato.");
     await fetchBooks();
     syncEditorButtonState();
@@ -509,7 +508,7 @@ function wireButtons(){
   $("#btn-create-book")?.addEventListener("click",()=>{ setHeroActive("create"); createBookSimple(); });
   $("#btn-library")?.addEventListener("click",()=>toggleLibrary(true));
   $("#btn-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
-  
+
   $("#btn-ed-close")?.addEventListener("click",closeEditor);
   $("#btn-ed-save")?.addEventListener("click",()=>saveCurrentChapter(true));
   $("#btn-ai-generate")?.addEventListener("click",generateWithAI);
@@ -566,7 +565,8 @@ function wireButtons(){
 /* Init */
 document.addEventListener("DOMContentLoaded", async ()=>{
   wireButtons();
-  await pingBackend();
+  await pingBackend();               // primo check
+  setInterval(pingBackend, 60_000);  // refresh ogni 60s
   syncEditorButtonState();
   await toggleLibrary(true);
 });
