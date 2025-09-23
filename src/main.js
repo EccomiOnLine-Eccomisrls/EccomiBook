@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v3.2 (LED + datalist per Book/Chapter + topic memo)
+ * src/main.js — v3.3 (toggle Libreria + datalist robusti + next ch hint)
  * ========================================================= */
 
 import "./styles.css";
@@ -20,10 +20,8 @@ const toast = (m)=>alert(m);
 
 const rememberLastBook   = (id)=>{ try{ localStorage.setItem("last_book_id", id||""); }catch{} };
 const loadLastBook       = ()=>{ try{ return localStorage.getItem("last_book_id")||""; }catch{ return ""; } };
-
 const rememberLastLang   = (lang)=>{ try{ localStorage.setItem("last_language", String(lang||"").toLowerCase()); }catch{} };
 const loadLastLang       = ()=>{ try{ return (localStorage.getItem("last_language")||"it").toLowerCase(); }catch{ return "it"; } };
-
 const rememberLastAuthor = (a)=>{ try{ localStorage.setItem("last_author", a||"Nome artista"); }catch{} };
 const loadLastAuthor     = ()=>{ try{ return localStorage.getItem("last_author") || "Nome artista"; }catch{ return "Nome artista"; } };
 
@@ -123,6 +121,22 @@ function nextChapterId(existing=[]) {
   const n = String(max+1).padStart(4,"0");
   return `ch_${n}`;
 }
+function updateNextHint(){
+  const hint=$("#nextChHint"); if(!hint) return;
+  const nid = nextChapterId(uiState.chapters||[]);
+  hint.textContent = nid || "—";
+  hint.title = "Prossimo ID suggerito";
+}
+
+/* Piccolo trucco per mostrare tutto il datalist su focus (utile su Safari) */
+function showAllOnFocus(input){
+  if(!input) return;
+  input.addEventListener("focus", ()=>{
+    const v=input.value;
+    input.value = v;            // re-trigger
+    input.dispatchEvent(new Event("input",{bubbles:true}));
+  });
+}
 
 /* Libreria */
 async function fetchBooks(){
@@ -133,8 +147,12 @@ async function fetchBooks(){
     const data=await res.json();
     const items = Array.isArray(data)?data:(data?.items||[]);
     renderLibrary(items);
-    populateBooksDatalist(items); // <— riempi datalist libri
-  }catch(e){ if(box) box.innerHTML=`<div class="error">Errore: ${e.message||e}</div>`; }
+    populateBooksDatalist(items);
+    return items;
+  }catch(e){
+    if(box) box.innerHTML=`<div class="error">Errore: ${e.message||e}</div>`;
+    return [];
+  }
 }
 
 function renderLibrary(books){
@@ -195,6 +213,9 @@ function renderLibrary(books){
 
 /* Editor / Capitoli */
 async function showEditor(bookId){
+  // assicura datalist libri sempre pieni
+  if (!$("#books-dl")?.options?.length) { await fetchBooks(); }
+
   uiState.currentBookId = bookId || loadLastBook() || "";
   if(!uiState.currentBookId) return;
   rememberLastBook(uiState.currentBookId);
@@ -252,8 +273,9 @@ async function refreshChaptersList(bookId){
       path: c?.path || ""
     }));
 
-    populateChaptersDatalist(uiState.chapters); // <— riempi datalist capitoli
+    populateChaptersDatalist(uiState.chapters);
     renderChaptersList(bookId, uiState.chapters);
+    updateNextHint(); // aggiorna il pill “prossimo capitolo”
   }catch(e){
     if(list) list.innerHTML=`<div class="error">Errore: ${escapeHtml(e?.message||String(e))}</div>`;
   }
@@ -462,7 +484,7 @@ async function exportBook(bookId){
   }
 }
 
-/* Libreria: toggle */
+/* Libreria: toggle (apri/chiudi con stesso bottone) */
 async function toggleLibrary(force){
   const lib=$("#library-section"); if(!lib) return;
   uiState.libraryVisible=(typeof force==="boolean")?force:!uiState.libraryVisible;
@@ -470,8 +492,8 @@ async function toggleLibrary(force){
   if(uiState.libraryVisible){
     await fetchBooks();
     setHeroActive("library");
-    syncEditorButtonState();
   }
+  syncEditorButtonState();
 }
 
 /* Azioni globali */
@@ -529,7 +551,7 @@ async function renameBook(bookId, oldTitle){
 /* Wiring */
 function wireButtons(){
   $("#btn-create-book")?.addEventListener("click",()=>{ setHeroActive("create"); createBookSimple(); });
-  $("#btn-library")?.addEventListener("click",()=>toggleLibrary(true));
+  $("#btn-library")?.addEventListener("click",()=>toggleLibrary()); // <— TOGGLE
   $("#btn-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
 
   $("#btn-ed-close")?.addEventListener("click",closeEditor);
@@ -541,7 +563,7 @@ function wireButtons(){
     await deleteChapter(bookId,chapterId);
   });
 
-  // Book ID change → ricarica capitoli
+  // Book ID change → ricarica capitoli e hint
   $("#bookIdInput")?.addEventListener("change", async ()=>{
     const bid = $("#bookIdInput").value.trim();
     if(!bid) return;
@@ -549,6 +571,12 @@ function wireButtons(){
     uiState.currentBookId = bid;
     await loadBookMeta(bid);
     await refreshChaptersList(bid);
+    // propone subito il prossimo capitolo se l'input era vuoto
+    if(!$("#chapterIdInput").value){
+      const nid = nextChapterId(uiState.chapters||[]);
+      $("#chapterIdInput").value = nid;
+      uiState.currentChapterId = nid;
+    }
     syncEditorButtonState();
   });
 
@@ -563,6 +591,7 @@ function wireButtons(){
     } else {
       uiState.currentChapterId = v;
     }
+    updateNextHint();
   });
 
   // Topic memo
@@ -571,6 +600,10 @@ function wireButtons(){
   $("#topicInput")?.addEventListener("change", ()=>{
     try{ localStorage.setItem("last_topic", $("#topicInput").value || ""); }catch{}
   });
+
+  // “Mostra tutto” sui datalist quando vai in focus
+  showAllOnFocus($("#bookIdInput"));
+  showAllOnFocus($("#chapterIdInput"));
 
   $("#chapterText")?.addEventListener("input",()=>{
     if(uiState.saveSoon) clearTimeout(uiState.saveSoon);
@@ -614,7 +647,8 @@ function wireButtons(){
 document.addEventListener("DOMContentLoaded", async ()=>{
   wireButtons();
   await pingBackend();
-  setInterval(pingBackend, 60_000);  // auto-refresh LED ogni 60s
+  setInterval(pingBackend, 60_000);
   syncEditorButtonState();
   await toggleLibrary(true);
+  updateNextHint();
 });
