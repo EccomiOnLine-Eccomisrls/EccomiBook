@@ -52,7 +52,7 @@ body{
 .statusbox__title{font-weight:700;font-size:14px}
 .statusbox__sub{opacity:.85;font-size:12px;margin-top:2px}
 
-/* Buttons (legacy) */
+/* Buttons legacy */
 .btn{
   border:1px solid transparent;border-radius:10px;padding:8px 12px;cursor:pointer;
   font-size:15px; line-height:1.2; min-height:40px;
@@ -65,6 +65,14 @@ body{
 .btn-primary{background:var(--primary);color:#fff}
 .btn-secondary{background:#1f2b3c;color:#e7f0ff;border:1px solid #2b3a53}
 .btn-ghost{background:transparent;color:#e7f0ff;border:1px solid #2b3a53}
+
+/* Icon button (per liste ▼ e +) */
+.iconbtn{
+  border:1px solid #2b3a53;background:#142035;color:#e7f0ff;
+  border-radius:10px; padding:8px 10px; min-width:40px; min-height:40px; cursor:pointer;
+}
+.iconbtn:hover{filter:brightness(1.06)}
+.input-row{display:flex;gap:8px;align-items:center}
 
 /* Layout base */
 .container{max-width:980px;margin:40px auto;padding:0 20px}
@@ -83,7 +91,7 @@ body{
   width:100%;margin-top:4px;padding:10px;border-radius:10px;border:1px solid #273753;background:#0c1522;color:var(--text)
 }
 
-/* Stile input con datalist → aspetto da select */
+/* Datalist look-like */
 input[list]{
   padding-right:36px;
   background-image:
@@ -92,27 +100,27 @@ input[list]{
   background-repeat:no-repeat,no-repeat;
   background-position:right 12px center, right 12px center;
   background-size:16px 10px,10px 6px;
-  cursor:text;
 }
 
-/* Piccolo pill suggerimento */
+/* Hint pill */
 .inline-hint{
   display:inline-flex; align-items:center; justify-content:center;
   padding:8px 12px; border-radius:10px; background:#1a2740; color:#cfd9eb;
-  border:1px solid #2b3a53; font-size:14px; min-height:40px;
+  border:1px solid #2b3a53; font-size:14px; min-height:40px; white-space:nowrap;
 }
 
-/* Helpers */
-.row-right{display:flex;justify-content:flex-start;gap:8px;margin-top:10px}
-
-/* Badges */
-.badge{ border-radius:10px; padding:2px 8px; font-size:12px; display:inline-flex; align-items:center; gap:6px; }
-.badge-ok{ background:rgba(0,180,90,.15); border:1px solid rgba(0,180,90,.35) }
-.badge-empty{ background:rgba(160,160,160,.12); border:1px solid rgba(160,160,160,.35) }
-.badge-neutral{ background:rgba(70,120,255,.12); border:1px solid rgba(70,120,255,.35) }
-
-/* Anteprima capitolo nascosta */
-.book-preview{ display:none !important; }
+/* Dropdown custom */
+.dropdown{
+  position:absolute; z-index:99; min-width:280px; max-width:520px; max-height:260px; overflow:auto;
+  background:#0d1726; border:1px solid #243454; border-radius:12px;
+  box-shadow:0 10px 26px rgba(0,0,0,.35); padding:6px;
+}
+.dropdown-item{
+  padding:8px 10px; border-radius:8px; cursor:pointer;
+  display:flex; gap:8px; align-items:center; font-size:14px;
+}
+.dropdown-item:hover{ background:#17243b; }
+.dropdown-item small{ opacity:.75 }
 
 /* Footer */
 .footer{opacity:.75;text-align:center;font-size:13px;margin:48px 0}
@@ -120,7 +128,6 @@ input[list]{
 /* Libreria */
 .library-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 @media (max-width:760px){ .library-grid{grid-template-columns:1fr;} }
-
 .book-card{
   background:linear-gradient(180deg,#101a28,#0f1827);
   border:1px solid #22324a;border-radius:14px;padding:16px;
