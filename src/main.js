@@ -174,7 +174,8 @@ async function loadBookMeta(bookId){
     uiState.currentLanguage = loadLastLang() || "it";
     uiState.currentBookTitle = "";
   }
-  $("#languageInput")?.value = uiState.currentLanguage;
+  const langEl = $("#languageInput");
+  if (langEl) langEl.value = uiState.currentLanguage;
   rememberLastLang(uiState.currentLanguage);
 }
 
