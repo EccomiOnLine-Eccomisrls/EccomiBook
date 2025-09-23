@@ -49,7 +49,28 @@ body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-ap
 }
 
 .row-right{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
-.badge{padding:4px 8px;border-radius:999px;border:1px solid #2b3a53;font-size:12px}
+
+/* ====== Badges dashboard ====== */
+.badge { 
+  border-radius: 10px; 
+  padding: 2px 8px; 
+  font-size: 12px; 
+  display:inline-flex; 
+  align-items:center; 
+  gap:6px; 
+}
+.badge-ok { background: rgba(0, 180, 90, 0.15); border: 1px solid rgba(0,180,90,0.35); }
+.badge-empty { background: rgba(160, 160, 160, 0.12); border: 1px solid rgba(160,160,160,0.35); }
+.badge-neutral { background: rgba(70, 120, 255, 0.12); border: 1px solid rgba(70,120,255,0.35); }
+
+/* Preview riga sotto le badge */
+.book-preview { 
+  margin-top: 6px; 
+  font-size: 12.5px; 
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+}
 
 .footer{opacity:.7;text-align:center;font-size:13px;margin:48px 0}
 
@@ -71,38 +92,12 @@ body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-ap
   justify-content: flex-start; 
   gap: 8px; 
 }
-/* ─ Capiretti: layout mobile-friendly per i bottoni ─ */
-.chapter-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
 
-.chapter-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.chapter-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-start; /* pulsanti a sinistra */
-}
-
-/* Bottoni un filo più compatti nei capitoli */
-.chapter-actions .btn {
-  padding: 6px 10px;
-  font-size: 14px;
-}
-
-/* Mobile: info su più righe, bottoni sempre sotto */
+/* Capitoli layout mobile-friendly */
+.chapter-row { display: flex; flex-direction: column; gap: 8px; }
+.chapter-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.chapter-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
+.chapter-actions .btn { padding: 6px 10px; font-size: 14px; }
 @media (max-width: 760px) {
-  .chapter-head {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
+  .chapter-head { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
