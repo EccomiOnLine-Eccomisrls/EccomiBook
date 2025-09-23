@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v3.0 (Hero CTA + Status LED con auto-refresh)
+ * src/main.js — v3.2 (LED + datalist per Book/Chapter + topic memo)
  * ========================================================= */
 
 import "./styles.css";
@@ -53,13 +53,9 @@ const fmtHHMM = (d=new Date())=>{
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-/* ---- UI Hero helpers ---- */
-function setHeroActive(which){ // "create" | "library" | "editor" | null
-  const map = {
-    create:  $("#btn-create-book"),
-    library: $("#btn-library"),
-    editor:  $("#btn-editor"),
-  };
+/* HERO helpers */
+function setHeroActive(which){
+  const map = { create:$("#btn-create-book"), library:$("#btn-library"), editor:$("#btn-editor") };
   Object.values(map).forEach(btn => btn && btn.classList.remove("is-active"));
   if (which && map[which]) map[which].classList.add("is-active");
 }
@@ -71,7 +67,7 @@ function syncEditorButtonState(){
   editorBtn.classList.toggle("is-disabled", !hasBook);
 }
 
-/* ===== Status LED handling ===== */
+/* ======== Status LED ======== */
 function renderStatus({mode,title,sub}){
   const el=$("#backend-status"); if(!el) return;
   const ledClass = mode==="ok" ? "led--ok" : mode==="warn" ? "led--warn" : "led--ko";
@@ -82,11 +78,8 @@ function renderStatus({mode,title,sub}){
         <span class="statusbox__title">${escapeHtml(title)}</span>
         <span class="statusbox__sub">${escapeHtml(sub)}</span>
       </div>
-    </div>
-  `;
+    </div>`;
 }
-
-/* Ping backend */
 async function pingBackend(){
   renderStatus({mode:"warn", title:"EccomiBook Live", sub:"Verifica in corso…"});
   try{
@@ -101,13 +94,46 @@ async function pingBackend(){
   }
 }
 
+/* ======== Datalist helpers ======== */
+function populateBooksDatalist(books=[]) {
+  const dl = $("#books-dl"); if(!dl) return;
+  dl.innerHTML = books.map(b=>{
+    const id = b?.id || b?.book_id || "";
+    const t  = (b?.title || "").trim();
+    const a  = (b?.author || "").trim();
+    return `<option value="${escapeAttr(id)}">${escapeHtml(t)}${a?` — ${escapeHtml(a)}`:""}</option>`;
+  }).join("");
+}
+function populateChaptersDatalist(chapters=[]) {
+  const dl = $("#chapters-dl"); if(!dl) return;
+  const opts = chapters.map(c=>{
+    const id = c?.id || "";
+    const title = (c?.title || "").trim();
+    return `<option value="${escapeAttr(id)}">${escapeHtml(title||id)}</option>`;
+  });
+  dl.innerHTML = opts.join("") + `<option value="(Nuovo capitolo…)">— Nuovo capitolo —</option>`;
+}
+function nextChapterId(existing=[]) {
+  const nums = existing
+    .map(c=>String(c.id||""))
+    .map(id => (id.match(/ch_(\d{4})$/)?.[1]) )
+    .filter(Boolean)
+    .map(n=>parseInt(n,10));
+  const max = nums.length ? Math.max(...nums) : 0;
+  const n = String(max+1).padStart(4,"0");
+  return `ch_${n}`;
+}
+
 /* Libreria */
 async function fetchBooks(){
   const box=$("#library-list"); if(box) box.innerHTML='<div class="muted">Carico libreria…</div>';
   try{
     const res=await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`,{cache:"no-store",headers:{Accept:"application/json"}});
     if(!res.ok){const t=await res.text().catch(()=> ""); throw new Error(`HTTP ${res.status}${t?`: ${t}`:""}`);}
-    const data=await res.json(); renderLibrary(Array.isArray(data)?data:(data?.items||[]));
+    const data=await res.json();
+    const items = Array.isArray(data)?data:(data?.items||[]);
+    renderLibrary(items);
+    populateBooksDatalist(items); // <— riempi datalist libri
   }catch(e){ if(box) box.innerHTML=`<div class="error">Errore: ${e.message||e}</div>`; }
 }
 
@@ -181,18 +207,14 @@ async function showEditor(bookId){
   uiState.lastSavedSnapshot=ta.value;
 
   await loadBookMeta(uiState.currentBookId);
-  refreshChaptersList(uiState.currentBookId).then(()=>{
-    if(uiState.chapters.some(c=>c.id===uiState.currentChapterId)){
-      openChapter(uiState.currentBookId, uiState.currentChapterId);
-    }
-  });
+  await refreshChaptersList(uiState.currentBookId);
   startAutosave();
   setHeroActive("editor");
   syncEditorButtonState();
 }
 function closeEditor(){ stopAutosave(); $("#editor-card").style.display="none"; }
 
-/* Metadati libro corrente (lingua + titolo) */
+/* Metadati libro corrente */
 async function loadBookMeta(bookId){
   try{
     const r=await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`,{cache:"no-store"});
@@ -211,7 +233,7 @@ async function loadBookMeta(bookId){
   rememberLastLang(uiState.currentLanguage);
 }
 
-/* elenco capitoli */
+/* Elenco capitoli */
 async function refreshChaptersList(bookId){
   const list=$("#chapters-list");
   if(list) list.innerHTML='<div class="muted">Carico capitoli…</div>';
@@ -229,12 +251,13 @@ async function refreshChaptersList(bookId){
       updated_at: c?.updated_at || "",
       path: c?.path || ""
     }));
+
+    populateChaptersDatalist(uiState.chapters); // <— riempi datalist capitoli
     renderChaptersList(bookId, uiState.chapters);
   }catch(e){
     if(list) list.innerHTML=`<div class="error">Errore: ${escapeHtml(e?.message||String(e))}</div>`;
   }
 }
-
 function renderChaptersList(bookId, chapters){
   const list=$("#chapters-list");
   if(!list) return;
@@ -317,8 +340,8 @@ async function openChapter(bookId, chapterId){
 async function deleteChapter(bookId, chapterId){
   if(!confirm(`Eliminare il capitolo ${chapterId}?`)) return;
   try{
-    const r=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,{method:"DELETE"});
-    if(!r.ok && r.status!==204) throw new Error(`HTTP ${r.status}`);
+    const res=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,{method:"DELETE"});
+    if(!res.ok && res.status!==204) throw new Error(`HTTP ${res.status}`);
     toast("🗑️ Capitolo eliminato.");
     await refreshChaptersList(bookId);
     if(uiState.currentChapterId===chapterId){
@@ -489,7 +512,7 @@ async function deleteBook(bookId){
   if(!confirm("Eliminare il libro?")) return;
   try{
     const res=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}`,{method:"DELETE"});
-    if(!res.ok && r.status!==204) throw new Error(`HTTP ${res.status}`);
+    if(!res.ok && res.status!==204) throw new Error(`HTTP ${res.status}`);
     toast("🗑️ Libro eliminato.");
     await fetchBooks();
     syncEditorButtonState();
@@ -518,16 +541,41 @@ function wireButtons(){
     await deleteChapter(bookId,chapterId);
   });
 
+  // Book ID change → ricarica capitoli
+  $("#bookIdInput")?.addEventListener("change", async ()=>{
+    const bid = $("#bookIdInput").value.trim();
+    if(!bid) return;
+    rememberLastBook(bid);
+    uiState.currentBookId = bid;
+    await loadBookMeta(bid);
+    await refreshChaptersList(bid);
+    syncEditorButtonState();
+  });
+
+  // Chapter ID → “Nuovo capitolo…”
+  $("#chapterIdInput")?.addEventListener("change", ()=>{
+    const v = $("#chapterIdInput").value.trim();
+    if(v === "(Nuovo capitolo…)"){
+      const nid = nextChapterId(uiState.chapters||[]);
+      $("#chapterIdInput").value = nid;
+      uiState.currentChapterId = nid;
+      $("#chapterText").focus();
+    } else {
+      uiState.currentChapterId = v;
+    }
+  });
+
+  // Topic memo
+  const lastTopic = localStorage.getItem("last_topic") || "";
+  if(lastTopic && $("#topicInput") && !$("#topicInput").value) $("#topicInput").value = lastTopic;
+  $("#topicInput")?.addEventListener("change", ()=>{
+    try{ localStorage.setItem("last_topic", $("#topicInput").value || ""); }catch{}
+  });
+
   $("#chapterText")?.addEventListener("input",()=>{
     if(uiState.saveSoon) clearTimeout(uiState.saveSoon);
     uiState.saveSoon=setTimeout(maybeAutosaveNow,1500);
   });
-  $("#chapterIdInput")?.addEventListener("change",async()=>{
-    await maybeAutosaveNow();
-    uiState.currentChapterId=$("#chapterIdInput").value.trim();
-    uiState.lastSavedSnapshot=$("#chapterText").value;
-  });
-
   $("#languageInput")?.addEventListener("change",()=>{
     const v=$("#languageInput").value.trim().toLowerCase()||"it";
     uiState.currentLanguage=v; rememberLastLang(v);
@@ -565,8 +613,8 @@ function wireButtons(){
 /* Init */
 document.addEventListener("DOMContentLoaded", async ()=>{
   wireButtons();
-  await pingBackend();               // primo check
-  setInterval(pingBackend, 60_000);  // refresh ogni 60s
+  await pingBackend();
+  setInterval(pingBackend, 60_000);  // auto-refresh LED ogni 60s
   syncEditorButtonState();
   await toggleLibrary(true);
 });
