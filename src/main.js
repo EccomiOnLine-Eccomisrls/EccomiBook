@@ -67,29 +67,58 @@ async function fetchBooks(){
 }
 
 function renderLibrary(books){
-  const box=$("#library-list"); if(!box) return;
-  if(!books?.length){ box.innerHTML=`<div class="muted">Nessun libro ancora. Crea il tuo primo libro con “Crea libro”.</div>`; return; }
-  box.innerHTML="";
+  const box = $("#library-list"); 
+  if(!box) return;
+  if(!books?.length){
+    box.innerHTML = `<div class="muted">Nessun libro ancora. Crea il tuo primo libro con “Crea libro”.</div>`;
+    return;
+  }
+  box.innerHTML = "";
 
-  const grid=document.createElement("div"); grid.className="library-grid"; box.appendChild(grid);
+  const grid = document.createElement("div");
+  grid.className = "library-grid";
+  box.appendChild(grid);
+
+  const getLastUpdated = (b)=>{
+    // prova 1: campo updated_at del libro
+    if (b?.updated_at) return b.updated_at;
+    // prova 2: max updated_at dei capitoli
+    if (Array.isArray(b?.chapters) && b.chapters.length){
+      const last = [...b.chapters].sort((a,b)=>String(a?.updated_at||"").localeCompare(String(b?.updated_at||""))).slice(-1)[0];
+      return last?.updated_at || "";
+    }
+    return "";
+  };
 
   books.forEach(b=>{
-    const id     = b?.id || b?.book_id || "";
-    const title  = b?.title || "(senza titolo)";
-    const author = b?.author || "—";
-    const lang   = (b?.language || "it").toUpperCase();
-    const chCount = Array.isArray(b?.chapters) ? b.chapters.length
-                   : (typeof b?.chapters_count === "number" ? b.chapters_count : 0);
+    const id       = b?.id || b?.book_id || "";
+    const title    = b?.title || "(senza titolo)";
+    const author   = b?.author || "—";
+    const lang     = (b?.language || "it").toUpperCase();
+    const chapters = Array.isArray(b?.chapters) ? b.chapters : [];
+    const chCount  = chapters.length || (typeof b?.chapters_count === "number" ? b.chapters_count : 0);
+    const lastCh   = chapters.length ? chapters[chapters.length - 1] : null;
+    const lastChTitle = lastCh?.title || lastCh?.id || "";
+    const lastUpdated = getLastUpdated(b);
 
-    const card=document.createElement("div");
-    card.className="book-card";
-    card.innerHTML=`
+    const chBadgeClass = chCount > 0 ? "badge-ok" : "badge-empty";
+
+    const card = document.createElement("div");
+    card.className = "book-card";
+    card.innerHTML = `
       <div class="book-title">${escapeHtml(title)}</div>
-      <div class="book-meta">Autore: ${escapeHtml(author)} — Lingua: ${escapeHtml(lang)}</div>
+      <div class="book-meta">
+        Autore: ${escapeHtml(author)} — Lingua: ${escapeHtml(lang)}
+      </div>
       <div class="book-id">${escapeHtml(id)}</div>
 
       <div class="row-right" style="margin-top:8px;justify-content:flex-start;gap:8px;flex-wrap:wrap">
-        <span class="badge">Capitoli: ${chCount}</span>
+        <span class="badge ${chBadgeClass}">📄 Capitoli: ${chCount}</span>
+        <span class="badge badge-neutral" title="${escapeAttr(lastUpdated || '—')}">🕑 Ultima mod.: ${escapeHtml(lastUpdated || "—")}</span>
+      </div>
+
+      <div class="book-preview muted" title="${escapeAttr(lastChTitle || '—')}">
+        🔎 Anteprima capitolo: ${escapeHtml(lastChTitle || "—")}
       </div>
 
       <div class="row-right" style="margin-top:10px;justify-content:flex-start;gap:8px">
@@ -101,7 +130,6 @@ function renderLibrary(books){
     grid.appendChild(card);
   });
 }
-
 /* Editor / Capitoli */
 async function showEditor(bookId){
   uiState.currentBookId = bookId || loadLastBook() || ""; if(!uiState.currentBookId) return;
