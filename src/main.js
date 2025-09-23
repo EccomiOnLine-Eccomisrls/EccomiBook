@@ -1,6 +1,9 @@
 /* =========================================================
- * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v3.6 (dropdown libri/capitoli + +Capitolo + autofill focus)
+ * EccomiBook — Frontend
+ * src/main.js — v3.8
+ * - LED stato backend
+ * - Libreria + Editor
+ * - Dropdown custom per pulsanti verdi (Book/Chapter)
  * ========================================================= */
 
 import "./styles.css";
@@ -18,7 +21,7 @@ const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"
 const escapeAttr = (s)=>escapeHtml(s).replace(/"/g,"&quot;");
 const toast = (m)=>alert(m);
 
-/* LocalStorage helpers */
+/* Local storage */
 const rememberLastBook   = (id)=>{ try{ localStorage.setItem("last_book_id", id||""); }catch{} };
 const loadLastBook       = ()=>{ try{ return localStorage.getItem("last_book_id")||""; }catch{ return ""; } };
 const rememberLastLang   = (lang)=>{ try{ localStorage.setItem("last_language", String(lang||"").toLowerCase()); }catch{} };
@@ -38,6 +41,7 @@ const uiState = {
   autosaveTimer: null,
   lastSavedSnapshot: "",
   saveSoon: null,
+  openMenuEl: null,
 };
 
 /* Date utils */
@@ -54,11 +58,6 @@ const fmtHHMM = (d=new Date())=>{
 };
 
 /* HERO helpers */
-function setHeroActive(which){
-  const map = { create:$("#btn-create-book"), library:$("#btn-library"), editor:$("#btn-editor") };
-  Object.values(map).forEach(btn => btn && btn.classList.remove("is-active"));
-  if (which && map[which]) map[which].classList.add("is-active");
-}
 function syncEditorButtonState(){
   const editorBtn = $("#btn-editor"); if(!editorBtn) return;
   const hasBook = !!(loadLastBook());
@@ -81,85 +80,62 @@ function renderStatus({mode,title,sub}){
     </div>`;
 }
 async function pingBackend(){
-  renderStatus({mode:"warn", title:"EccomiBook Live", sub:"Verifica in corso…"});
+  renderStatus({mode:"warn", title:"EccomiBook Live", sub:"Verifica in corso..."});
   try{
     const r=await fetch(`${API_BASE_URL}/health`,{cache:"no-store"});
-    if(r.ok){
-      renderStatus({mode:"ok", title:"EccomiBook Live", sub:`Ultimo aggiornamento: ${fmtHHMM()}`});
-    }else{
-      renderStatus({mode:"ko", title:"EccomiBook Offline", sub:`Errore ${r.status}`});
-    }
+    renderStatus(r.ok
+      ? {mode:"ok", title:"EccomiBook Live", sub:`Ultimo aggiornamento: ${fmtHHMM()}`}
+      : {mode:"ko", title:"EccomiBook Offline", sub:`Errore ${r.status}`});
   }catch{
     renderStatus({mode:"ko", title:"EccomiBook Offline", sub:"Servizio non raggiungibile"});
   }
 }
 
-/* ======== Datalist + dropdown helpers ======== */
-function populateBooksDatalist(books=[]) {
-  const dl = $("#books-dl"); if(!dl) return;
-  dl.innerHTML = books.map(b=>{
-    const id = b?.id || b?.book_id || "";
-    const t  = (b?.title || "").trim();
-    const a  = (b?.author || "").trim();
-    return `<option value="${escapeAttr(id)}">${escapeHtml(t)}${a?` — ${escapeHtml(a)}`:""}</option>`;
-  }).join("");
+/* ======== Menu popup custom (per pulsanti verdi) ======== */
+function closeMenu(){
+  uiState.openMenuEl?.remove();
+  uiState.openMenuEl = null;
+  document.removeEventListener("click", onDocClick);
+  window.removeEventListener("resize", closeMenu);
+  window.removeEventListener("scroll", closeMenu, true);
 }
-function populateChaptersDatalist(chapters=[]) {
-  const dl = $("#chapters-dl"); if(!dl) return;
-  const opts = chapters.map(c=>{
-    const id = c?.id || "";
-    const title = (c?.title || "").trim();
-    return `<option value="${escapeAttr(id)}">${escapeHtml(title||id)}</option>`;
+function onDocClick(e){
+  if (uiState.openMenuEl && !uiState.openMenuEl.contains(e.target)) closeMenu();
+}
+function showMenuForButton(btn, items, onPick){
+  closeMenu();
+  const rect = btn.getBoundingClientRect();
+  const host = document.createElement("div");
+  host.className = "menu-pop";
+  host.style.left = `${Math.max(10, rect.left + window.scrollX)}px`;
+  host.style.top  = `${rect.bottom + window.scrollY + 6}px`;
+
+  if(!items.length){
+    host.innerHTML = `<div class="muted" style="padding:6px 8px">Nessun elemento</div>`;
+  }else{
+    host.innerHTML = items.map(x =>
+      `<button type="button" data-val="${escapeAttr(x.value)}">
+         ${escapeHtml(x.label)}${x.sublabel?`<div class="muted">${escapeHtml(x.sublabel)}</div>`:""}
+       </button>`
+    ).join("");
+  }
+
+  host.addEventListener("click",(ev)=>{
+    const b = ev.target.closest("button[data-val]");
+    if(!b) return;
+    const val = b.getAttribute("data-val");
+    closeMenu();
+    onPick?.(val);
   });
-  dl.innerHTML = opts.join("") + `<option value="(Nuovo capitolo…)">— Nuovo capitolo —</option>`;
+
+  document.body.appendChild(host);
+  uiState.openMenuEl = host;
+  setTimeout(()=>{ document.addEventListener("click", onDocClick); },0);
+  window.addEventListener("resize", closeMenu);
+  window.addEventListener("scroll", closeMenu, true);
 }
 
-function nextChapterId(existing=[]) {
-  const nums = existing
-    .map(c=>String(c.id||""))
-    .map(id => (id.match(/ch_(\d{4})$/)?.[1]) )
-    .filter(Boolean)
-    .map(n=>parseInt(n,10));
-  const max = nums.length ? Math.max(...nums) : 0;
-  const n = String(max+1).padStart(4,"0");
-  return `ch_${n}`;
-}
-function updateNextHint(){
-  const hint=$("#nextChHint"); if(!hint) return;
-  const nid = nextChapterId(uiState.chapters||[]);
-  hint.textContent = nid || "—";
-  hint.title = "Prossimo ID suggerito";
-}
-
-/* Dropdown custom */
-let openDropdownEl=null;
-function closeDropdown(){ if(openDropdownEl){ openDropdownEl.remove(); openDropdownEl=null; } }
-document.addEventListener("click",(e)=>{
-  if(openDropdownEl && !openDropdownEl.contains(e.target) &&
-     !e.target.closest(".iconbtn") && !e.target.closest(".input-row")) closeDropdown();
-});
-
-function openDropdown(anchorEl, items, renderer, onSelect){
-  closeDropdown();
-  const rect = anchorEl.getBoundingClientRect();
-  const dd = document.createElement("div");
-  dd.className="dropdown";
-  dd.style.left = `${Math.round(rect.left + window.scrollX)}px`;
-  dd.style.top  = `${Math.round(rect.bottom + window.scrollY + 6)}px`;
-  dd.style.width= `${Math.round(rect.width)}px`;
-  dd.innerHTML = items.map(renderer).join("") || `<div class="dropdown-item">Nessun elemento</div>`;
-  dd.addEventListener("click",(ev)=>{
-    const it = ev.target.closest("[data-value]");
-    if(!it) return;
-    const value = it.getAttribute("data-value");
-    onSelect(value, it);
-    closeDropdown();
-  });
-  document.body.appendChild(dd);
-  openDropdownEl = dd;
-}
-
-/* Libreria */
+/* ======== Libreria ======== */
 async function fetchBooks(){
   const box=$("#library-list"); if(box) box.innerHTML='<div class="muted">Carico libreria…</div>';
   try{
@@ -169,15 +145,13 @@ async function fetchBooks(){
     const items = Array.isArray(data)?data:(data?.items||[]);
     uiState.books = items;
     renderLibrary(items);
-    populateBooksDatalist(items);
     return items;
   }catch(e){
-    if(box) box.innerHTML=`<div class="error">Errore: ${e.message||e}</div>`;
+    if(box) box.innerHTML=`<div class="error">Errore: ${e.message||e}`;
     uiState.books=[];
     return [];
   }
 }
-
 function renderLibrary(books){
   const box = $("#library-list");
   if(!box) return;
@@ -186,7 +160,6 @@ function renderLibrary(books){
     return;
   }
   box.innerHTML = "";
-
   const grid=document.createElement("div");
   grid.className="library-grid";
   box.appendChild(grid);
@@ -234,7 +207,18 @@ function renderLibrary(books){
   });
 }
 
-/* Editor / Capitoli */
+/* ======== Capitoli / Editor ======== */
+function nextChapterId(existing=[]) {
+  const nums = existing
+    .map(c=>String(c.id||""))
+    .map(id => (id.match(/ch_(\d{4})$/)?.[1]) )
+    .filter(Boolean)
+    .map(n=>parseInt(n,10));
+  const max = nums.length ? Math.max(...nums) : 0;
+  const n = String(max+1).padStart(4,"0");
+  return `ch_${n}`;
+}
+
 async function showEditor(bookId){
   if (!uiState.books.length) { await fetchBooks(); }
 
@@ -252,17 +236,14 @@ async function showEditor(bookId){
   await loadBookMeta(uiState.currentBookId);
   await refreshChaptersList(uiState.currentBookId);
 
-  // Se libro senza capitoli: precompila Chapter ID e focus nella textarea
   if(!(uiState.chapters?.length)){
     const nid = nextChapterId([]);
     $("#chapterIdInput").value = nid;
     uiState.currentChapterId = nid;
-    updateNextHint();
     $("#chapterText").focus();
   }
 
   startAutosave();
-  setHeroActive("editor");
   syncEditorButtonState();
 }
 function closeEditor(){ stopAutosave(); $("#editor-card").style.display="none"; }
@@ -283,7 +264,6 @@ async function loadBookMeta(bookId){
   }
   const langEl = $("#languageInput");
   if (langEl) langEl.value = uiState.currentLanguage;
-  rememberLastLang(uiState.currentLanguage);
 }
 
 /* Elenco capitoli */
@@ -304,10 +284,7 @@ async function refreshChaptersList(bookId){
       updated_at: c?.updated_at || "",
       path: c?.path || ""
     }));
-
-    populateChaptersDatalist(uiState.chapters);
     renderChaptersList(bookId, uiState.chapters);
-    updateNextHint();
   }catch(e){
     if(list) list.innerHTML=`<div class="error">Errore: ${escapeHtml(e?.message||String(e))}</div>`;
   }
@@ -394,8 +371,8 @@ async function openChapter(bookId, chapterId){
 async function deleteChapter(bookId, chapterId){
   if(!confirm(`Eliminare il capitolo ${chapterId}?`)) return;
   try{
-    const res=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,{method:"DELETE"});
-    if(!res.ok && res.status!==204) throw new Error(`HTTP ${res.status}`);
+    const r=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,{method:"DELETE"});
+    if(!r.ok && r.status!==204) throw new Error(`HTTP ${r.status}`);
     toast("🗑️ Capitolo eliminato.");
     await refreshChaptersList(bookId);
     if(uiState.currentChapterId===chapterId){
@@ -441,34 +418,7 @@ async function maybeAutosaveNow(){
   }
 }
 
-/* AI */
-async function generateWithAI(){
-  const bookId   = $("#bookIdInput").value.trim()||uiState.currentBookId;
-  const chapterId= $("#chapterIdInput").value.trim();
-  const topic    = $("#topicInput")?.value?.trim()||"";
-  const language = ($("#languageInput")?.value?.trim().toLowerCase()||uiState.currentLanguage||"it");
-  if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
-
-  uiState.currentLanguage = language;
-  rememberLastLang(language);
-
-  try{
-    const r=await fetch(`${API_BASE_URL}/generate/chapter`,{
-      method:"POST", headers:{ "Content-Type":"application/json" },
-      body:JSON.stringify({ book_id:bookId, chapter_id:chapterId, topic, language })
-    });
-    if(!r.ok){ const t=await r.text().catch(()=> ""); throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`); }
-    const data=await r.json();
-    $("#chapterText").value=data?.content||data?.text||"";
-    toast(`✨ Testo generato (bozza) — lingua: ${language.toUpperCase()}`);
-    await saveCurrentChapter(false);
-    await refreshChaptersList(bookId);
-  }catch(e){
-    toast("⚠️ AI di test: "+(e?.message||e));
-  }
-}
-
-/* Export */
+/* ======== Export ======== */
 function askFormat(defaultFmt="pdf"){
   const a=prompt("Formato? (pdf / md / txt)",defaultFmt)?.trim().toLowerCase();
   if(!a) return null;
@@ -516,19 +466,113 @@ async function exportBook(bookId){
   }
 }
 
-/* Libreria: toggle */
+/* ======== Toggle Libreria ======== */
 async function toggleLibrary(force){
   const lib=$("#library-section"); if(!lib) return;
   uiState.libraryVisible=(typeof force==="boolean")?force:!uiState.libraryVisible;
   lib.style.display=uiState.libraryVisible?"block":"none";
-  if(uiState.libraryVisible){
-    await fetchBooks();
-    setHeroActive("library");
-  }
-  syncEditorButtonState();
+  if(uiState.libraryVisible) await fetchBooks();
 }
 
-/* Azioni globali */
+/* ======== Wiring ======== */
+function wireButtons(){
+  // CTA
+  $("#btn-create-book")?.addEventListener("click",createBookSimple);
+  $("#btn-library")?.addEventListener("click",()=>toggleLibrary());
+  $("#btn-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
+
+  // Toolbar editor
+  $("#btn-ed-close")?.addEventListener("click",closeEditor);
+  $("#btn-ed-save")?.addEventListener("click",()=>saveCurrentChapter(true));
+  $("#btn-ai-generate")?.addEventListener("click",generateWithAI);
+  $("#btn-ed-delete")?.addEventListener("click",async()=>{
+    const bookId=$("#bookIdInput").value.trim(), chapterId=$("#chapterIdInput").value.trim();
+    if(!bookId||!chapterId) return toast("Inserisci Book ID e Chapter ID.");
+    await deleteChapter(bookId,chapterId);
+  });
+
+  // Input changes
+  $("#chapterText")?.addEventListener("input",()=>{
+    if(uiState.saveSoon) clearTimeout(uiState.saveSoon);
+    uiState.saveSoon=setTimeout(maybeAutosaveNow,1500);
+  });
+  $("#chapterIdInput")?.addEventListener("change",async()=>{
+    await maybeAutosaveNow();
+    uiState.currentChapterId=$("#chapterIdInput").value.trim();
+    uiState.lastSavedSnapshot=$("#chapterText").value;
+  });
+  $("#languageInput")?.addEventListener("change",()=>{
+    const v=$("#languageInput").value.trim().toLowerCase()||"it";
+    uiState.currentLanguage=v; rememberLastLang(v);
+  });
+
+  // Libreria: actions
+  $("#library-list")?.addEventListener("click",async(ev)=>{
+    const btn=ev.target.closest("button[data-action]"); if(!btn) return;
+    const action=btn.getAttribute("data-action");
+    const bookId=btn.getAttribute("data-bookid")||"";
+    if(!bookId) return;
+    if(action==="open"){ rememberLastBook(bookId); showEditor(bookId); }
+    else if(action==="delete"){ await deleteBook(bookId); }
+    else if(action==="rename"){ await renameBook(bookId, btn.getAttribute("data-oldtitle")||""); }
+    else if(action==="export"){ await exportBook(bookId); }
+  });
+
+  // Editor list actions
+  $("#chapters-list")?.addEventListener("click",async(ev)=>{
+    const openBtn=ev.target.closest("[data-ch-open]"),
+          editBtn=ev.target.closest("[data-ch-edit]"),
+          delBtn =ev.target.closest("[data-ch-del]"),
+          dlBtn  =ev.target.closest("[data-ch-dl]");
+    if(!openBtn && !delBtn && !editBtn && !dlBtn) return;
+    const cid=(openBtn||delBtn||editBtn||dlBtn).getAttribute(
+      openBtn?"data-ch-open":delBtn?"data-ch-del":editBtn?"data-ch-edit":"data-ch-dl"
+    );
+    const bid=uiState.currentBookId || $("#bookIdInput").value.trim();
+    if(!cid||!bid) return;
+    if(openBtn)      await openChapter(bid,cid);
+    else if(delBtn)  await deleteChapter(bid,cid);
+    else if(editBtn) editChapter(cid);
+    else if(dlBtn)   downloadChapter(bid,cid);
+  });
+
+  // ===== Pulsanti verdi: MENU =====
+  $("#btn-book-menu")?.addEventListener("click",(ev)=>{
+    if(!uiState.books.length){ toast("Nessun libro caricato."); return; }
+    const items = uiState.books.map(b=>{
+      const id=b?.id||b?.book_id||"";
+      return { value:id, label:(b?.title||"(senza titolo)"), sublabel:`${b?.author||"—"} — ${id}` };
+    });
+    showMenuForButton(ev.currentTarget, items, async (val)=>{
+      $("#bookIdInput").value = val;
+      rememberLastBook(val);
+      await showEditor(val); // ricarica capitoli del nuovo libro
+    });
+  });
+
+  $("#btn-ch-menu")?.addEventListener("click",(ev)=>{
+    if(!uiState.chapters.length){ toast("Nessun capitolo nel libro."); return; }
+    const items = uiState.chapters.map(c=>({
+      value:c.id, label:(c.title||c.id), sublabel:c.id
+    }));
+    showMenuForButton(ev.currentTarget, items, async (val)=>{
+      $("#chapterIdInput").value = val;
+      uiState.currentChapterId = val;
+      await openChapter(uiState.currentBookId, val);
+    });
+  });
+
+  $("#btn-ch-new")?.addEventListener("click",()=>{
+    const nid = nextChapterId(uiState.chapters);
+    $("#chapterIdInput").value = nid;
+    uiState.currentChapterId = nid;
+    $("#chapterText").focus();
+    const pill = $("#nextChHint");
+    if(pill) pill.textContent = nid;
+  });
+}
+
+/* ===== Create/Rename/Delete book ===== */
 async function createBookSimple(){
   const title=prompt("Inserisci il titolo del libro:", "Bozza Libro");
   if(title==null) return;
@@ -555,13 +599,10 @@ async function createBookSimple(){
     await toggleLibrary(true);
     await fetchBooks();
     setTimeout(fetchBooks,300);
-    setHeroActive("library");
-    syncEditorButtonState();
   }catch(e){
     toast("Errore di rete: "+(e?.message||e));
   }
 }
-
 async function deleteBook(bookId){
   if(!confirm("Eliminare il libro?")) return;
   try{
@@ -569,7 +610,6 @@ async function deleteBook(bookId){
     if(!res.ok && res.status!==204) throw new Error(`HTTP ${res.status}`);
     toast("🗑️ Libro eliminato.");
     await fetchBooks();
-    syncEditorButtonState();
   }catch(e){
     toast("Errore: "+(e?.message||e));
   }
@@ -580,156 +620,36 @@ async function renameBook(bookId, oldTitle){
   toast("✏️ Titolo modificato (endpoint reale in arrivo).");
 }
 
-/* Wiring */
-function wireButtons(){
-  $("#btn-create-book")?.addEventListener("click",()=>{ setHeroActive("create"); createBookSimple(); });
-  $("#btn-library")?.addEventListener("click",()=>toggleLibrary());
-  $("#btn-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
+/* ===== AI (bozza) ===== */
+async function generateWithAI(){
+  const bookId   = $("#bookIdInput").value.trim()||uiState.currentBookId;
+  const chapterId= $("#chapterIdInput").value.trim();
+  const topic    = $("#topicInput")?.value?.trim()||"";
+  const language = ($("#languageInput")?.value?.trim().toLowerCase()||uiState.currentLanguage||"it");
+  if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
 
-  $("#btn-ed-close")?.addEventListener("click",closeEditor);
-  $("#btn-ed-save")?.addEventListener("click",()=>saveCurrentChapter(true));
-  $("#btn-ai-generate")?.addEventListener("click",generateWithAI);
-  $("#btn-ed-delete")?.addEventListener("click",async()=>{
-    const bookId=$("#bookIdInput").value.trim(), chapterId=$("#chapterIdInput").value.trim();
-    if(!bookId||!chapterId) return toast("Inserisci Book ID e Chapter ID.");
-    await deleteChapter(bookId,chapterId);
-  });
+  uiState.currentLanguage = language;
 
-  // Pulsanti menu ▼
-  $("#btn-book-menu")?.addEventListener("click",()=>{
-    const anchor = $("#bookIdInput");
-    const items = (uiState.books||[]).map(b=>{
-      const id = b?.id || b?.book_id || "";
-      const t = (b?.title||"").trim() || "(senza titolo)";
-      const a = (b?.author||"").trim();
-      return {value:id, label:`${t}`, sub:a?`Autore: ${a}`:""};
+  try{
+    const r=await fetch(`${API_BASE_URL}/generate/chapter`,{
+      method:"POST", headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({ book_id:bookId, chapter_id:chapterId, topic, language })
     });
-    openDropdown(anchor, items, it=>(
-      `<div class="dropdown-item" data-value="${escapeAttr(it.value)}">
-         <strong>${escapeHtml(it.label)}</strong> ${it.sub?`<small> · ${escapeHtml(it.sub)}</small>`:""}
-       </div>`
-    ), async (val)=>{
-      $("#bookIdInput").value = val;
-      rememberLastBook(val);
-      uiState.currentBookId = val;
-      await loadBookMeta(val);
-      await refreshChaptersList(val);
-      // se vuoto, proponi nuovo capitolo
-      if(!$("#chapterIdInput").value){
-        const nid = nextChapterId(uiState.chapters||[]);
-        $("#chapterIdInput").value = nid;
-        uiState.currentChapterId = nid;
-        updateNextHint();
-      }
-    });
-  });
-
-  $("#btn-ch-menu")?.addEventListener("click",()=>{
-    const anchor = $("#chapterIdInput");
-    const items = (uiState.chapters||[]).map(c=>({
-      value:c.id, label:c.id, sub:(c.title||"")
-    }));
-    openDropdown(anchor, items, it=>(
-      `<div class="dropdown-item" data-value="${escapeAttr(it.value)}">
-         <strong>${escapeHtml(it.label)}</strong>${it.sub?`<small> · ${escapeHtml(it.sub)}</small>`:""}
-       </div>`
-    ), (val)=>{
-      $("#chapterIdInput").value = val;
-      uiState.currentChapterId = val;
-      updateNextHint();
-    });
-  });
-
-  // Pulsante + Capitolo
-  $("#btn-ch-new")?.addEventListener("click",()=>{
-    const nid = nextChapterId(uiState.chapters||[]);
-    $("#chapterIdInput").value = nid;
-    uiState.currentChapterId = nid;
-    updateNextHint();
-    $("#chapterText").focus();
-  });
-
-  // Change manuale input (fallback/nativo)
-  $("#bookIdInput")?.addEventListener("change", async ()=>{
-    const bid = $("#bookIdInput").value.trim();
-    if(!bid) return;
-    rememberLastBook(bid);
-    uiState.currentBookId = bid;
-    await loadBookMeta(bid);
-    await refreshChaptersList(bid);
-    if(!$("#chapterIdInput").value){
-      const nid = nextChapterId(uiState.chapters||[]);
-      $("#chapterIdInput").value = nid;
-      uiState.currentChapterId = nid;
-    }
-    updateNextHint();
-    syncEditorButtonState();
-  });
-
-  $("#chapterIdInput")?.addEventListener("change", ()=>{
-    const v = $("#chapterIdInput").value.trim();
-    if(v === "(Nuovo capitolo…)"){
-      const nid = nextChapterId(uiState.chapters||[]);
-      $("#chapterIdInput").value = nid;
-      uiState.currentChapterId = nid;
-      $("#chapterText").focus();
-    } else {
-      uiState.currentChapterId = v;
-    }
-    updateNextHint();
-  });
-
-  // Topic memo
-  const lastTopic = localStorage.getItem("last_topic") || "";
-  if(lastTopic && $("#topicInput") && !$("#topicInput").value) $("#topicInput").value = lastTopic;
-  $("#topicInput")?.addEventListener("change", ()=>{
-    try{ localStorage.setItem("last_topic", $("#topicInput").value || ""); }catch{}
-  });
-
-  $("#chapterText")?.addEventListener("input",()=>{
-    if(uiState.saveSoon) clearTimeout(uiState.saveSoon);
-    uiState.saveSoon=setTimeout(maybeAutosaveNow,1500);
-  });
-  $("#languageInput")?.addEventListener("change",()=>{
-    const v=$("#languageInput").value.trim().toLowerCase()||"it";
-    uiState.currentLanguage=v; rememberLastLang(v);
-  });
-
-  $("#library-list")?.addEventListener("click",async(ev)=>{
-    const btn=ev.target.closest("button[data-action]"); if(!btn) return;
-    const action=btn.getAttribute("data-action");
-    const bookId=btn.getAttribute("data-bookid")||"";
-    if(!bookId) return;
-    if(action==="open"){ rememberLastBook(bookId); showEditor(bookId); }
-    else if(action==="delete"){ await deleteBook(bookId); }
-    else if(action==="rename"){ await renameBook(bookId, btn.getAttribute("data-oldtitle")||""); }
-    else if(action==="export"){ await exportBook(bookId); }
-  });
-
-  $("#chapters-list")?.addEventListener("click",async(ev)=>{
-    const openBtn=ev.target.closest("[data-ch-open]"),
-          editBtn=ev.target.closest("[data-ch-edit]"),
-          delBtn =ev.target.closest("[data-ch-del]"),
-          dlBtn  =ev.target.closest("[data-ch-dl]");
-    if(!openBtn && !delBtn && !editBtn && !dlBtn) return;
-    const cid=(openBtn||delBtn||editBtn||dlBtn).getAttribute(
-      openBtn?"data-ch-open":delBtn?"data-ch-del":editBtn?"data-ch-edit":"data-ch-dl"
-    );
-    const bid=uiState.currentBookId || $("#bookIdInput").value.trim();
-    if(!cid||!bid) return;
-    if(openBtn)      await openChapter(bid,cid);
-    else if(delBtn)  await deleteChapter(bid,cid);
-    else if(editBtn) editChapter(cid);
-    else if(dlBtn)   downloadChapter(bid,cid);
-  });
+    if(!r.ok){ const t=await r.text().catch(()=> ""); throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`); }
+    const data=await r.json();
+    $("#chapterText").value=data?.content||data?.text||"";
+    toast(`✨ Testo generato (bozza) — lingua: ${language.toUpperCase()}`);
+    await saveCurrentChapter(false);
+    await refreshChaptersList(bookId);
+  }catch(e){
+    toast("⚠️ AI di test: "+(e?.message||e));
+  }
 }
 
-/* Init */
+/* ===== Init ===== */
 document.addEventListener("DOMContentLoaded", async ()=>{
   wireButtons();
   await pingBackend();
-  setInterval(pingBackend, 60_000);
-  syncEditorButtonState();
   await toggleLibrary(true);
-  updateNextHint();
+  syncEditorButtonState();
 });
