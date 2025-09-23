@@ -10,10 +10,7 @@
   --warn:#f59e0b;
   --err:#ef4444;
 
-  /* Tipografia & spaziature */
   --fs-base:16px;
-  --fs-sm:14px;
-  --fs-xs:12px;
   --radius:12px;
   --gap:16px;
 }
@@ -25,7 +22,7 @@ body{
   -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
 }
 
-/* ===== Topbar ===== */
+/* Topbar */
 .topbar{
   display:flex;align-items:center;justify-content:space-between;gap:var(--gap);
   padding:14px 18px;background:linear-gradient(180deg,#0b192b,#0d1b2a);
@@ -35,7 +32,7 @@ body{
 .logo{font-size:20px}
 .title{font-size:18px}
 
-/* ===== Status LED (EccomiBook Live) ===== */
+/* Status LED */
 #backend-status{min-height:36px;display:flex;align-items:center}
 .statusbox{
   display:flex;align-items:center;gap:10px;
@@ -55,7 +52,7 @@ body{
 .statusbox__title{font-weight:700;font-size:14px}
 .statusbox__sub{opacity:.85;font-size:12px;margin-top:2px}
 
-/* ===== Buttons (legacy) ===== */
+/* Buttons (legacy) */
 .btn{
   border:1px solid transparent;border-radius:10px;padding:8px 12px;cursor:pointer;
   font-size:15px; line-height:1.2; min-height:40px;
@@ -69,7 +66,7 @@ body{
 .btn-secondary{background:#1f2b3c;color:#e7f0ff;border:1px solid #2b3a53}
 .btn-ghost{background:transparent;color:#e7f0ff;border:1px solid #2b3a53}
 
-/* ===== Layout base ===== */
+/* Layout base */
 .container{max-width:980px;margin:40px auto;padding:0 20px}
 .hero{font-size:28px;margin:0 0 6px}
 .subhero{margin:0;color:var(--muted)}
@@ -86,21 +83,34 @@ body{
   width:100%;margin-top:4px;padding:10px;border-radius:10px;border:1px solid #273753;background:#0c1522;color:var(--text)
 }
 
+/* Stile input con datalist → aspetto da select */
+input[list]{
+  padding-right:36px;
+  background-image:
+    linear-gradient(180deg,transparent 60%,rgba(255,255,255,.06) 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23e8eef7' fill-opacity='.8' d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat,no-repeat;
+  background-position:right 12px center, right 12px center;
+  background-size:16px 10px,10px 6px;
+  cursor:text;
+}
+
+/* Helpers */
 .row-right{display:flex;justify-content:flex-start;gap:8px;margin-top:10px}
 
-/* ===== Badges ===== */
+/* Badges */
 .badge{ border-radius:10px; padding:2px 8px; font-size:12px; display:inline-flex; align-items:center; gap:6px; }
 .badge-ok{ background:rgba(0,180,90,.15); border:1px solid rgba(0,180,90,.35) }
 .badge-empty{ background:rgba(160,160,160,.12); border:1px solid rgba(160,160,160,.35) }
 .badge-neutral{ background:rgba(70,120,255,.12); border:1px solid rgba(70,120,255,.35) }
 
-/* (Opzione B) Anteprima capitolo nascosta */
+/* Anteprima capitolo nascosta (opzione B) */
 .book-preview{ display:none !important; }
 
-/* ===== Footer ===== */
+/* Footer */
 .footer{opacity:.75;text-align:center;font-size:13px;margin:48px 0}
 
-/* ===== Libreria ===== */
+/* Libreria */
 .library-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 @media (max-width:760px){ .library-grid{grid-template-columns:1fr;} }
 
@@ -114,9 +124,7 @@ body{
 .book-meta{color:var(--muted);font-size:14px}
 .book-id{font-family:ui-monospace,Menlo,Consolas,monospace;opacity:.85;margin-top:6px}
 
-#editor-toolbar, .row-right{ justify-content:flex-start; gap:8px; }
-
-/* ===== Capitoli ===== */
+/* Editor / Capitoli */
 .chapter-row{ display:flex; flex-direction:column; gap:8px; }
 .chapter-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .chapter-actions{ display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-start; }
@@ -125,7 +133,7 @@ body{
   .chapter-head{ flex-direction:column; align-items:flex-start; gap:4px; }
 }
 
-/* ===== HERO CTA ===== */
+/* HERO CTA */
 .hero-cta{ margin:18px 0 8px; }
 .hero-cta__inner{ display:flex; align-items:stretch; justify-content:center; gap:16px; flex-wrap:wrap; }
 
@@ -142,18 +150,12 @@ body{
 .cta__icon{ font-size:20px; line-height:0; }
 .cta__text{ display:flex; flex-direction:column; line-height:1.1; }
 .cta__sub{ display:block; opacity:.75; font-size:12px; margin-top:3px; }
-
-/* Gerarchia CTA */
 .cta--primary{
   background:var(--primary); color:#fff; border-color:rgba(255,255,255,.08);
   box-shadow:0 6px 20px rgba(45,126,247,.22);
 }
 .cta--primary:hover{ filter:brightness(1.08); }
-.cta--outline{
-  background:transparent; color:inherit; border-color:rgba(255,255,255,.18);
-}
+.cta--outline{ background:transparent; color:inherit; border-color:rgba(255,255,255,.18); }
 .cta--outline:hover{ background:rgba(255,255,255,.06); }
-
-/* Stato attivo / disabled */
 .cta.is-active{ box-shadow:0 0 0 2px rgba(45,126,247,.35) inset; }
 .cta[disabled], .cta.is-disabled{ opacity:.5; cursor:not-allowed; box-shadow:none; }
