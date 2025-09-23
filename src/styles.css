@@ -40,13 +40,10 @@ body{
   padding:8px 12px;color:var(--text);
   box-shadow:0 10px 24px rgba(0,0,0,.15);
 }
-.statusbox__led{
-  width:12px;height:12px;border-radius:50%;
-  box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 12px rgba(0,0,0,.25);
-}
-.led--ok{ background: var(--ok); box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 10px rgba(47,191,113,.6); }
-.led--ko{ background: var(--err); box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 10px rgba(239,68,68,.6); }
-.led--warn{ background: var(--warn); box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 10px rgba(245,158,11,.6); }
+.statusbox__led{width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 12px rgba(0,0,0,.25)}
+.led--ok{ background: var(--ok); box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 10px rgba(47,191,113,.6) }
+.led--ko{ background: var(--err); box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 10px rgba(239,68,68,.6) }
+.led--warn{ background: var(--warn); box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 10px rgba(245,158,11,.6) }
 
 .statusbox__text{display:flex;flex-direction:column;line-height:1.1}
 .statusbox__title{font-weight:700;font-size:14px}
@@ -59,17 +56,15 @@ body{
   transition:filter .15s ease, box-shadow .15s ease, border-color .15s ease;
 }
 .btn:hover{filter:brightness(1.04)}
-.btn:focus-visible{
-  outline:none; box-shadow:0 0 0 2px rgba(45,126,247,.45), 0 0 0 4px rgba(45,126,247,.25);
-}
+.btn:focus-visible{outline:none; box-shadow:0 0 0 2px rgba(45,126,247,.45), 0 0 0 4px rgba(45,126,247,.25)}
 .btn-primary{background:var(--primary);color:#fff}
 .btn-secondary{background:#1f2b3c;color:#e7f0ff;border:1px solid #2b3a53}
 .btn-ghost{background:transparent;color:#e7f0ff;border:1px solid #2b3a53}
 
-/* Icon buttons (i tuoi verdi) */
+/* Icon buttons (verdi) */
 .iconbtn{
   border:1px solid #2b3a53;background:#1f2b3c;color:#e7f0ff;
-  border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px;
+  border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px;min-height:40px;
 }
 .iconbtn:hover{opacity:.85}
 
@@ -93,22 +88,15 @@ body{
 /* righe input con pulsanti verdi */
 .input-row{display:flex;gap:8px;align-items:center}
 
-/* Datalist Fallback: niente freccette native */
+/* ===== Rimuove le freccette native dagli input con datalist ===== */
 input[list]{
-  padding-right:12px;
-  appearance:none;
-  -moz-appearance:textfield;
-  background-image:none !important;
+  padding-right:12px; appearance:none; -moz-appearance:textfield; background-image:none !important;
 }
-input[list]::-webkit-calendar-picker-indicator{
-  display:none !important;
-  -webkit-appearance:none;
-}
-/* clear/search controls */
+input[list]::-webkit-calendar-picker-indicator{ display:none !important; -webkit-appearance:none; }
 input[type="search"]::-webkit-search-decoration,
 input[type="search"]::-webkit-search-cancel-button,
 input[type="search"]::-webkit-search-results-button,
-input[type="search"]::-webkit-search-results-decoration{display:none}
+input[type="search"]::-webkit-search-results-decoration{ display:none }
 
 /* Hint pill */
 .inline-hint{
@@ -122,7 +110,7 @@ input[type="search"]::-webkit-search-results-decoration{display:none}
 
 /* Libreria */
 .library-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-@media (max-width:760px){ .library-grid{grid-template-columns:1fr;} }
+@media (max-width:760px){ .library-grid{grid-template-columns:1fr} }
 .book-card{
   background:linear-gradient(180deg,#101a28,#0f1827);
   border:1px solid #22324a;border-radius:14px;padding:16px;
@@ -161,3 +149,17 @@ input[type="search"]::-webkit-search-results-decoration{display:none}
 .cta--outline:hover{background:rgba(255,255,255,.06)}
 .cta.is-active{box-shadow:0 0 0 2px rgba(45,126,247,.35) inset}
 .cta[disabled],.cta.is-disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+
+/* ===== Popup menu custom ===== */
+.menu-pop{
+  position:absolute; z-index:50; min-width:260px; max-width:min(560px, 92vw);
+  max-height:280px; overflow:auto; padding:6px;
+  border-radius:10px; border:1px solid #2b3a53; background:#0e1726;
+  box-shadow:0 10px 30px rgba(0,0,0,.35);
+}
+.menu-pop button{
+  display:block; width:100%; text-align:left; padding:8px 10px; border:none;
+  background:transparent; color:var(--text); border-radius:8px; cursor:pointer; font-size:14px;
+}
+.menu-pop button:hover{ background:rgba(255,255,255,.06) }
+.menu-pop .muted{ color:var(--muted); font-size:12px }
