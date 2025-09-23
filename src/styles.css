@@ -95,6 +95,13 @@ input[list]{
   cursor:text;
 }
 
+/* Piccolo pill suggerimento */
+.inline-hint{
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:8px 12px; border-radius:10px; background:#1a2740; color:#cfd9eb;
+  border:1px solid #2b3a53; font-size:14px; min-height:40px;
+}
+
 /* Helpers */
 .row-right{display:flex;justify-content:flex-start;gap:8px;margin-top:10px}
 
@@ -104,7 +111,7 @@ input[list]{
 .badge-empty{ background:rgba(160,160,160,.12); border:1px solid rgba(160,160,160,.35) }
 .badge-neutral{ background:rgba(70,120,255,.12); border:1px solid rgba(70,120,255,.35) }
 
-/* Anteprima capitolo nascosta (opzione B) */
+/* Anteprima capitolo nascosta */
 .book-preview{ display:none !important; }
 
 /* Footer */
