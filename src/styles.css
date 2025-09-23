@@ -7,6 +7,8 @@
   --secondary:#1f2b3c;
   --accent:#f73d6b;
   --ok:#2fbf71;
+  --warn:#f59e0b;
+  --err:#ef4444;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Helvetica,Arial}
@@ -19,14 +21,26 @@ body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-ap
 .logo{font-size:20px}
 .title{font-size:18px}
 
-.backend-pill{
-  font-size:14px;background:#162338;border:1px solid #21324b;border-radius:8px;
-  padding:6px 10px;color:var(--text);
+/* ===== Status LED (EccomiBook Live) ===== */
+.statusbox{
+  display:flex;align-items:center;gap:10px;
+  background:#0d1a2b;border:1px solid #1a2a43;border-radius:12px;
+  padding:10px 14px; color:var(--text);
+  box-shadow:0 10px 24px rgba(0,0,0,.15);
 }
-.debug-url{font-size:11px;opacity:.8;margin-top:4px}
+.statusbox__led{
+  width:12px;height:12px;border-radius:50%;
+  box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 12px rgba(0,0,0,.25);
+}
+.led--ok{ background: var(--ok); box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 10px rgba(47,191,113,.6); }
+.led--ko{ background: var(--err); box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 10px rgba(239,68,68,.6); }
+.led--warn{ background: var(--warn); box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 10px rgba(245,158,11,.6); }
 
-/* Rimosso: .actions nel topbar (non usiamo più pulsanti duplicati nel header) */
+.statusbox__text{display:flex;flex-direction:column;line-height:1.1}
+.statusbox__title{font-weight:700;font-size:14px}
+.statusbox__sub{opacity:.8;font-size:12px;margin-top:2px}
 
+/* Buttons (legacy) */
 .btn{border:1px solid transparent;border-radius:10px;padding:8px 12px;cursor:pointer}
 .btn:hover{opacity:.95}
 .btn-primary{background:var(--primary);color:#fff}
