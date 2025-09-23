@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v2.5 (dashboard badges + preview capitolo)
+ * src/main.js — v2.6 (chapter title + date in lista capitoli)
  * ========================================================= */
 
 import "./styles.css";
@@ -186,24 +186,35 @@ async function refreshChaptersList(bookId){
     renderChaptersList(bookId, uiState.chapters);
   }catch(e){ if(list) list.innerHTML=`<div class="error">Errore: ${e.message||e}</div>`; }
 }
+
 function renderChaptersList(bookId, chapters){
-  const list=$("#chapters-list"); if(!list) return;
-  if(!chapters?.length){ list.innerHTML=`<div class="muted">Nessun capitolo ancora.</div>`; return; }
+  const list=$("#chapters-list"); 
+  if(!list) return;
+  if(!chapters?.length){
+    list.innerHTML=`<div class="muted">Nessun capitolo ancora.</div>`;
+    return;
+  }
   list.innerHTML="";
   const nav=document.createElement("div");
-  nav.className="row-right"; nav.style.justifyContent="flex-start"; nav.style.marginBottom="8px";
+  nav.className="row-right"; 
+  nav.style.justifyContent="flex-start"; 
+  nav.style.marginBottom="8px";
   nav.innerHTML=`<button class="btn btn-ghost" id="btn-ch-prev">← Precedente</button>
                  <button class="btn btn-ghost" id="btn-ch-next">Successivo →</button>`;
   list.appendChild(nav);
 
   chapters.forEach(ch=>{
-    const cid=ch.id, updated=ch.updated_at||"";
-    const li=document.createElement("div"); li.className="card chapter-row"; li.style.margin="8px 0";
+    const cid     = ch.id, 
+          title   = (ch.title||"").trim(),
+          updated = ch.updated_at||"";
+    const li=document.createElement("div"); 
+    li.className="card chapter-row"; 
+    li.style.margin="8px 0";
     li.innerHTML=`
       <div class="chapter-head">
         <div>
-          <div style="font-weight:600">${escapeHtml(ch.title||cid)}</div>
-          <div class="muted">ID: ${escapeHtml(cid)}${updated?` · ${escapeHtml(updated)}`:""}</div>
+          <div style="font-weight:600">${escapeHtml(title||cid)}</div>
+          <div class="muted">ID: ${escapeHtml(cid)} · Titolo: ${escapeHtml(title||cid)}${updated?` · ${escapeHtml(fmtLast(updated))}`:""}</div>
         </div>
       </div>
       <div class="chapter-actions">
@@ -218,6 +229,7 @@ function renderChaptersList(bookId, chapters){
   $("#btn-ch-prev")?.addEventListener("click",()=>stepChapter(-1));
   $("#btn-ch-next")?.addEventListener("click",()=>stepChapter(+1));
 }
+
 const chapterIndex=(cid)=>uiState.chapters.findIndex(c=>c.id===cid);
 function stepChapter(delta){
   if(!uiState.chapters.length) return;
@@ -304,144 +316,4 @@ async function exportBook(bookId){
     try{
       const r=await fetch(`${API_BASE_URL}/generate/export/book/${encodeURIComponent(bookId)}`,{method:"POST",headers:{ "Content-Type":"application/json" }});
       if(!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data=await r.json(); const url=data?.download_url||data?.url;
-      return url?window.open(url,"_blank","noopener"):toast("Export avviato ma nessun URL ricevuto.");
-    }catch(e){ toast("Errore export PDF: "+(e?.message||e)); }
-  }else{
-    try{
-      await refreshChaptersList(bookId); if(!uiState.chapters.length) return toast("Nessun capitolo da esportare.");
-      let assembled=`# ${bookId}\n\n`;
-      for(const ch of uiState.chapters){
-        const resp=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(ch.id)}`,{cache:"no-store"});
-        const data=resp.ok?await resp.json():{content:""}; 
-        assembled+=`\n\n# ${ch.title||ch.id}\n\n${data.content||""}\n`;
-      }
-      const mime=fmt==="md"?"text/markdown":"text/plain";
-      const blob=new Blob([assembled],{type:`${mime};charset=utf-8`});
-      const a=document.createElement("a"); 
-      a.href=URL.createObjectURL(blob); 
-      a.download=`${bookId}.${fmt}`; 
-      a.click(); 
-      URL.revokeObjectURL(a.href);
-    }catch(e){ toast("Errore export: "+(e?.message||e)); }
-  }
-}
-
-/* Libreria: toggle */
-async function toggleLibrary(force){
-  const lib=$("#library-section"); if(!lib) return;
-  uiState.libraryVisible=(typeof force==="boolean")?force:!uiState.libraryVisible;
-  lib.style.display=uiState.libraryVisible?"block":"none";
-  if(uiState.libraryVisible) await fetchBooks();
-}
-
-/* Azioni globali */
-async function createBookSimple(){
-  const title=prompt("Inserisci il titolo del libro:", "Bozza Libro");
-  if(title==null) return;
-
-  let author = prompt("Nome artista", loadLastAuthor())?.trim();
-  if(author==null) return;
-  author = author || loadLastAuthor();
-  rememberLastAuthor(author);
-
-  let defaultLang = loadLastLang();
-  let language=prompt("Lingua (es. it, en, es, fr…):", defaultLang)?.trim().toLowerCase()||defaultLang||"it";
-  language=language.replace(/[^a-z-]/gi,"").slice(0,10)||"it";
-  rememberLastLang(language);
-
-  try{
-    const res=await fetch(`${API_BASE_URL}/books/create`,{
-      method:"POST", headers:{ "Content-Type":"application/json" }, cache:"no-store",
-      body:JSON.stringify({ title:(title.trim()||"Senza titolo"), author, language, chapters:[] }),
-    });
-    if(!res.ok){ const txt=await res.text().catch(()=> ""); throw new Error(`HTTP ${res.status}${txt?`: ${txt}`:""}`); }
-    const data=await res.json();
-    rememberLastBook(data?.book_id||data?.id||"");
-    toast(`✅ Libro creato (${language.toUpperCase()}) — Autore: ${author}`);
-    await toggleLibrary(true); await fetchBooks(); setTimeout(fetchBooks,300);
-  }catch(e){ toast("Errore di rete: "+(e?.message||e)); }
-}
-
-async function deleteBook(bookId){
-  if(!confirm("Eliminare il libro?")) return;
-  try{
-    const res=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}`,{method:"DELETE"});
-    if(!res.ok && res.status!==204) throw new Error(`HTTP ${res.status}`);
-    toast("🗑️ Libro eliminato."); await fetchBooks();
-  }catch(e){ toast("Errore: "+(e?.message||e)); }
-}
-async function renameBook(bookId, oldTitle){
-  const newTitle=prompt("Nuovo titolo libro:",oldTitle||"")?.trim();
-  if(!newTitle || newTitle===oldTitle) return;
-  toast("✏️ Titolo modificato (endpoint reale in arrivo).");
-}
-
-/* Wiring */
-function wireButtons(){
-  $("#btn-create-book")?.addEventListener("click",createBookSimple);
-  $("#btn-library")?.addEventListener("click",()=>toggleLibrary());
-  $("#btn-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
-  $("#btn-quick-create")?.addEventListener("click",createBookSimple);
-  $("#btn-quick-library")?.addEventListener("click",()=>toggleLibrary());
-  $("#btn-quick-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
-
-  $("#btn-ed-close")?.addEventListener("click",closeEditor);
-  $("#btn-ed-save")?.addEventListener("click",()=>saveCurrentChapter(true));
-  $("#btn-ai-generate")?.addEventListener("click",generateWithAI);
-  $("#btn-ed-delete")?.addEventListener("click",async()=>{
-    const bookId=$("#bookIdInput").value.trim(), chapterId=$("#chapterIdInput").value.trim();
-    if(!bookId||!chapterId) return toast("Inserisci Book ID e Chapter ID."); 
-    await deleteChapter(bookId,chapterId);
-  });
-
-  $("#chapterText")?.addEventListener("input",()=>{
-    if(uiState.saveSoon) clearTimeout(uiState.saveSoon);
-    uiState.saveSoon=setTimeout(maybeAutosaveNow,1500);
-  });
-  $("#chapterIdInput")?.addEventListener("change",async()=>{
-    await maybeAutosaveNow();
-    uiState.currentChapterId=$("#chapterIdInput").value.trim();
-    uiState.lastSavedSnapshot=$("#chapterText").value;
-  });
-
-  $("#languageInput")?.addEventListener("change",()=>{
-    const v=$("#languageInput").value.trim().toLowerCase()||"it";
-    uiState.currentLanguage=v; rememberLastLang(v);
-  });
-
-  $("#library-list")?.addEventListener("click",async(ev)=>{
-    const btn=ev.target.closest("button[data-action]"); if(!btn) return;
-    const action=btn.getAttribute("data-action"); 
-    const bookId=btn.getAttribute("data-bookid")||""; 
-    if(!bookId) return;
-    if(action==="open"){ rememberLastBook(bookId); showEditor(bookId); }
-    else if(action==="delete"){ await deleteBook(bookId); }
-    else if(action==="rename"){ await renameBook(bookId, btn.getAttribute("data-oldtitle")||""); }
-    else if(action==="export"){ await exportBook(bookId); }
-  });
-
-  $("#chapters-list")?.addEventListener("click",async(ev)=>{
-    const openBtn=ev.target.closest("[data-ch-open]"),
-          editBtn=ev.target.closest("[data-ch-edit]"),
-          delBtn =ev.target.closest("[data-ch-del]"),
-          dlBtn  =ev.target.closest("[data-ch-dl]");
-    if(!openBtn && !delBtn && !editBtn && !dlBtn) return;
-    const cid=(openBtn||delBtn||editBtn||dlBtn).getAttribute(
-      openBtn?"data-ch-open":delBtn?"data-ch-del":editBtn?"data-ch-edit":"data-ch-dl"
-    );
-    const bid=uiState.currentBookId || $("#bookIdInput").value.trim(); 
-    if(!cid||!bid) return;
-    if(openBtn)      await openChapter(bid,cid);
-    else if(delBtn)  await deleteChapter(bid,cid);
-    else if(editBtn) editChapter(cid);
-    else if(dlBtn)   downloadChapter(bid,cid);
-  });
-}
-
-/* Init */
-document.addEventListener("DOMContentLoaded", async ()=>{
-  wireButtons();
-  await pingBackend();
-  await toggleLibrary(true);
-});
+      const
