@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v2.7 (dashboard + titolo capitolo + riga info con Libro)
+ * src/main.js — v2.7 (titolo capitolo + libro nella lista)
  * ========================================================= */
 
 import "./styles.css";
@@ -31,7 +31,7 @@ const loadLastAuthor     = ()=>{ try{ return localStorage.getItem("last_author")
 const uiState = {
   libraryVisible: true,
   currentBookId: "",
-  currentBookTitle: "",            // NEW: titolo del libro corrente
+  currentBookTitle: "",   // 👈 titolo libro corrente
   currentLanguage: "it",
   chapters: [],
   currentChapterId: "",
@@ -179,24 +179,25 @@ async function loadBookLanguage(bookId){
 
 /* elenco capitoli */
 async function refreshChaptersList(bookId){
-  const list=$("#chapters-list");
+  const list=$("#chapters-list"); 
   if(list) list.innerHTML='<div class="muted">Carico capitoli…</div>';
   try{
     const r=await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`,{cache:"no-store"});
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    const all=await r.json();
+    const all=await r.json(); 
     const arr=Array.isArray(all)?all:(all?.items||[]);
     const found=arr.find(x=>(x?.id||x?.book_id)===bookId);
+
+    // 👇 salviamo il titolo libro
+    uiState.currentBookTitle = (found?.title ?? "(senza titolo)").trim() || "(senza titolo)";
+
     const chapters=found?.chapters||[];
-
-    // 👉 Salvo SOLO il titolo reale; niente fallback all’ID
     uiState.chapters=chapters.map(c=>({
-      id: c?.id || "",
-      title: (c?.title ?? "").trim(),
-      updated_at: c?.updated_at || "",
-      path: c?.path || ""
+      id:c?.id||"",
+      title:(c?.title??"").trim(),
+      updated_at:c?.updated_at||"",
+      path:c?.path||""
     }));
-
     renderChaptersList(bookId, uiState.chapters);
   }catch(e){
     if(list) list.innerHTML=`<div class="error">Errore: ${e.message||e}</div>`;
@@ -212,28 +213,28 @@ function renderChaptersList(bookId, chapters){
   }
   list.innerHTML="";
   const nav=document.createElement("div");
-  nav.className="row-right";
-  nav.style.justifyContent="flex-start";
+  nav.className="row-right"; 
+  nav.style.justifyContent="flex-start"; 
   nav.style.marginBottom="8px";
   nav.innerHTML=`<button class="btn btn-ghost" id="btn-ch-prev">← Precedente</button>
                  <button class="btn btn-ghost" id="btn-ch-next">Successivo →</button>`;
   list.appendChild(nav);
 
   chapters.forEach(ch=>{
-    const cid     = ch.id;
-    const title   = (ch.title || "").trim();
-    const displayTitle = title || "(senza titolo)";   // 👉 titolo visibile
-    const updated = ch.updated_at || "";
+    const cid     = ch.id; 
+    const title   = (ch.title||"").trim() || "(senza titolo)";
+    const updated = ch.updated_at||"";
 
-    const li=document.createElement("div");
-    li.className="card chapter-row";
+    const li=document.createElement("div"); 
+    li.className="card chapter-row"; 
     li.style.margin="8px 0";
     li.innerHTML=`
       <div class="chapter-head">
         <div>
-          <div style="font-weight:600">${escapeHtml(displayTitle)}</div>
+          <div style="font-weight:600">${escapeHtml(title)}</div>
           <div class="muted">
-            ID: ${escapeHtml(cid)}${updated?` · ${escapeHtml(fmtLast(updated))}`:""}
+            ID: ${escapeHtml(cid)} · Libro: ${escapeHtml(uiState.currentBookTitle)}
+            ${updated?` · ${escapeHtml(fmtLast(updated))}`:""}
           </div>
         </div>
       </div>
@@ -249,6 +250,8 @@ function renderChaptersList(bookId, chapters){
   $("#btn-ch-prev")?.addEventListener("click",()=>stepChapter(-1));
   $("#btn-ch-next")?.addEventListener("click",()=>stepChapter(+1));
 }
+
+/* resto funzioni invariato… */
 
 const chapterIndex=(cid)=>uiState.chapters.findIndex(c=>c.id===cid);
 function stepChapter(delta){
