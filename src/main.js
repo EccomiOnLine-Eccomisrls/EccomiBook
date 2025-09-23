@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v2.7 (titolo capitolo + libro nella lista)
+ * src/main.js — v2.7 (dashboard + titolo capitolo in lista)
  * ========================================================= */
 
 import "./styles.css";
@@ -31,7 +31,7 @@ const loadLastAuthor     = ()=>{ try{ return localStorage.getItem("last_author")
 const uiState = {
   libraryVisible: true,
   currentBookId: "",
-  currentBookTitle: "",   // 👈 titolo libro corrente
+  currentBookTitle: "",
   currentLanguage: "it",
   chapters: [],
   currentChapterId: "",
@@ -76,7 +76,7 @@ async function fetchBooks(){
 }
 
 function renderLibrary(books){
-  const box=$("#library-list"); 
+  const box = $("#library-list");
   if(!box) return;
   if(!books?.length){
     box.innerHTML = `<div class="muted">Nessun libro ancora. Crea il tuo primo libro con “Crea libro”.</div>`;
@@ -139,7 +139,7 @@ function renderLibrary(books){
 
 /* Editor / Capitoli */
 async function showEditor(bookId){
-  uiState.currentBookId = bookId || loadLastBook() || ""; 
+  uiState.currentBookId = bookId || loadLastBook() || "";
   if(!uiState.currentBookId) return;
   rememberLastBook(uiState.currentBookId);
   $("#editor-card").style.display="block";
@@ -147,10 +147,10 @@ async function showEditor(bookId){
 
   const ch=$("#chapterIdInput"); if(!ch.value) ch.value="ch_0001";
   const ta=$("#chapterText"); if(!ta.value) ta.value="Scrivi qui il contenuto del capitolo…";
-  uiState.currentChapterId=ch.value.trim(); 
+  uiState.currentChapterId=ch.value.trim();
   uiState.lastSavedSnapshot=ta.value;
 
-  await loadBookLanguage(uiState.currentBookId);
+  await loadBookMeta(uiState.currentBookId);
   refreshChaptersList(uiState.currentBookId).then(()=>{
     if(uiState.chapters.some(c=>c.id===uiState.currentChapterId)){
       openChapter(uiState.currentBookId, uiState.currentChapterId);
@@ -160,52 +160,51 @@ async function showEditor(bookId){
 }
 function closeEditor(){ stopAutosave(); $("#editor-card").style.display="none"; }
 
-/* lingua libro corrente */
-async function loadBookLanguage(bookId){
+/* Metadati libro corrente (lingua + titolo) */
+async function loadBookMeta(bookId){
   try{
-    const r=await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`,{cache:"no-store"}); 
+    const r=await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`,{cache:"no-store"});
     if(!r.ok) return;
-    const arr=(await r.json()); 
+    const arr=(await r.json());
     const items=Array.isArray(arr)?arr:(arr?.items||[]);
     const bk=items.find(b=>(b?.id||b?.book_id)===bookId);
-    uiState.currentLanguage=String(bk?.language||loadLastLang()||"it").toLowerCase();
+    uiState.currentLanguage = String(bk?.language || loadLastLang() || "it").toLowerCase();
+    uiState.currentBookTitle = String(bk?.title || "");
   }catch{
-    uiState.currentLanguage=loadLastLang()||"it";
+    uiState.currentLanguage = loadLastLang() || "it";
+    uiState.currentBookTitle = "";
   }
-  const langInput=$("#languageInput");
-  if(langInput){ langInput.value=uiState.currentLanguage; }
+  $("#languageInput")?.value = uiState.currentLanguage;
   rememberLastLang(uiState.currentLanguage);
 }
 
 /* elenco capitoli */
 async function refreshChaptersList(bookId){
-  const list=$("#chapters-list"); 
+  const list=$("#chapters-list");
   if(list) list.innerHTML='<div class="muted">Carico capitoli…</div>';
   try{
     const r=await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`,{cache:"no-store"});
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    const all=await r.json(); 
+    const all=await r.json();
     const arr=Array.isArray(all)?all:(all?.items||[]);
     const found=arr.find(x=>(x?.id||x?.book_id)===bookId);
-
-    // 👇 salviamo il titolo libro
-    uiState.currentBookTitle = (found?.title ?? "(senza titolo)").trim() || "(senza titolo)";
-
+    // aggiornamento difensivo del titolo libro
+    uiState.currentBookTitle = String(found?.title || uiState.currentBookTitle || "");
     const chapters=found?.chapters||[];
     uiState.chapters=chapters.map(c=>({
-      id:c?.id||"",
-      title:(c?.title??"").trim(),
-      updated_at:c?.updated_at||"",
-      path:c?.path||""
+      id: c?.id || "",
+      title: c?.title || "",        // lascio stringa vuota se mancante per mostrare “(senza titolo)”
+      updated_at: c?.updated_at || "",
+      path: c?.path || ""
     }));
     renderChaptersList(bookId, uiState.chapters);
   }catch(e){
-    if(list) list.innerHTML=`<div class="error">Errore: ${e.message||e}</div>`;
+    if(list) list.innerHTML=`<div class="error">Errore: ${escapeHtml(e?.message||String(e))}</div>`;
   }
 }
 
 function renderChaptersList(bookId, chapters){
-  const list=$("#chapters-list"); 
+  const list=$("#chapters-list");
   if(!list) return;
   if(!chapters?.length){
     list.innerHTML=`<div class="muted">Nessun capitolo ancora.</div>`;
@@ -213,28 +212,32 @@ function renderChaptersList(bookId, chapters){
   }
   list.innerHTML="";
   const nav=document.createElement("div");
-  nav.className="row-right"; 
-  nav.style.justifyContent="flex-start"; 
+  nav.className="row-right";
+  nav.style.justifyContent="flex-start";
   nav.style.marginBottom="8px";
   nav.innerHTML=`<button class="btn btn-ghost" id="btn-ch-prev">← Precedente</button>
                  <button class="btn btn-ghost" id="btn-ch-next">Successivo →</button>`;
   list.appendChild(nav);
 
+  const bookTitle = uiState.currentBookTitle || "";
+
   chapters.forEach(ch=>{
-    const cid     = ch.id; 
-    const title   = (ch.title||"").trim() || "(senza titolo)";
+    const cid     = ch.id;
+    const title   = (ch.title||"").trim();
+    const shown   = title || "(senza titolo)";
     const updated = ch.updated_at||"";
 
-    const li=document.createElement("div"); 
-    li.className="card chapter-row"; 
+    const li=document.createElement("div");
+    li.className="card chapter-row";
     li.style.margin="8px 0";
     li.innerHTML=`
       <div class="chapter-head">
         <div>
-          <div style="font-weight:600">${escapeHtml(title)}</div>
+          <div style="font-weight:600">${escapeHtml(shown)}</div>
           <div class="muted">
-            ID: ${escapeHtml(cid)} · Libro: ${escapeHtml(uiState.currentBookTitle)}
-            ${updated?` · ${escapeHtml(fmtLast(updated))}`:""}
+            ID: ${escapeHtml(cid)}
+            ${bookTitle ? ` · Libro: ${escapeHtml(bookTitle)}` : ""}
+            ${updated ? ` · ${escapeHtml(fmtLast(updated))}` : ""}
           </div>
         </div>
       </div>
@@ -250,8 +253,6 @@ function renderChaptersList(bookId, chapters){
   $("#btn-ch-prev")?.addEventListener("click",()=>stepChapter(-1));
   $("#btn-ch-next")?.addEventListener("click",()=>stepChapter(+1));
 }
-
-/* resto funzioni invariato… */
 
 const chapterIndex=(cid)=>uiState.chapters.findIndex(c=>c.id===cid);
 function stepChapter(delta){
@@ -269,11 +270,11 @@ async function openChapter(bookId, chapterId){
     const r=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?ts=${Date.now()}`,{cache:"no-store"});
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
     const data=await r.json();
-    $("#bookIdInput").value=bookId; 
-    $("#chapterIdInput").value=chapterId; 
+    $("#bookIdInput").value=bookId;
+    $("#chapterIdInput").value=chapterId;
     $("#chapterText").value=data?.content||"";
-    uiState.currentBookId=bookId; 
-    uiState.currentChapterId=chapterId; 
+    uiState.currentBookId=bookId;
+    uiState.currentChapterId=chapterId;
     uiState.lastSavedSnapshot=$("#chapterText").value;
     toast(`📖 Aperto ${chapterId}`);
   }catch(e){
@@ -289,7 +290,7 @@ async function deleteChapter(bookId, chapterId){
     toast("🗑️ Capitolo eliminato.");
     await refreshChaptersList(bookId);
     if(uiState.currentChapterId===chapterId){
-      $("#chapterText").value=""; 
+      $("#chapterText").value="";
       uiState.currentChapterId="";
     }
   }catch(e){
@@ -298,8 +299,8 @@ async function deleteChapter(bookId, chapterId){
 }
 
 function editChapter(cid){
-  $("#chapterIdInput").value=cid; 
-  uiState.currentChapterId=cid; 
+  $("#chapterIdInput").value=cid;
+  uiState.currentChapterId=cid;
   openChapter(uiState.currentBookId,cid).then(()=>$("#chapterText")?.focus());
 }
 
@@ -313,8 +314,8 @@ async function saveCurrentChapter(showToast=true){
       method:"PUT", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ content })
     });
     if(!r.ok){ const t=await r.text().catch(()=> ""); throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`); }
-    uiState.lastSavedSnapshot=content; 
-    if(showToast) toast("✅ Capitolo salvato."); 
+    uiState.lastSavedSnapshot=content;
+    if(showToast) toast("✅ Capitolo salvato.");
     refreshChaptersList(bookId);
   }catch(e){
     toast("Errore salvataggio: "+(e?.message||e));
@@ -348,10 +349,10 @@ async function generateWithAI(){
       body:JSON.stringify({ book_id:bookId, chapter_id:chapterId, topic, language })
     });
     if(!r.ok){ const t=await r.text().catch(()=> ""); throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`); }
-    const data=await r.json(); 
+    const data=await r.json();
     $("#chapterText").value=data?.content||data?.text||"";
     toast(`✨ Testo generato (bozza) — lingua: ${language.toUpperCase()}`);
-    await saveCurrentChapter(false); 
+    await saveCurrentChapter(false);
     await refreshChaptersList(bookId);
   }catch(e){
     toast("⚠️ AI di test: "+(e?.message||e));
@@ -361,17 +362,15 @@ async function generateWithAI(){
 /* Export */
 function askFormat(defaultFmt="pdf"){
   const a=prompt("Formato? (pdf / md / txt)",defaultFmt)?.trim().toLowerCase();
-  if(!a) return null; 
-  if(!["pdf","md","txt"].includes(a)){ toast("Formato non valido."); return null; } 
+  if(!a) return null;
+  if(!["pdf","md","txt"].includes(a)){ toast("Formato non valido."); return null; }
   return a;
 }
-
 function downloadChapter(bookId, chapterId){
   const fmt=askFormat("pdf"); if(!fmt) return;
   window.open(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}/${fmt}`,
               "_blank","noopener");
 }
-
 async function exportBook(bookId){
   const fmt=askFormat("pdf"); if(!fmt) return;
   if(fmt==="pdf"){
@@ -379,7 +378,7 @@ async function exportBook(bookId){
       const r=await fetch(`${API_BASE_URL}/generate/export/book/${encodeURIComponent(bookId)}`,
                           {method:"POST",headers:{ "Content-Type":"application/json" }});
       if(!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data=await r.json(); 
+      const data=await r.json();
       const url=data?.download_url||data?.url;
       if(url) window.open(url,"_blank","noopener"); else toast("Export avviato ma nessun URL ricevuto.");
     }catch(e){
@@ -387,7 +386,7 @@ async function exportBook(bookId){
     }
   }else{
     try{
-      await refreshChaptersList(bookId); 
+      await refreshChaptersList(bookId);
       if(!uiState.chapters.length) return toast("Nessun capitolo da esportare.");
       let assembled=`# ${bookId}\n\n`;
       for(const ch of uiState.chapters){
@@ -397,10 +396,10 @@ async function exportBook(bookId){
       }
       const mime=fmt==="md"?"text/markdown":"text/plain";
       const blob=new Blob([assembled],{type:`${mime};charset=utf-8`});
-      const a=document.createElement("a"); 
-      a.href=URL.createObjectURL(blob); 
-      a.download=`${bookId}.${fmt}`; 
-      a.click(); 
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download=`${bookId}.${fmt}`;
+      a.click();
       URL.revokeObjectURL(a.href);
     }catch(e){
       toast("Errore export: "+(e?.message||e));
@@ -440,8 +439,8 @@ async function createBookSimple(){
     const data=await res.json();
     rememberLastBook(data?.book_id||data?.id||"");
     toast(`✅ Libro creato (${language.toUpperCase()}) — Autore: ${author}`);
-    await toggleLibrary(true); 
-    await fetchBooks(); 
+    await toggleLibrary(true);
+    await fetchBooks();
     setTimeout(fetchBooks,300);
   }catch(e){
     toast("Errore di rete: "+(e?.message||e));
@@ -453,17 +452,15 @@ async function deleteBook(bookId){
   try{
     const res=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}`,{method:"DELETE"});
     if(!res.ok && res.status!==204) throw new Error(`HTTP ${res.status}`);
-    toast("🗑️ Libro eliminato."); 
+    toast("🗑️ Libro eliminato.");
     await fetchBooks();
   }catch(e){
     toast("Errore: "+(e?.message||e));
   }
 }
-
 async function renameBook(bookId, oldTitle){
   const newTitle=prompt("Nuovo titolo libro:",oldTitle||"")?.trim();
   if(!newTitle || newTitle===oldTitle) return;
-  // TODO: endpoint reale di rename quando disponibile
   toast("✏️ Titolo modificato (endpoint reale in arrivo).");
 }
 
@@ -481,7 +478,7 @@ function wireButtons(){
   $("#btn-ai-generate")?.addEventListener("click",generateWithAI);
   $("#btn-ed-delete")?.addEventListener("click",async()=>{
     const bookId=$("#bookIdInput").value.trim(), chapterId=$("#chapterIdInput").value.trim();
-    if(!bookId||!chapterId) return toast("Inserisci Book ID e Chapter ID."); 
+    if(!bookId||!chapterId) return toast("Inserisci Book ID e Chapter ID.");
     await deleteChapter(bookId,chapterId);
   });
 
@@ -502,8 +499,8 @@ function wireButtons(){
 
   $("#library-list")?.addEventListener("click",async(ev)=>{
     const btn=ev.target.closest("button[data-action]"); if(!btn) return;
-    const action=btn.getAttribute("data-action"); 
-    const bookId=btn.getAttribute("data-bookid")||""; 
+    const action=btn.getAttribute("data-action");
+    const bookId=btn.getAttribute("data-bookid")||"";
     if(!bookId) return;
     if(action==="open"){ rememberLastBook(bookId); showEditor(bookId); }
     else if(action==="delete"){ await deleteBook(bookId); }
@@ -520,7 +517,7 @@ function wireButtons(){
     const cid=(openBtn||delBtn||editBtn||dlBtn).getAttribute(
       openBtn?"data-ch-open":delBtn?"data-ch-del":editBtn?"data-ch-edit":"data-ch-dl"
     );
-    const bid=uiState.currentBookId || $("#bookIdInput").value.trim(); 
+    const bid=uiState.currentBookId || $("#bookIdInput").value.trim();
     if(!cid||!bid) return;
     if(openBtn)      await openChapter(bid,cid);
     else if(delBtn)  await deleteChapter(bid,cid);
