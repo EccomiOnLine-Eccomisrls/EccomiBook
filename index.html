@@ -13,8 +13,8 @@
         <span class="logo">📚</span>
         <span class="title">EccomiBook</span>
       </div>
-      <div id="backend-status" class="backend-pill">Backend: …</div>
-      <!-- RIMOSSI i pulsanti duplicati nel topbar -->
+      <!-- Status LED (riempito via JS) -->
+      <div id="backend-status" aria-live="polite"></div>
     </header>
 
     <!-- Main -->
@@ -89,7 +89,7 @@
           <button id="btn-ed-close" class="btn btn-secondary">Chiudi</button>
         </div>
 
-        <!-- Lista capitoli del libro corrente -->
+        <!-- Lista capitoli del libro -->
         <div class="card" style="margin-top:18px">
           <div class="card-head"><strong>Capitoli del libro</strong></div>
           <div id="chapters-list">
