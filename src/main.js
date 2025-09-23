@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v2.6 (dashboard + titolo capitolo in lista)
+ * src/main.js — v2.7 (dashboard + titolo capitolo + riga info con Libro)
  * ========================================================= */
 
 import "./styles.css";
@@ -31,6 +31,7 @@ const loadLastAuthor     = ()=>{ try{ return localStorage.getItem("last_author")
 const uiState = {
   libraryVisible: true,
   currentBookId: "",
+  currentBookTitle: "",            // NEW: titolo del libro corrente
   currentLanguage: "it",
   chapters: [],
   currentChapterId: "",
@@ -186,6 +187,9 @@ async function refreshChaptersList(bookId){
     const all=await r.json(); 
     const arr=Array.isArray(all)?all:(all?.items||[]);
     const found=arr.find(x=>(x?.id||x?.book_id)===bookId);
+
+    uiState.currentBookTitle = found?.title || "";  // NEW: salva titolo libro
+
     const chapters=found?.chapters||[];
     uiState.chapters=chapters.map(c=>({
       id:c?.id||"",
@@ -193,13 +197,13 @@ async function refreshChaptersList(bookId){
       updated_at:c?.updated_at||"",
       path:c?.path||""
     }));
-    renderChaptersList(bookId, uiState.chapters);
+    renderChaptersList(bookId, uiState.chapters, uiState.currentBookTitle); // passiamo titolo
   }catch(e){
     if(list) list.innerHTML=`<div class="error">Errore: ${e.message||e}</div>`;
   }
 }
 
-function renderChaptersList(bookId, chapters){
+function renderChaptersList(bookId, chapters, bookTitle=""){
   const list=$("#chapters-list"); 
   if(!list) return;
   if(!chapters?.length){
@@ -227,7 +231,9 @@ function renderChaptersList(bookId, chapters){
       <div class="chapter-head">
         <div>
           <div style="font-weight:600">${escapeHtml(title||cid)}</div>
-          <div class="muted">ID: ${escapeHtml(cid)} · Titolo: ${escapeHtml(title||cid)}${updated?` · ${escapeHtml(fmtLast(updated))}`:""}</div>
+          <div class="muted">
+            ID: ${escapeHtml(cid)} · Libro: ${escapeHtml(bookTitle || "—")}${updated?` · ${escapeHtml(fmtLast(updated))}`:""}
+          </div>
         </div>
       </div>
       <div class="chapter-actions">
