@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v2.7 (dashboard + titolo capitolo in lista)
+ * src/main.js — v2.8 (Hero CTA + stato Editor + pulizia anteprima)
  * ========================================================= */
 
 import "./styles.css";
@@ -48,6 +48,25 @@ const fmtLast = (iso)=>{
   const pad = n=>String(n).padStart(2,"0");
   return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+
+/* ---- UI Hero helpers ---- */
+function setHeroActive(which){ // "create" | "library" | "editor" | null
+  const map = {
+    create:  $("#btn-create-book"),
+    library: $("#btn-library"),
+    editor:  $("#btn-editor"),
+  };
+  Object.values(map).forEach(btn => btn && btn.classList.remove("is-active"));
+  if (which && map[which]) map[which].classList.add("is-active");
+}
+
+function syncEditorButtonState(){
+  const editorBtn = $("#btn-editor"); if(!editorBtn) return;
+  const hasBook = !!(loadLastBook());
+  editorBtn.disabled = !hasBook;
+  editorBtn.title = hasBook ? "Scrivi e salva capitoli" : "Apri un libro dalla Libreria";
+  editorBtn.classList.toggle("is-disabled", !hasBook);
+}
 
 /* Ping backend */
 async function pingBackend(){
@@ -104,8 +123,6 @@ function renderLibrary(books){
     const lang     = (b?.language || "it").toUpperCase();
     const chapters = Array.isArray(b?.chapters) ? b.chapters : [];
     const chCount  = chapters.length || (typeof b?.chapters_count === "number" ? b.chapters_count : 0);
-    const lastCh   = chapters.length ? chapters[chapters.length - 1] : null;
-    const lastChTitle = lastCh?.title || lastCh?.id || "";
     const lastUpdated = getLastUpdated(b);
     const chBadgeClass = chCount > 0 ? "badge-ok" : "badge-empty";
 
@@ -118,15 +135,12 @@ function renderLibrary(books){
 
       <div class="row-right" style="margin-top:8px;justify-content:flex-start;gap:8px;flex-wrap:wrap">
         <span class="badge ${chBadgeClass}">📄 Capitoli: ${chCount}</span>
-        <span class="badge badge-neutral" title="${escapeAttr(lastUpdated || '—')}">
+        <span class="badge badge-neutral" title="${escapeAttr(getLastUpdated(b) || '—')}">
           🕑 Ultima mod.: ${escapeHtml(fmtLast(lastUpdated) || "—")}
         </span>
       </div>
 
-      <div class="book-preview muted" title="${escapeAttr(lastChTitle || '—')}">
-        🔎 Anteprima capitolo: ${escapeHtml(lastChTitle || "—")}
-      </div>
-
+      <!-- Anteprima capitolo rimossa -->
       <div class="row-right" style="margin-top:10px;justify-content:flex-start;gap:8px">
         <button class="btn btn-secondary" data-action="open"    data-bookid="${escapeAttr(id)}">Apri</button>
         <button class="btn btn-ghost"     data-action="rename"  data-bookid="${escapeAttr(id)}" data-oldtitle="${escapeAttr(title)}">Modifica</button>
@@ -157,6 +171,8 @@ async function showEditor(bookId){
     }
   });
   startAutosave();
+  setHeroActive("editor");
+  syncEditorButtonState();
 }
 function closeEditor(){ stopAutosave(); $("#editor-card").style.display="none"; }
 
@@ -189,12 +205,11 @@ async function refreshChaptersList(bookId){
     const all=await r.json();
     const arr=Array.isArray(all)?all:(all?.items||[]);
     const found=arr.find(x=>(x?.id||x?.book_id)===bookId);
-    // aggiornamento difensivo del titolo libro
     uiState.currentBookTitle = String(found?.title || uiState.currentBookTitle || "");
     const chapters=found?.chapters||[];
     uiState.chapters=chapters.map(c=>({
       id: c?.id || "",
-      title: c?.title || "",        // lascio stringa vuota se mancante per mostrare “(senza titolo)”
+      title: c?.title || "",
       updated_at: c?.updated_at || "",
       path: c?.path || ""
     }));
@@ -413,7 +428,11 @@ async function toggleLibrary(force){
   const lib=$("#library-section"); if(!lib) return;
   uiState.libraryVisible=(typeof force==="boolean")?force:!uiState.libraryVisible;
   lib.style.display=uiState.libraryVisible?"block":"none";
-  if(uiState.libraryVisible) await fetchBooks();
+  if(uiState.libraryVisible){
+    await fetchBooks();
+    setHeroActive("library");
+    syncEditorButtonState();
+  }
 }
 
 /* Azioni globali */
@@ -443,6 +462,8 @@ async function createBookSimple(){
     await toggleLibrary(true);
     await fetchBooks();
     setTimeout(fetchBooks,300);
+    setHeroActive("library");
+    syncEditorButtonState();
   }catch(e){
     toast("Errore di rete: "+(e?.message||e));
   }
@@ -455,6 +476,7 @@ async function deleteBook(bookId){
     if(!res.ok && res.status!==204) throw new Error(`HTTP ${res.status}`);
     toast("🗑️ Libro eliminato.");
     await fetchBooks();
+    syncEditorButtonState();
   }catch(e){
     toast("Errore: "+(e?.message||e));
   }
@@ -467,13 +489,12 @@ async function renameBook(bookId, oldTitle){
 
 /* Wiring */
 function wireButtons(){
-  $("#btn-create-book")?.addEventListener("click",createBookSimple);
-  $("#btn-library")?.addEventListener("click",()=>toggleLibrary());
+  $("#btn-create-book")?.addEventListener("click",()=>{ setHeroActive("create"); createBookSimple(); });
+  $("#btn-library")?.addEventListener("click",()=>toggleLibrary(true));
   $("#btn-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
-  $("#btn-quick-create")?.addEventListener("click",createBookSimple);
-  $("#btn-quick-library")?.addEventListener("click",()=>toggleLibrary());
-  $("#btn-quick-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
 
+  // (Rimossi i quick buttons duplicati)
+  
   $("#btn-ed-close")?.addEventListener("click",closeEditor);
   $("#btn-ed-save")?.addEventListener("click",()=>saveCurrentChapter(true));
   $("#btn-ai-generate")?.addEventListener("click",generateWithAI);
@@ -531,5 +552,6 @@ function wireButtons(){
 document.addEventListener("DOMContentLoaded", async ()=>{
   wireButtons();
   await pingBackend();
+  syncEditorButtonState();
   await toggleLibrary(true);
 });
