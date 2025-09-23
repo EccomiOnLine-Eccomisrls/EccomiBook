@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v3.3 (toggle Libreria + datalist robusti + next ch hint)
+ * src/main.js — v3.6 (dropdown libri/capitoli + +Capitolo + autofill focus)
  * ========================================================= */
 
 import "./styles.css";
@@ -18,6 +18,7 @@ const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"
 const escapeAttr = (s)=>escapeHtml(s).replace(/"/g,"&quot;");
 const toast = (m)=>alert(m);
 
+/* LocalStorage helpers */
 const rememberLastBook   = (id)=>{ try{ localStorage.setItem("last_book_id", id||""); }catch{} };
 const loadLastBook       = ()=>{ try{ return localStorage.getItem("last_book_id")||""; }catch{ return ""; } };
 const rememberLastLang   = (lang)=>{ try{ localStorage.setItem("last_language", String(lang||"").toLowerCase()); }catch{} };
@@ -31,6 +32,7 @@ const uiState = {
   currentBookId: "",
   currentBookTitle: "",
   currentLanguage: "it",
+  books: [],
   chapters: [],
   currentChapterId: "",
   autosaveTimer: null,
@@ -92,7 +94,7 @@ async function pingBackend(){
   }
 }
 
-/* ======== Datalist helpers ======== */
+/* ======== Datalist + dropdown helpers ======== */
 function populateBooksDatalist(books=[]) {
   const dl = $("#books-dl"); if(!dl) return;
   dl.innerHTML = books.map(b=>{
@@ -111,6 +113,7 @@ function populateChaptersDatalist(chapters=[]) {
   });
   dl.innerHTML = opts.join("") + `<option value="(Nuovo capitolo…)">— Nuovo capitolo —</option>`;
 }
+
 function nextChapterId(existing=[]) {
   const nums = existing
     .map(c=>String(c.id||""))
@@ -128,14 +131,32 @@ function updateNextHint(){
   hint.title = "Prossimo ID suggerito";
 }
 
-/* Piccolo trucco per mostrare tutto il datalist su focus (utile su Safari) */
-function showAllOnFocus(input){
-  if(!input) return;
-  input.addEventListener("focus", ()=>{
-    const v=input.value;
-    input.value = v;            // re-trigger
-    input.dispatchEvent(new Event("input",{bubbles:true}));
+/* Dropdown custom */
+let openDropdownEl=null;
+function closeDropdown(){ if(openDropdownEl){ openDropdownEl.remove(); openDropdownEl=null; } }
+document.addEventListener("click",(e)=>{
+  if(openDropdownEl && !openDropdownEl.contains(e.target) &&
+     !e.target.closest(".iconbtn") && !e.target.closest(".input-row")) closeDropdown();
+});
+
+function openDropdown(anchorEl, items, renderer, onSelect){
+  closeDropdown();
+  const rect = anchorEl.getBoundingClientRect();
+  const dd = document.createElement("div");
+  dd.className="dropdown";
+  dd.style.left = `${Math.round(rect.left + window.scrollX)}px`;
+  dd.style.top  = `${Math.round(rect.bottom + window.scrollY + 6)}px`;
+  dd.style.width= `${Math.round(rect.width)}px`;
+  dd.innerHTML = items.map(renderer).join("") || `<div class="dropdown-item">Nessun elemento</div>`;
+  dd.addEventListener("click",(ev)=>{
+    const it = ev.target.closest("[data-value]");
+    if(!it) return;
+    const value = it.getAttribute("data-value");
+    onSelect(value, it);
+    closeDropdown();
   });
+  document.body.appendChild(dd);
+  openDropdownEl = dd;
 }
 
 /* Libreria */
@@ -146,11 +167,13 @@ async function fetchBooks(){
     if(!res.ok){const t=await res.text().catch(()=> ""); throw new Error(`HTTP ${res.status}${t?`: ${t}`:""}`);}
     const data=await res.json();
     const items = Array.isArray(data)?data:(data?.items||[]);
+    uiState.books = items;
     renderLibrary(items);
     populateBooksDatalist(items);
     return items;
   }catch(e){
     if(box) box.innerHTML=`<div class="error">Errore: ${e.message||e}</div>`;
+    uiState.books=[];
     return [];
   }
 }
@@ -213,8 +236,7 @@ function renderLibrary(books){
 
 /* Editor / Capitoli */
 async function showEditor(bookId){
-  // assicura datalist libri sempre pieni
-  if (!$("#books-dl")?.options?.length) { await fetchBooks(); }
+  if (!uiState.books.length) { await fetchBooks(); }
 
   uiState.currentBookId = bookId || loadLastBook() || "";
   if(!uiState.currentBookId) return;
@@ -222,13 +244,23 @@ async function showEditor(bookId){
   $("#editor-card").style.display="block";
   $("#bookIdInput").value=uiState.currentBookId;
 
-  const ch=$("#chapterIdInput"); if(!ch.value) ch.value="ch_0001";
+  const ch=$("#chapterIdInput"); if(!ch.value) ch.value="";
   const ta=$("#chapterText"); if(!ta.value) ta.value="Scrivi qui il contenuto del capitolo…";
   uiState.currentChapterId=ch.value.trim();
   uiState.lastSavedSnapshot=ta.value;
 
   await loadBookMeta(uiState.currentBookId);
   await refreshChaptersList(uiState.currentBookId);
+
+  // Se libro senza capitoli: precompila Chapter ID e focus nella textarea
+  if(!(uiState.chapters?.length)){
+    const nid = nextChapterId([]);
+    $("#chapterIdInput").value = nid;
+    uiState.currentChapterId = nid;
+    updateNextHint();
+    $("#chapterText").focus();
+  }
+
   startAutosave();
   setHeroActive("editor");
   syncEditorButtonState();
@@ -275,7 +307,7 @@ async function refreshChaptersList(bookId){
 
     populateChaptersDatalist(uiState.chapters);
     renderChaptersList(bookId, uiState.chapters);
-    updateNextHint(); // aggiorna il pill “prossimo capitolo”
+    updateNextHint();
   }catch(e){
     if(list) list.innerHTML=`<div class="error">Errore: ${escapeHtml(e?.message||String(e))}</div>`;
   }
@@ -484,7 +516,7 @@ async function exportBook(bookId){
   }
 }
 
-/* Libreria: toggle (apri/chiudi con stesso bottone) */
+/* Libreria: toggle */
 async function toggleLibrary(force){
   const lib=$("#library-section"); if(!lib) return;
   uiState.libraryVisible=(typeof force==="boolean")?force:!uiState.libraryVisible;
@@ -551,7 +583,7 @@ async function renameBook(bookId, oldTitle){
 /* Wiring */
 function wireButtons(){
   $("#btn-create-book")?.addEventListener("click",()=>{ setHeroActive("create"); createBookSimple(); });
-  $("#btn-library")?.addEventListener("click",()=>toggleLibrary()); // <— TOGGLE
+  $("#btn-library")?.addEventListener("click",()=>toggleLibrary());
   $("#btn-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
 
   $("#btn-ed-close")?.addEventListener("click",closeEditor);
@@ -563,7 +595,61 @@ function wireButtons(){
     await deleteChapter(bookId,chapterId);
   });
 
-  // Book ID change → ricarica capitoli e hint
+  // Pulsanti menu ▼
+  $("#btn-book-menu")?.addEventListener("click",()=>{
+    const anchor = $("#bookIdInput");
+    const items = (uiState.books||[]).map(b=>{
+      const id = b?.id || b?.book_id || "";
+      const t = (b?.title||"").trim() || "(senza titolo)";
+      const a = (b?.author||"").trim();
+      return {value:id, label:`${t}`, sub:a?`Autore: ${a}`:""};
+    });
+    openDropdown(anchor, items, it=>(
+      `<div class="dropdown-item" data-value="${escapeAttr(it.value)}">
+         <strong>${escapeHtml(it.label)}</strong> ${it.sub?`<small> · ${escapeHtml(it.sub)}</small>`:""}
+       </div>`
+    ), async (val)=>{
+      $("#bookIdInput").value = val;
+      rememberLastBook(val);
+      uiState.currentBookId = val;
+      await loadBookMeta(val);
+      await refreshChaptersList(val);
+      // se vuoto, proponi nuovo capitolo
+      if(!$("#chapterIdInput").value){
+        const nid = nextChapterId(uiState.chapters||[]);
+        $("#chapterIdInput").value = nid;
+        uiState.currentChapterId = nid;
+        updateNextHint();
+      }
+    });
+  });
+
+  $("#btn-ch-menu")?.addEventListener("click",()=>{
+    const anchor = $("#chapterIdInput");
+    const items = (uiState.chapters||[]).map(c=>({
+      value:c.id, label:c.id, sub:(c.title||"")
+    }));
+    openDropdown(anchor, items, it=>(
+      `<div class="dropdown-item" data-value="${escapeAttr(it.value)}">
+         <strong>${escapeHtml(it.label)}</strong>${it.sub?`<small> · ${escapeHtml(it.sub)}</small>`:""}
+       </div>`
+    ), (val)=>{
+      $("#chapterIdInput").value = val;
+      uiState.currentChapterId = val;
+      updateNextHint();
+    });
+  });
+
+  // Pulsante + Capitolo
+  $("#btn-ch-new")?.addEventListener("click",()=>{
+    const nid = nextChapterId(uiState.chapters||[]);
+    $("#chapterIdInput").value = nid;
+    uiState.currentChapterId = nid;
+    updateNextHint();
+    $("#chapterText").focus();
+  });
+
+  // Change manuale input (fallback/nativo)
   $("#bookIdInput")?.addEventListener("change", async ()=>{
     const bid = $("#bookIdInput").value.trim();
     if(!bid) return;
@@ -571,16 +657,15 @@ function wireButtons(){
     uiState.currentBookId = bid;
     await loadBookMeta(bid);
     await refreshChaptersList(bid);
-    // propone subito il prossimo capitolo se l'input era vuoto
     if(!$("#chapterIdInput").value){
       const nid = nextChapterId(uiState.chapters||[]);
       $("#chapterIdInput").value = nid;
       uiState.currentChapterId = nid;
     }
+    updateNextHint();
     syncEditorButtonState();
   });
 
-  // Chapter ID → “Nuovo capitolo…”
   $("#chapterIdInput")?.addEventListener("change", ()=>{
     const v = $("#chapterIdInput").value.trim();
     if(v === "(Nuovo capitolo…)"){
@@ -600,10 +685,6 @@ function wireButtons(){
   $("#topicInput")?.addEventListener("change", ()=>{
     try{ localStorage.setItem("last_topic", $("#topicInput").value || ""); }catch{}
   });
-
-  // “Mostra tutto” sui datalist quando vai in focus
-  showAllOnFocus($("#bookIdInput"));
-  showAllOnFocus($("#chapterIdInput"));
 
   $("#chapterText")?.addEventListener("input",()=>{
     if(uiState.saveSoon) clearTimeout(uiState.saveSoon);
