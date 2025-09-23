@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v2.8 (Hero CTA + stato Editor + pulizia anteprima)
+ * src/main.js — v2.9 (Hero CTA + Status LED)
  * ========================================================= */
 
 import "./styles.css";
@@ -48,6 +48,11 @@ const fmtLast = (iso)=>{
   const pad = n=>String(n).padStart(2,"0");
   return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+/* HH:MM */
+const fmtHHMM = (d=new Date())=>{
+  const pad=n=>String(n).padStart(2,"0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 /* ---- UI Hero helpers ---- */
 function setHeroActive(which){ // "create" | "library" | "editor" | null
@@ -59,7 +64,6 @@ function setHeroActive(which){ // "create" | "library" | "editor" | null
   Object.values(map).forEach(btn => btn && btn.classList.remove("is-active"));
   if (which && map[which]) map[which].classList.add("is-active");
 }
-
 function syncEditorButtonState(){
   const editorBtn = $("#btn-editor"); if(!editorBtn) return;
   const hasBook = !!(loadLastBook());
@@ -68,20 +72,34 @@ function syncEditorButtonState(){
   editorBtn.classList.toggle("is-disabled", !hasBook);
 }
 
+/* ===== Status LED handling ===== */
+function renderStatus({mode,title,sub}){
+  const el=$("#backend-status"); if(!el) return;
+  const ledClass = mode==="ok" ? "led--ok" : mode==="warn" ? "led--warn" : "led--ko";
+  el.innerHTML = `
+    <div class="statusbox">
+      <span class="statusbox__led ${ledClass}"></span>
+      <div class="statusbox__text">
+        <span class="statusbox__title">${escapeHtml(title)}</span>
+        <span class="statusbox__sub">${escapeHtml(sub)}</span>
+      </div>
+    </div>
+  `;
+}
+
 /* Ping backend */
 async function pingBackend(){
-  const el=$("#backend-status"); if(!el) return;
-  el.textContent="Backend: verifico…";
+  renderStatus({mode:"warn", title:"EccomiBook Live", sub:"Verifica in corso…"});
   try{
     const r=await fetch(`${API_BASE_URL}/health`,{cache:"no-store"});
-    el.textContent=r.ok?"Backend: ✅ OK":`Backend: errore ${r.status}`;
+    if(r.ok){
+      renderStatus({mode:"ok", title:"EccomiBook Live", sub:`Ultimo aggiornamento: ${fmtHHMM()}`});
+    }else{
+      renderStatus({mode:"ko", title:"EccomiBook Offline", sub:`Errore ${r.status}`});
+    }
   }catch{
-    el.textContent="Backend: non raggiungibile";
+    renderStatus({mode:"ko", title:"EccomiBook Offline", sub:"Servizio non raggiungibile"});
   }
-  const dbg=document.createElement("div");
-  dbg.className="debug-url";
-  dbg.innerHTML=`API: <a href="${API_BASE_URL}" target="_blank" rel="noreferrer">${API_BASE_URL}</a>`;
-  el.appendChild(dbg);
 }
 
 /* Libreria */
@@ -140,7 +158,6 @@ function renderLibrary(books){
         </span>
       </div>
 
-      <!-- Anteprima capitolo rimossa -->
       <div class="row-right" style="margin-top:10px;justify-content:flex-start;gap:8px">
         <button class="btn btn-secondary" data-action="open"    data-bookid="${escapeAttr(id)}">Apri</button>
         <button class="btn btn-ghost"     data-action="rename"  data-bookid="${escapeAttr(id)}" data-oldtitle="${escapeAttr(title)}">Modifica</button>
@@ -492,8 +509,6 @@ function wireButtons(){
   $("#btn-create-book")?.addEventListener("click",()=>{ setHeroActive("create"); createBookSimple(); });
   $("#btn-library")?.addEventListener("click",()=>toggleLibrary(true));
   $("#btn-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
-
-  // (Rimossi i quick buttons duplicati)
   
   $("#btn-ed-close")?.addEventListener("click",closeEditor);
   $("#btn-ed-save")?.addEventListener("click",()=>saveCurrentChapter(true));
