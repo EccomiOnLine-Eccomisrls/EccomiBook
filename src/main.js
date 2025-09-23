@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend (Vite, vanilla)
- * src/main.js — v2.4.1 (Bozza Libro + Nome artista)
+ * src/main.js — v2.5 (dashboard badges + preview capitolo)
  * ========================================================= */
 
 import "./styles.css";
@@ -24,7 +24,6 @@ const loadLastBook      = ()=>{ try{ return localStorage.getItem("last_book_id")
 const rememberLastLang = (lang)=>{ try{ localStorage.setItem("last_language", String(lang||"").toLowerCase()); }catch{} };
 const loadLastLang     = ()=>{ try{ return (localStorage.getItem("last_language")||"it").toLowerCase(); }catch{ return "it"; } };
 
-/* >>> cambiato default autore a "Nome artista" <<< */
 const rememberLastAuthor = (a)=>{ try{ localStorage.setItem("last_author", a||"Nome artista"); }catch{} };
 const loadLastAuthor     = ()=>{ try{ return localStorage.getItem("last_author") || "Nome artista"; }catch{ return "Nome artista"; } };
 
@@ -38,6 +37,15 @@ const uiState = {
   autosaveTimer: null,
   lastSavedSnapshot: "",
   saveSoon: null,
+};
+
+/* Formatta ISO → dd/mm/yyyy hh:mm */
+const fmtLast = (iso)=>{
+  if(!iso) return "";
+  const d = new Date(iso);
+  if(isNaN(d)) return iso;
+  const pad = n=>String(n).padStart(2,"0");
+  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
 /* Ping backend */
@@ -80,9 +88,7 @@ function renderLibrary(books){
   box.appendChild(grid);
 
   const getLastUpdated = (b)=>{
-    // prova 1: campo updated_at del libro
     if (b?.updated_at) return b.updated_at;
-    // prova 2: max updated_at dei capitoli
     if (Array.isArray(b?.chapters) && b.chapters.length){
       const last = [...b.chapters].sort((a,b)=>String(a?.updated_at||"").localeCompare(String(b?.updated_at||""))).slice(-1)[0];
       return last?.updated_at || "";
@@ -114,7 +120,9 @@ function renderLibrary(books){
 
       <div class="row-right" style="margin-top:8px;justify-content:flex-start;gap:8px;flex-wrap:wrap">
         <span class="badge ${chBadgeClass}">📄 Capitoli: ${chCount}</span>
-        <span class="badge badge-neutral" title="${escapeAttr(lastUpdated || '—')}">🕑 Ultima mod.: ${escapeHtml(lastUpdated || "—")}</span>
+        <span class="badge badge-neutral" title="${escapeAttr(lastUpdated || '—')}">
+          🕑 Ultima mod.: ${escapeHtml(fmtLast(lastUpdated) || "—")}
+        </span>
       </div>
 
       <div class="book-preview muted" title="${escapeAttr(lastChTitle || '—')}">
@@ -130,6 +138,7 @@ function renderLibrary(books){
     grid.appendChild(card);
   });
 }
+
 /* Editor / Capitoli */
 async function showEditor(bookId){
   uiState.currentBookId = bookId || loadLastBook() || ""; if(!uiState.currentBookId) return;
@@ -296,137 +305,4 @@ async function exportBook(bookId){
       const r=await fetch(`${API_BASE_URL}/generate/export/book/${encodeURIComponent(bookId)}`,{method:"POST",headers:{ "Content-Type":"application/json" }});
       if(!r.ok) throw new Error(`HTTP ${r.status}`);
       const data=await r.json(); const url=data?.download_url||data?.url;
-      return url?window.open(url,"_blank","noopener"):toast("Export avviato ma nessun URL ricevuto.");
-    }catch(e){ toast("Errore export PDF: "+(e?.message||e)); }
-  }else{
-    try{
-      await refreshChaptersList(bookId); if(!uiState.chapters.length) return toast("Nessun capitolo da esportare.");
-      let assembled=`# ${bookId}\n\n`;
-      for(const ch of uiState.chapters){
-        const resp=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(ch.id)}`,{cache:"no-store"});
-        const data=resp.ok?await resp.json():{content:""}; assembled+=`\n\n# ${ch.title||ch.id}\n\n${data.content||""}\n`;
-      }
-      const mime=fmt==="md"?"text/markdown":"text/plain";
-      const blob=new Blob([assembled],{type:`${mime};charset=utf-8`});
-      const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`${bookId}.${fmt}`; a.click(); URL.revokeObjectURL(a.href);
-    }catch(e){ toast("Errore export: "+(e?.message||e)); }
-  }
-}
-
-/* Libreria: toggle */
-async function toggleLibrary(force){
-  const lib=$("#library-section"); if(!lib) return;
-  uiState.libraryVisible=(typeof force==="boolean")?force:!uiState.libraryVisible;
-  lib.style.display=uiState.libraryVisible?"block":"none";
-  if(uiState.libraryVisible) await fetchBooks();
-}
-
-/* Azioni globali */
-async function createBookSimple(){
-  // 1) titolo —>>> default aggiornato
-  const title=prompt("Inserisci il titolo del libro:", "Bozza Libro");
-  if(title==null) return;
-
-  // 2) autore —>>> prompt semplificato e default “Nome artista”
-  let author = prompt("Nome artista", loadLastAuthor())?.trim();
-  if(author==null) return;
-  author = author || loadLastAuthor();
-  rememberLastAuthor(author);
-
-  // 3) lingua (precompilata con ultima lingua)
-  let defaultLang = loadLastLang();
-  let language=prompt("Lingua (es. it, en, es, fr…):", defaultLang)?.trim().toLowerCase()||defaultLang||"it";
-  language=language.replace(/[^a-z-]/gi,"").slice(0,10)||"it";
-  rememberLastLang(language);
-
-  try{
-    const res=await fetch(`${API_BASE_URL}/books/create`,{
-      method:"POST", headers:{ "Content-Type":"application/json" }, cache:"no-store",
-      body:JSON.stringify({ title:(title.trim()||"Senza titolo"), author, language, chapters:[] }),
-    });
-    if(!res.ok){ const txt=await res.text().catch(()=> ""); throw new Error(`HTTP ${res.status}${txt?`: ${txt}`:""}`); }
-    const data=await res.json();
-    rememberLastBook(data?.book_id||data?.id||"");
-    toast(`✅ Libro creato (${language.toUpperCase()}) — Autore: ${author}`);
-    await toggleLibrary(true); await fetchBooks(); setTimeout(fetchBooks,300);
-  }catch(e){ toast("Errore di rete: "+(e?.message||e)); }
-}
-
-async function deleteBook(bookId){
-  if(!confirm("Eliminare il libro?")) return;
-  try{
-    const res=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}`,{method:"DELETE"});
-    if(!res.ok && res.status!==204) throw new Error(`HTTP ${r.status}`);
-    toast("🗑️ Libro eliminato."); await fetchBooks();
-  }catch(e){ toast("Errore: "+(e?.message||e)); }
-}
-async function renameBook(bookId, oldTitle){
-  const newTitle=prompt("Nuovo titolo libro:",oldTitle||"")?.trim();
-  if(!newTitle || newTitle===oldTitle) return;
-  toast("✏️ Titolo modificato (endpoint reale in arrivo).");
-}
-
-/* Wiring */
-function wireButtons(){
-  $("#btn-create-book")?.addEventListener("click",createBookSimple);
-  $("#btn-library")?.addEventListener("click",()=>toggleLibrary());
-  $("#btn-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
-  $("#btn-quick-create")?.addEventListener("click",createBookSimple);
-  $("#btn-quick-library")?.addEventListener("click",()=>toggleLibrary());
-  $("#btn-quick-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
-
-  $("#btn-ed-close")?.addEventListener("click",closeEditor);
-  $("#btn-ed-save")?.addEventListener("click",()=>saveCurrentChapter(true));
-  $("#btn-ai-generate")?.addEventListener("click",generateWithAI);
-  $("#btn-ed-delete")?.addEventListener("click",async()=>{
-    const bookId=$("#bookIdInput").value.trim(), chapterId=$("#chapterIdInput").value.trim();
-    if(!bookId||!chapterId) return toast("Inserisci Book ID e Chapter ID."); await deleteChapter(bookId,chapterId);
-  });
-
-  $("#chapterText")?.addEventListener("input",()=>{
-    if(uiState.saveSoon) clearTimeout(uiState.saveSoon);
-    uiState.saveSoon=setTimeout(maybeAutosaveNow,1500);
-  });
-  $("#chapterIdInput")?.addEventListener("change",async()=>{
-    await maybeAutosaveNow();
-    uiState.currentChapterId=$("#chapterIdInput").value.trim();
-    uiState.lastSavedSnapshot=$("#chapterText").value;
-  });
-
-  $("#languageInput")?.addEventListener("change",()=>{
-    const v=$("#languageInput").value.trim().toLowerCase()||"it";
-    uiState.currentLanguage=v; rememberLastLang(v);
-  });
-
-  $("#library-list")?.addEventListener("click",async(ev)=>{
-    const btn=ev.target.closest("button[data-action]"); if(!btn) return;
-    const action=btn.getAttribute("data-action"); const bookId=btn.getAttribute("data-bookid")||""; if(!bookId) return;
-    if(action==="open"){ rememberLastBook(bookId); showEditor(bookId); }
-    else if(action==="delete"){ await deleteBook(bookId); }
-    else if(action==="rename"){ await renameBook(bookId, btn.getAttribute("data-oldtitle")||""); }
-    else if(action==="export"){ await exportBook(bookId); }
-  });
-
-  $("#chapters-list")?.addEventListener("click",async(ev)=>{
-    const openBtn=ev.target.closest("[data-ch-open]"),
-          editBtn=ev.target.closest("[data-ch-edit]"),
-          delBtn =ev.target.closest("[data-ch-del]"),
-          dlBtn  =ev.target.closest("[data-ch-dl]");
-    if(!openBtn && !delBtn && !editBtn && !dlBtn) return;
-    const cid=(openBtn||delBtn||editBtn||dlBtn).getAttribute(
-      openBtn?"data-ch-open":delBtn?"data-ch-del":editBtn?"data-ch-edit":"data-ch-dl"
-    );
-    const bid=uiState.currentBookId || $("#bookIdInput").value.trim(); if(!cid||!bid) return;
-    if(openBtn)      await openChapter(bid,cid);
-    else if(delBtn)  await deleteChapter(bid,cid);
-    else if(editBtn) editChapter(cid);
-    else if(dlBtn)   downloadChapter(bid,cid);
-  });
-}
-
-/* Init */
-document.addEventListener("DOMContentLoaded", async ()=>{
-  wireButtons();
-  await pingBackend();
-  await toggleLibrary(true);
-});
+      return url?window.open(url,"_blank","noopener"):toast
