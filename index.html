@@ -60,13 +60,21 @@
       <section id="editor-card" class="card editor-card" style="display:none; margin-top:20px;">
         <div class="card-head"><strong>✏️ Editor capitolo</strong></div>
 
+        <!-- Book ID + pulsante lista -->
         <label for="bookIdInput">Book ID</label>
-        <input id="bookIdInput" type="text" placeholder="ID libro" list="books-dl" autocomplete="off"/>
+        <div class="input-row">
+          <input id="bookIdInput" type="text" placeholder="ID libro" list="books-dl" autocomplete="off"/>
+          <button id="btn-book-menu" class="iconbtn" title="Elenco libri">▼</button>
+        </div>
 
         <div class="grid">
           <div>
             <label for="chapterIdInput">Chapter ID</label>
-            <input id="chapterIdInput" type="text" placeholder="es. ch_0001" list="chapters-dl" autocomplete="off"/>
+            <div class="input-row">
+              <input id="chapterIdInput" type="text" placeholder="es. ch_0001" list="chapters-dl" autocomplete="off"/>
+              <button id="btn-ch-menu" class="iconbtn" title="Elenco capitoli">▼</button>
+              <button id="btn-ch-new" class="iconbtn" title="Nuovo capitolo">＋</button>
+            </div>
           </div>
           <div>
             <label for="topicInput">Topic (per AI)
@@ -80,7 +88,7 @@
           </div>
         </div>
 
-        <!-- datalist -->
+        <!-- datalist fallback -->
         <datalist id="books-dl"></datalist>
         <datalist id="chapters-dl"></datalist>
 
