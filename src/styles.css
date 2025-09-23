@@ -24,7 +24,8 @@ body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-ap
   padding:6px 10px;color:var(--text);
 }
 .debug-url{font-size:11px;opacity:.8;margin-top:4px}
-.actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* Rimosso: .actions nel topbar (non usiamo più pulsanti duplicati nel header) */
 
 .btn{border:1px solid transparent;border-radius:10px;padding:8px 12px;cursor:pointer}
 .btn:hover{opacity:.95}
@@ -63,10 +64,8 @@ body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-ap
 .badge-empty { background: rgba(160, 160, 160, 0.12); border: 1px solid rgba(160,160,160,0.35); }
 .badge-neutral { background: rgba(70, 120, 255, 0.12); border: 1px solid rgba(70,120,255,0.35); }
 
-/* Preview riga sotto le badge */
-.book-preview {
-  display: none !important;
-}
+/* (Opzione B) Anteprima capitolo nascosta */
+.book-preview { display: none !important; }
 
 .footer{opacity:.7;text-align:center;font-size:13px;margin:48px 0}
 
@@ -96,4 +95,44 @@ body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-ap
 .chapter-actions .btn { padding: 6px 10px; font-size: 14px; }
 @media (max-width: 760px) {
   .chapter-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+}
+
+/* ===== HERO CTA (nuovo blocco centrale) ===== */
+.hero-cta { margin: 18px 0 8px; }
+.hero-cta__inner {
+  display: flex; align-items: stretch; justify-content: center; gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cta {
+  display: inline-flex; align-items: center; gap: 10px;
+  min-height: 60px; padding: 12px 18px; border-radius: 12px;
+  border: 1px solid transparent; cursor: pointer; text-align: left;
+  transition: transform .06s ease, box-shadow .1s ease, background .1s ease, border-color .1s ease;
+}
+.cta:active { transform: translateY(1px); }
+.cta__icon { font-size: 20px; line-height: 0; }
+.cta__text { display: flex; flex-direction: column; line-height: 1.1; }
+.cta__sub { display: block; opacity: .7; font-size: 12px; margin-top: 3px; }
+
+/* Gerarchia */
+.cta--primary {
+  background: var(--primary);
+  color: #fff; border-color: rgba(255,255,255,.08);
+  box-shadow: 0 6px 20px rgba(45,126,247,.22);
+}
+.cta--primary:hover { filter: brightness(1.08); }
+
+.cta--outline {
+  background: transparent; color: inherit; border-color: rgba(255,255,255,.18);
+}
+.cta--outline:hover { background: rgba(255,255,255,.06); }
+
+/* Stato attivo (highlight leggero) */
+.cta.is-active { box-shadow: 0 0 0 2px rgba(45,126,247,.35) inset; }
+
+/* Disabled (Editor quando non c'è last_book_id) */
+.cta[disabled],
+.cta.is-disabled {
+  opacity: .5; cursor: not-allowed; box-shadow: none;
 }
