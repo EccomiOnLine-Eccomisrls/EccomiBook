@@ -13,7 +13,6 @@
         <span class="logo">📚</span>
         <span class="title">EccomiBook</span>
       </div>
-      <!-- Status LED (riempito via JS) -->
       <div id="backend-status" aria-live="polite"></div>
     </header>
 
@@ -22,7 +21,7 @@
       <h1 class="hero">Benvenuto in EccomiBook</h1>
       <p class="subhero">Genera libri e capitoli con un click.</p>
 
-      <!-- HERO CTA (centrale) -->
+      <!-- HERO CTA -->
       <section class="hero-cta" id="hero-cta">
         <div class="hero-cta__inner">
           <button id="btn-create-book" class="cta cta--primary">
@@ -57,34 +56,36 @@
         <div id="library-list"></div>
       </section>
 
-      <!-- Editor capitolo -->
+      <!-- Editor -->
       <section id="editor-card" class="card editor-card" style="display:none; margin-top:20px;">
         <div class="card-head"><strong>✏️ Editor capitolo</strong></div>
 
         <label for="bookIdInput">Book ID</label>
-        <input id="bookIdInput" type="text" placeholder="ID libro" list="books-dl" />
+        <input id="bookIdInput" type="text" placeholder="ID libro" list="books-dl" autocomplete="off"/>
 
         <div class="grid">
           <div>
             <label for="chapterIdInput">Chapter ID</label>
-            <input id="chapterIdInput" type="text" placeholder="es. ch_0001" list="chapters-dl" />
+            <input id="chapterIdInput" type="text" placeholder="es. ch_0001" list="chapters-dl" autocomplete="off"/>
           </div>
           <div>
             <label for="topicInput">Topic (per AI)
-              <span title="Suggerimento: indica obiettivo, tono, pubblico, punti da coprire e vincoli di stile. Esempio: 'Capitolo introduttivo sul mindset dello studio per liceali, tono amichevole, 5 sezioni con esempi pratici e un esercizio finale.'">ℹ️</span>
+              <span title="Suggerimento: indica obiettivo, tono, pubblico, punti da coprire e vincoli di stile. Esempio: 'Capitolo introduttivo per liceali, tono amichevole, 5 sezioni con esempi e un esercizio finale.'">ℹ️</span>
             </label>
             <input id="topicInput" type="text"
                    placeholder="Obiettivo, tono, pubblico, punti chiave, vincoli (es. 5 sezioni + esercizio finale)" />
           </div>
-          <div>
-            <label for="languageInput">Lingua</label>
-            <input id="languageInput" type="text" placeholder="it, en, es…" />
+          <div style="display:flex;align-items:flex-end">
+            <div id="nextChHint" class="inline-hint" aria-hidden="true">—</div>
           </div>
         </div>
 
         <!-- datalist -->
         <datalist id="books-dl"></datalist>
         <datalist id="chapters-dl"></datalist>
+
+        <label for="languageInput">Lingua</label>
+        <input id="languageInput" type="text" placeholder="it, en, es…" />
 
         <label for="chapterText">Contenuto</label>
         <textarea id="chapterText" rows="10" placeholder="Scrivi qui il contenuto del capitolo…"></textarea>
@@ -96,7 +97,6 @@
           <button id="btn-ed-close" class="btn btn-secondary">Chiudi</button>
         </div>
 
-        <!-- Lista capitoli del libro -->
         <div class="card" style="margin-top:18px">
           <div class="card-head"><strong>Capitoli del libro</strong></div>
           <div id="chapters-list">
