@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>EccomiBook</title>
-    <!-- Stili -->
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
@@ -29,9 +28,7 @@
 
       <!-- Card: Azioni rapide -->
       <div class="card">
-        <div class="card-head">
-          <strong>Azioni rapide</strong>
-        </div>
+        <div class="card-head"><strong>Azioni rapide</strong></div>
         <div class="row-right">
           <button id="btn-quick-create" class="btn btn-primary">+ Crea libro</button>
           <button id="btn-quick-library" class="btn btn-secondary">Libreria</button>
@@ -46,55 +43,40 @@
       </section>
 
       <!-- Editor capitolo -->
-<section id="editor-card" class="card editor-card" style="display:none; margin-top:20px;">
-  <div class="card-head">
-    <strong>✏️ Editor capitolo</strong>
-  </div>
+      <section id="editor-card" class="card editor-card" style="display:none; margin-top:20px;">
+        <div class="card-head"><strong>✏️ Editor capitolo</strong></div>
 
-  <label for="bookIdInput">Book ID</label>
-  <input id="bookIdInput" type="text" placeholder="ID libro" />
+        <label for="bookIdInput">Book ID</label>
+        <input id="bookIdInput" type="text" placeholder="ID libro" />
 
-  <div class="grid">
-    <div>
-      <label for="chapterIdInput">Chapter ID</label>
-      <input id="chapterIdInput" type="text" placeholder="es. ch_0001" />
-    </div>
-    <div>
-      <label for="topicInput">Topic (per AI)</label>
-      <input id="topicInput" type="text" placeholder="es. Introduzione EccomiBook" />
-    </div>
-    <div>
-      <label for="languageInput">Lingua</label>
-      <input id="languageInput" type="text" placeholder="it, en, es…" />
-    </div>
-  </div>
-
-  <label for="chapterText">Contenuto</label>
-  <textarea id="chapterText" rows="10" placeholder="Scrivi qui il contenuto del capitolo…"></textarea>
-
-  <div class="row-right" style="margin-top:12px">
-    <button id="btn-ai-generate" class="btn btn-secondary">✨ Scrivi con AI</button>
-    <button id="btn-ed-save" class="btn btn-primary">💾 Salva</button>
-    <button id="btn-ed-delete" class="btn btn-ghost">🗑️ Elimina capitolo</button>
-    <button id="btn-ed-close" class="btn btn-secondary">Chiudi</button>
-  </div>
-
-  <!-- Lista capitoli del libro corrente -->
-  <div class="card" style="margin-top:18px">
-    <div class="card-head">
-      <strong>Capitoli del libro</strong>
-    </div>
-    <div id="chapters-list">
-      <div class="muted">Nessun capitolo ancora.</div>
-    </div>
-  </div>
-</section>
-
-        <!-- Lista capitoli del libro corrente -->
-        <div class="card" style="margin-top:18px">
-          <div class="card-head">
-            <strong>Capitoli del libro</strong>
+        <div class="grid">
+          <div>
+            <label for="chapterIdInput">Chapter ID</label>
+            <input id="chapterIdInput" type="text" placeholder="es. ch_0001" />
           </div>
+          <div>
+            <label for="topicInput">Topic (per AI)</label>
+            <input id="topicInput" type="text" placeholder="es. Introduzione EccomiBook" />
+          </div>
+          <div>
+            <label for="languageInput">Lingua</label>
+            <input id="languageInput" type="text" placeholder="it, en, es…" />
+          </div>
+        </div>
+
+        <label for="chapterText">Contenuto</label>
+        <textarea id="chapterText" rows="10" placeholder="Scrivi qui il contenuto del capitolo…"></textarea>
+
+        <div class="row-right" style="margin-top:12px">
+          <button id="btn-ai-generate" class="btn btn-secondary">✨ Scrivi con AI</button>
+          <button id="btn-ed-save" class="btn btn-primary">💾 Salva</button>
+          <button id="btn-ed-delete" class="btn btn-ghost">🗑️ Elimina capitolo</button>
+          <button id="btn-ed-close" class="btn btn-secondary">Chiudi</button>
+        </div>
+
+        <!-- Lista capitoli del libro corrente (UNICA) -->
+        <div class="card" style="margin-top:18px">
+          <div class="card-head"><strong>Capitoli del libro</strong></div>
           <div id="chapters-list">
             <div class="muted">Nessun capitolo ancora.</div>
           </div>
@@ -104,7 +86,6 @@
       <p class="footer">© EccomiBook</p>
     </main>
 
-    <!-- JS -->
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
