@@ -179,31 +179,31 @@ async function loadBookLanguage(bookId){
 
 /* elenco capitoli */
 async function refreshChaptersList(bookId){
-  const list=$("#chapters-list"); 
+  const list=$("#chapters-list");
   if(list) list.innerHTML='<div class="muted">Carico capitoli…</div>';
   try{
     const r=await fetch(`${API_BASE_URL}/books?ts=${Date.now()}`,{cache:"no-store"});
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    const all=await r.json(); 
+    const all=await r.json();
     const arr=Array.isArray(all)?all:(all?.items||[]);
     const found=arr.find(x=>(x?.id||x?.book_id)===bookId);
-
-    uiState.currentBookTitle = found?.title || "";  // NEW: salva titolo libro
-
     const chapters=found?.chapters||[];
+
+    // 👉 Salvo SOLO il titolo reale; niente fallback all’ID
     uiState.chapters=chapters.map(c=>({
-      id:c?.id||"",
-      title:c?.title||c?.id||"",
-      updated_at:c?.updated_at||"",
-      path:c?.path||""
+      id: c?.id || "",
+      title: (c?.title ?? "").trim(),
+      updated_at: c?.updated_at || "",
+      path: c?.path || ""
     }));
-    renderChaptersList(bookId, uiState.chapters, uiState.currentBookTitle); // passiamo titolo
+
+    renderChaptersList(bookId, uiState.chapters);
   }catch(e){
     if(list) list.innerHTML=`<div class="error">Errore: ${e.message||e}</div>`;
   }
 }
 
-function renderChaptersList(bookId, chapters, bookTitle=""){
+function renderChaptersList(bookId, chapters){
   const list=$("#chapters-list"); 
   if(!list) return;
   if(!chapters?.length){
@@ -212,27 +212,28 @@ function renderChaptersList(bookId, chapters, bookTitle=""){
   }
   list.innerHTML="";
   const nav=document.createElement("div");
-  nav.className="row-right"; 
-  nav.style.justifyContent="flex-start"; 
+  nav.className="row-right";
+  nav.style.justifyContent="flex-start";
   nav.style.marginBottom="8px";
   nav.innerHTML=`<button class="btn btn-ghost" id="btn-ch-prev">← Precedente</button>
                  <button class="btn btn-ghost" id="btn-ch-next">Successivo →</button>`;
   list.appendChild(nav);
 
   chapters.forEach(ch=>{
-    const cid     = ch.id; 
-    const title   = (ch.title||"").trim();
-    const updated = ch.updated_at||"";
+    const cid     = ch.id;
+    const title   = (ch.title || "").trim();
+    const displayTitle = title || "(senza titolo)";   // 👉 titolo visibile
+    const updated = ch.updated_at || "";
 
-    const li=document.createElement("div"); 
-    li.className="card chapter-row"; 
+    const li=document.createElement("div");
+    li.className="card chapter-row";
     li.style.margin="8px 0";
     li.innerHTML=`
       <div class="chapter-head">
         <div>
-          <div style="font-weight:600">${escapeHtml(title||cid)}</div>
+          <div style="font-weight:600">${escapeHtml(displayTitle)}</div>
           <div class="muted">
-            ID: ${escapeHtml(cid)} · Libro: ${escapeHtml(bookTitle || "—")}${updated?` · ${escapeHtml(fmtLast(updated))}`:""}
+            ID: ${escapeHtml(cid)}${updated?` · ${escapeHtml(fmtLast(updated))}`:""}
           </div>
         </div>
       </div>
