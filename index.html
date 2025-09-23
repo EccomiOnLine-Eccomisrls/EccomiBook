@@ -14,11 +14,7 @@
         <span class="title">EccomiBook</span>
       </div>
       <div id="backend-status" class="backend-pill">Backend: …</div>
-      <div class="actions">
-        <button id="btn-create-book" class="btn btn-primary">+ Crea libro</button>
-        <button id="btn-library" class="btn btn-secondary">Libreria</button>
-        <button id="btn-editor" class="btn btn-ghost">Editor</button>
-      </div>
+      <!-- RIMOSSI i pulsanti duplicati nel topbar -->
     </header>
 
     <!-- Main -->
@@ -26,15 +22,34 @@
       <h1 class="hero">Benvenuto in EccomiBook</h1>
       <p class="subhero">Genera libri e capitoli con un click.</p>
 
-      <!-- Card: Azioni rapide -->
-      <div class="card">
-        <div class="card-head"><strong>Azioni rapide</strong></div>
-        <div class="row-right">
-          <button id="btn-quick-create" class="btn btn-primary">+ Crea libro</button>
-          <button id="btn-quick-library" class="btn btn-secondary">Libreria</button>
-          <button id="btn-quick-editor" class="btn btn-ghost">Editor</button>
+      <!-- HERO CTA (centrale) -->
+      <section class="hero-cta" id="hero-cta">
+        <div class="hero-cta__inner">
+          <button id="btn-create-book" class="cta cta--primary">
+            <span class="cta__icon">➕</span>
+            <span class="cta__text">
+              + Crea libro
+              <small class="cta__sub">Titolo, autore, lingua</small>
+            </span>
+          </button>
+
+          <button id="btn-library" class="cta cta--outline">
+            <span class="cta__icon">📚</span>
+            <span class="cta__text">
+              Libreria
+              <small class="cta__sub">Gestisci e scarica i tuoi libri</small>
+            </span>
+          </button>
+
+          <button id="btn-editor" class="cta cta--outline" title="Apri un libro dalla Libreria" disabled>
+            <span class="cta__icon">✍️</span>
+            <span class="cta__text">
+              Editor
+              <small class="cta__sub">Scrivi e salva capitoli</small>
+            </span>
+          </button>
         </div>
-      </div>
+      </section>
 
       <!-- Libreria -->
       <section id="library-section" style="display:none; margin-top:20px;">
@@ -74,7 +89,7 @@
           <button id="btn-ed-close" class="btn btn-secondary">Chiudi</button>
         </div>
 
-        <!-- Lista capitoli del libro corrente (UNICA) -->
+        <!-- Lista capitoli del libro corrente -->
         <div class="card" style="margin-top:18px">
           <div class="card-head"><strong>Capitoli del libro</strong></div>
           <div id="chapters-list">
