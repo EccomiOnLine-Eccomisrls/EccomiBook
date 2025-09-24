@@ -371,14 +371,19 @@ async function openChapter(bookId, chapterId){
 async function deleteChapter(bookId, chapterId){
   if(!confirm(`Eliminare il capitolo ${chapterId}?`)) return;
   try{
-    const r=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,{method:"DELETE"});
+    const r = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`, { method: "DELETE" });
     if(!r.ok && r.status!==204) throw new Error(`HTTP ${r.status}`);
     toast("🗑️ Capitolo eliminato.");
+
+    // aggiorna editor
     await refreshChaptersList(bookId);
     if(uiState.currentChapterId===chapterId){
       $("#chapterText").value="";
       uiState.currentChapterId="";
     }
+
+    // 🔧 aggiorna anche le CARD in libreria
+    await fetchBooks();
   }catch(e){
     toast("Errore eliminazione: "+(e?.message||e));
   }
