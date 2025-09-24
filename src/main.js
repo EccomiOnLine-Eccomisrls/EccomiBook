@@ -1,9 +1,10 @@
 /* =========================================================
  * EccomiBook — Frontend
- * src/main.js — v3.8
+ * src/main.js — v3.9
  * - LED stato backend
  * - Libreria + Editor
  * - Dropdown custom per pulsanti verdi (Book/Chapter)
+ * - Modifica libro (PUT /books/{book_id})
  * ========================================================= */
 
 import "./styles.css";
@@ -608,9 +609,46 @@ async function deleteBook(bookId){
   }
 }
 async function renameBook(bookId, oldTitle){
-  const newTitle=prompt("Nuovo titolo libro:",oldTitle||"")?.trim();
-  if(!newTitle || newTitle===oldTitle) return;
-  toast("✏️ Titolo modificato (endpoint reale in arrivo).");
+  // recupera metadati correnti
+  const b = uiState.books.find(x=>(x?.id||x?.book_id)===bookId) || {};
+  const curAuthor  = b?.author || loadLastAuthor();
+  const curLang    = (b?.language || loadLastLang() || "it").toLowerCase();
+
+  const newTitle = prompt("Nuovo titolo libro:", oldTitle || b?.title || "")?.trim();
+  if(newTitle==null) return;
+
+  const newAuthor = prompt("Autore:", curAuthor)?.trim();
+  if(newAuthor==null) return;
+
+  let newLang = prompt("Lingua (es. it, en, es, fr…):", curLang)?.trim().toLowerCase();
+  if(newLang==null) return;
+  newLang = (newLang||curLang||"it").replace(/[^a-z-]/gi,"").slice(0,10) || "it";
+
+  try{
+    const r = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}`,{
+      method:"PUT",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ title:newTitle, author:newAuthor, language:newLang })
+    });
+    if(!r.ok){ const t=await r.text().catch(()=> ""); throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`); }
+
+    rememberLastAuthor(newAuthor);
+    rememberLastLang(newLang);
+
+    toast("✅ Libro aggiornato.");
+    await fetchBooks();
+
+    // se è il libro aperto aggiorna stato editor
+    if(uiState.currentBookId===bookId){
+      uiState.currentBookTitle = newTitle;
+      uiState.currentLanguage  = newLang;
+      const langEl=$("#languageInput");
+      if(langEl) langEl.value=newLang;
+      await refreshChaptersList(bookId);
+    }
+  }catch(e){
+    toast("Errore aggiornamento: "+(e?.message||e));
+  }
 }
 
 /* ===== AI (bozza) ===== */
