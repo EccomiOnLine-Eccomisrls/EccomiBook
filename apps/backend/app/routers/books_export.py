@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse, PlainTextResponse
 from typing import List, Dict, Tuple
 import io
@@ -16,7 +16,7 @@ from reportlab.lib.units import cm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-# usa lo stesso storage del tuo main
+# usa lo stesso storage del tuo backend
 from app import storage
 
 router = APIRouter()
@@ -38,7 +38,7 @@ def _kdp_gutter(pages: int) -> float:
 def _register_ttf() -> Tuple[str,bool]:
     """
     Prova a registrare un TTF incorporabile (embedded).
-    Percorsi tentati (metti il file in uno di questi):
+    Percorsi tentati:
     - /app/fonts/DejaVuSerif.ttf
     - ./fonts/DejaVuSerif.ttf
     - /usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf
@@ -95,7 +95,7 @@ def _make_story(book_title:str, author:str, chapters:List[Dict], styles) -> List
 
 def _build_pdf_mirror(page_size, margins, story):
     """
-    Impaginazione con margini 'specchiati' (gutter interno alternato pari/dispari).
+    Impaginazione con margini specchiati (gutter interno alternato pari/dispari).
     margins: {left, right, top, bottom}
     """
     buf = io.BytesIO()
@@ -121,7 +121,6 @@ def _build_pdf_mirror(page_size, margins, story):
     )
 
     def on_page(canvas, doc):
-        # footer con numero pagina (leggero)
         page = canvas.getPageNumber()
         canvas.setFont("Helvetica", 8)
         canvas.setFillGray(0.25)
@@ -181,7 +180,7 @@ def build_book_pdf_kdp(book_title:str, author:str, chapters:List[Dict],
     # Gutter in base alle pagine
     gutter = _kdp_gutter(prelim_pages)
 
-    # Margini finali: aggiungiamo il gutter al “lato interno”, ottenuto col mirroring
+    # Margini finali: aggiungiamo il gutter al lato interno (mirror)
     final_margins = dict(
         left=(outer_margin_in*INCH + gutter)+bleed_add,
         right=(outer_margin_in*INCH)+bleed_add,
@@ -209,7 +208,7 @@ async def export_book_pdf_kdp(book_id: str,
     """
     # 🔧 LEGGI SEMPRE DA DISCO (evita inconsistenze di app.state)
     try:
-        all_books = storage.load_books_from_disk()  # <-- ricarica
+        all_books = storage.load_books_from_disk()
     except Exception:
         all_books = getattr(storage, "BOOKS_CACHE", []) or []
 
@@ -229,8 +228,10 @@ async def export_book_pdf_kdp(book_id: str,
             continue
         text = _read_chapter_file(book_id, cid)
         if not text and hasattr(storage, "read_chapter_text"):
-            try: text = storage.read_chapter_text(book_id, cid) or ""
-            except Exception: text = ""
+            try:
+                text = storage.read_chapter_text(book_id, cid) or ""
+            except Exception:
+                text = ""
         chapters_full.append({"id": cid, "title": ch.get("title") or cid, "content": text})
 
     if not chapters_full:
@@ -241,9 +242,6 @@ async def export_book_pdf_kdp(book_id: str,
         font_name, embedded = _register_ttf()
         styles = _styles(font_name)
         buffer = io.BytesIO()
-        from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.units import cm
         doc = BaseDocTemplate(buffer, pagesize=A4,
                               leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm,
                               title=meta.get("title") or "EccomiBook")
@@ -252,6 +250,7 @@ async def export_book_pdf_kdp(book_id: str,
         doc.build(_make_story(meta.get("title") or book_id, meta.get("author") or "", chapters_full, styles))
         pdf_bytes = buffer.getvalue(); buffer.close()
         pages = doc.page
+        embedded_flag = embedded
     else:
         pdf_bytes, pages, embedded = build_book_pdf_kdp(
             book_title = meta.get("title") or book_id,
@@ -259,26 +258,28 @@ async def export_book_pdf_kdp(book_id: str,
             chapters   = chapters_full,
             trim       = trim,
             bleed      = bleed,
-            outer_margin_in    = top_bottom_margin if outer_margin is None else outer_margin,
-            top_bottom_in      = top_bottom_margin
+            outer_margin_in = outer_margin if outer_margin is not None else 0.5,
+            top_bottom_in   = top_bottom_margin
         )
+        embedded_flag = embedded
 
     filename = f"{(meta.get('title') or book_id).replace(' ','_')}.pdf"
     headers = {
         "Content-Disposition": f'attachment; filename="{filename}"',
         "X-KDP-Pages": str(pages),
-        "X-Fonts-Embedded": "yes" if (not classic and embedded) else "no"
+        "X-Fonts-Embedded": "yes" if embedded_flag else "no"
     }
     return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers=headers)
 
 
 @router.get("/books/{book_id}/export/md", response_class=PlainTextResponse, name="Export Book Md")
 @router.get("/books/{book_id}/export/txt", response_class=PlainTextResponse, name="Export Book Txt")
-async def export_book_text(request: Request, book_id: str):
-    books = getattr(request.app.state, "books", None)
-    meta = None
-    if isinstance(books, list):
-        meta = next((b for b in books if (b.get("id") or b.get("book_id")) == book_id), None)
+async def export_book_text(book_id: str):
+    try:
+        all_books = storage.load_books_from_disk()
+    except Exception:
+        all_books = getattr(storage, "BOOKS_CACHE", []) or []
+    meta = next((b for b in (all_books or []) if (b.get("id") or b.get("book_id")) == book_id), None)
     if not meta:
         raise HTTPException(status_code=404, detail="Libro non trovato.")
     ch_list = meta.get("chapters") or []
