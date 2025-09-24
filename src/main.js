@@ -431,39 +431,27 @@ function downloadChapter(bookId, chapterId){
               "_blank","noopener");
 }
 async function exportBook(bookId){
-  const fmt=askFormat("pdf"); if(!fmt) return;
-  if(fmt==="pdf"){
-    try{
-      const r=await fetch(`${API_BASE_URL}/generate/export/book/${encodeURIComponent(bookId)}`,
-                          {method:"POST",headers:{ "Content-Type":"application/json" }});
-      if(!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data=await r.json();
-      const url=data?.download_url||data?.url;
-      if(url) window.open(url,"_blank","noopener"); else toast("Export avviato ma nessun URL ricevuto.");
-    }catch(e){
-      toast("Errore export PDF: "+(e?.message||e));
-    }
-  }else{
-    try{
-      await refreshChaptersList(bookId);
-      if(!uiState.chapters.length) return toast("Nessun capitolo da esportare.");
-      let assembled=`# ${bookId}\n\n`;
-      for(const ch of uiState.chapters){
-        const resp=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(ch.id)}`,{cache:"no-store"});
-        const data=resp.ok?await resp.json():{content:""};
-        assembled+=`\n\n# ${ch.title||ch.id}\n\n${data.content||""}\n`;
-      }
-      const mime=fmt==="md"?"text/markdown":"text/plain";
-      const blob=new Blob([assembled],{type:`${mime};charset=utf-8`});
-      const a=document.createElement("a");
-      a.href=URL.createObjectURL(blob);
-      a.download=`${bookId}.${fmt}`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    }catch(e){
-      toast("Errore export: "+(e?.message||e));
-    }
+  const fmt = askFormat("pdf"); if(!fmt) return;
+
+  if (fmt === "pdf") {
+    // Default: KDP-ready (6x9, no bleed). Per A4 semplice: usa classic=true
+    const params = new URLSearchParams({
+      trim: "6x9",
+      bleed: "false",
+      classic: "false"
+    });
+    const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/pdf?${params.toString()}`;
+    window.open(url, "_blank", "noopener");
+    return;
   }
+
+  if (fmt === "md" || fmt === "txt") {
+    const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/${fmt}`;
+    window.open(url, "_blank", "noopener");
+    return;
+  }
+
+  toast("Formato non supportato.");
 }
 
 /* ======== Toggle Libreria ======== */
