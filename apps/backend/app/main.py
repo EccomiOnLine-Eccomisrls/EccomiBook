@@ -8,7 +8,8 @@ from .settings import get_settings
 from . import storage
 from .routers import books as books_router
 from .routers import generate as generate_router
-from .routers import books_export as books_export_router
+from .routers import books_export as books_export_router   # <-- AGGIUNTO
+
 # opzionale: se usi anche auth o admin, lasciali pure
 # from .routers import auth as auth_router
 # from .routers import admin as admin_router
@@ -47,13 +48,6 @@ def on_startup() -> None:
     storage.ensure_dirs()
     app.state.books = storage.load_books_from_disk()
     app.state.counters = {"books": len(app.state.books)}
-
-    # Se usi utenti/piani, riattiva:
-    # load_users()
-    # if not getattr(app.state, "seeded", False):
-    #     seed_demo_users()
-    #     app.state.seeded = True
-
     settings = get_settings()
     print(f"✅ APP STARTED | ENV: {settings.environment} | STORAGE_ROOT={storage.BASE_DIR}")
 
@@ -101,5 +95,5 @@ def debug_storage():
 # app.include_router(auth_router.router, tags=["default"])
 app.include_router(books_router.router, tags=["books"])
 app.include_router(generate_router.router, tags=["generate"])
-app.include_router(books_export_router.router, tags=["export"])
+app.include_router(books_export_router.router, tags=["export"])   # <-- AGGIUNTO
 # app.include_router(admin_router.router, tags=["admin"])
