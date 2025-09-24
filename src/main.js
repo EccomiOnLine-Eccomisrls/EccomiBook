@@ -706,6 +706,7 @@ async function generateWithAI(){
     toast(`✨ Testo generato (bozza) — lingua: ${language.toUpperCase()}`);
     await saveCurrentChapter(false);
     await refreshChaptersList(bookId);
+    await fetchBooks();   // 🔵 qui
   }catch(e){
     toast("⚠️ AI di test: "+(e?.message||e));
   }
