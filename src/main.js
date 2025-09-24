@@ -448,7 +448,8 @@ async function saveCurrentChapter(showToast=true){
     if(!r.ok){ const t=await r.text().catch(()=> ""); throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`); }
     uiState.lastSavedSnapshot=content;
     if(showToast) toast("✅ Capitolo salvato.");
-    refreshChaptersList(bookId);
+    await refreshChaptersList(bookId);
+    await fetchBooks();            // 🔵 <— aggiungi questa riga
   }catch(e){
     toast("Errore salvataggio: "+(e?.message||e));
   }
