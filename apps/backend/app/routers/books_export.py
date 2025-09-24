@@ -195,8 +195,7 @@ def build_book_pdf_kdp(book_title:str, author:str, chapters:List[Dict],
 # ----------------- ENDPOINTS -----------------
 
 @router.get("/books/{book_id}/export/pdf", name="Export Book Pdf (KDP)")
-async def export_book_pdf_kdp(request: Request,
-                              book_id: str,
+async def export_book_pdf_kdp(book_id: str,
                               trim: str = "6x9",
                               bleed: bool = False,
                               outer_margin: float = 0.5,
@@ -206,14 +205,15 @@ async def export_book_pdf_kdp(request: Request,
     Esporta l'intero libro in PDF.
     - trim: 6x9 | 5x8 | 8.5x11
     - bleed: true/false
-    - classic: true -> A4, margini standard 2cm, nessun gutter (PDF “classico”)
+    - classic: true -> A4, margini standard 2cm, nessun gutter
     """
-    # 1) Recupera meta + capitoli dalla cache in memoria (caricata in startup)
-    books = getattr(request.app.state, "books", None)
-    meta = None
-    if isinstance(books, list):
-        meta = next((b for b in books if (b.get("id") or b.get("book_id")) == book_id), None)
+    # 🔧 LEGGI SEMPRE DA DISCO (evita inconsistenze di app.state)
+    try:
+        all_books = storage.load_books_from_disk()  # <-- ricarica
+    except Exception:
+        all_books = getattr(storage, "BOOKS_CACHE", []) or []
 
+    meta = next((b for b in (all_books or []) if (b.get("id") or b.get("book_id")) == book_id), None)
     if not meta:
         raise HTTPException(status_code=404, detail="Libro non trovato.")
 
@@ -221,40 +221,32 @@ async def export_book_pdf_kdp(request: Request,
     if not ch_list:
         raise HTTPException(status_code=404, detail="Nessun capitolo nel libro.")
 
-    # 2) Carica contenuti
-    chapters_full: List[Dict] = []
+    # Carica contenuti capitoli
+    chapters_full = []
     for ch in ch_list:
         cid = ch.get("id")
         if not cid:
             continue
-        # prova a leggere da filesystem
         text = _read_chapter_file(book_id, cid)
-        # se storage ha una funzione ufficiale, prova a usarla (non obbligatorio)
         if not text and hasattr(storage, "read_chapter_text"):
-            try:
-                text = storage.read_chapter_text(book_id, cid) or ""
-            except Exception:
-                pass
-        chapters_full.append({
-            "id": cid,
-            "title": ch.get("title") or cid,
-            "content": text
-        })
+            try: text = storage.read_chapter_text(book_id, cid) or ""
+            except Exception: text = ""
+        chapters_full.append({"id": cid, "title": ch.get("title") or cid, "content": text})
 
     if not chapters_full:
         raise HTTPException(status_code=404, detail="Impossibile assemblare i capitoli.")
 
-    # 3) Genera PDF
+    # Genera PDF (KDP o classico)
     if classic:
-        # A4 semplice (senza gutter/bleed), font embedded se disponibile
         font_name, embedded = _register_ttf()
         styles = _styles(font_name)
         buffer = io.BytesIO()
-        doc = BaseDocTemplate(
-            buffer, pagesize=A4,
-            leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm,
-            title=meta.get("title") or "EccomiBook"
-        )
+        from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import cm
+        doc = BaseDocTemplate(buffer, pagesize=A4,
+                              leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm,
+                              title=meta.get("title") or "EccomiBook")
         frame = Frame(2*cm, 2*cm, A4[0]-4*cm, A4[1]-4*cm)
         doc.addPageTemplates([PageTemplate(id='a4', frames=[frame])])
         doc.build(_make_story(meta.get("title") or book_id, meta.get("author") or "", chapters_full, styles))
@@ -267,7 +259,7 @@ async def export_book_pdf_kdp(request: Request,
             chapters   = chapters_full,
             trim       = trim,
             bleed      = bleed,
-            outer_margin_in    = outer_margin,
+            outer_margin_in    = top_bottom_margin if outer_margin is None else outer_margin,
             top_bottom_in      = top_bottom_margin
         )
 
@@ -275,8 +267,7 @@ async def export_book_pdf_kdp(request: Request,
     headers = {
         "Content-Disposition": f'attachment; filename="{filename}"',
         "X-KDP-Pages": str(pages),
-        # se classic=True, 'embedded' è definito sopra; se KDP, è ritornato dal builder
-        "X-Fonts-Embedded": "yes" if (not classic and embedded) or (classic and font_name != "Helvetica") else "no"
+        "X-Fonts-Embedded": "yes" if (not classic and embedded) else "no"
     }
     return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers=headers)
 
