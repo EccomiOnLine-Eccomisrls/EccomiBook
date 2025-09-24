@@ -1,3 +1,6 @@
+# apps/backend/app/main.py
+from __future__ import annotations
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,12 +11,7 @@ from .settings import get_settings
 from . import storage
 from .routers import books as books_router
 from .routers import generate as generate_router
-from .routers import books_export as books_export_router   # <-- AGGIUNTO
-
-# opzionale: se usi anche auth o admin, lasciali pure
-# from .routers import auth as auth_router
-# from .routers import admin as admin_router
-# from .users import load_users, seed_demo_users
+from .routers import books_export as books_export_router   # export intero libro
 
 app = FastAPI(
     title="EccomiBook Backend",
@@ -22,20 +20,12 @@ app = FastAPI(
     docs_url="/",
 )
 
-# Mount statici sul DISCO PERSISTENTE
+# Inizializza filesystem e mount statici
 storage.ensure_dirs()
-app.mount(
-    "/static/chapters",
-    StaticFiles(directory=str(storage.BASE_DIR / "chapters")),
-    name="chapters",
-)
-app.mount(
-    "/static/books",
-    StaticFiles(directory=str(storage.BASE_DIR / "books")),
-    name="books",
-)
+app.mount("/static/chapters", StaticFiles(directory=str(storage.CHAPTERS_DIR)), name="chapters")
+app.mount("/static/books", StaticFiles(directory=str(storage.BOOKS_DIR)), name="books")
 
-# CORS
+# CORS dev-friendly
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -46,14 +36,20 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     storage.ensure_dirs()
-    app.state.books = storage.load_books_from_disk()
-    app.state.counters = {"books": len(app.state.books)}
+    # 👇 Carica da DISCO e sincronizza cache + app.state
+    books = storage.load_books_from_disk()
+    storage.BOOKS_CACHE = books
+    app.state.books = books
+    app.state.counters = {"books": len(books)}
+
     settings = get_settings()
     print(f"✅ APP STARTED | ENV: {settings.environment} | STORAGE_ROOT={storage.BASE_DIR}")
 
 @app.on_event("shutdown")
 def on_shutdown() -> None:
-    storage.save_books_to_disk(app.state.books)
+    # Salva su disco lo stato più aggiornato
+    books = getattr(app.state, "books", None) or storage.BOOKS_CACHE or []
+    storage.save_books_to_disk(books)
     print("💾 Books salvati su disco in shutdown.")
 
 @app.get("/health", tags=["default"])
@@ -92,8 +88,6 @@ def debug_storage():
     }
 
 # Routers
-# app.include_router(auth_router.router, tags=["default"])
 app.include_router(books_router.router, tags=["books"])
 app.include_router(generate_router.router, tags=["generate"])
-app.include_router(books_export_router.router, tags=["export"])   # <-- AGGIUNTO
-# app.include_router(admin_router.router, tags=["admin"])
+app.include_router(books_export_router.router, tags=["export"])
