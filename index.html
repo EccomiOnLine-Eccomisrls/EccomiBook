@@ -6,6 +6,33 @@
     <title>EccomiBook</title>
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
+  <!-- Modal: Modifica libro -->
+<div id="modal-edit-book" class="modal" aria-hidden="true">
+  <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="meb-title">
+    <div class="modal__head">
+      <h3 id="meb-title">Modifica libro</h3>
+      <button type="button" class="modal__close" data-meb-close aria-label="Chiudi">×</button>
+    </div>
+    <div class="modal__body">
+      <label class="field">
+        <span>Titolo</span>
+        <input type="text" id="meb-title-input" placeholder="Titolo">
+      </label>
+      <label class="field">
+        <span>Autore</span>
+        <input type="text" id="meb-author-input" placeholder="Autore">
+      </label>
+      <label class="field">
+        <span>Lingua</span>
+        <input type="text" id="meb-lang-input" placeholder="it / en / es…" maxlength="10">
+      </label>
+    </div>
+    <div class="modal__foot">
+      <button type="button" class="btn btn-ghost" data-meb-close>Annulla</button>
+      <button type="button" class="btn btn-secondary" id="meb-save">Salva</button>
+    </div>
+  </div>
+</div>
   <body>
     <!-- Topbar -->
     <header class="topbar">
