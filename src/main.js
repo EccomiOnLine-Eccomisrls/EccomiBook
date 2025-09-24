@@ -1,13 +1,16 @@
 /* =========================================================
  * EccomiBook — Frontend
- * src/main.js — v3.9
+ * src/main.js — v3.9 (modal rename + PUT)
  * - LED stato backend
  * - Libreria + Editor
  * - Dropdown custom per pulsanti verdi (Book/Chapter)
- * - Modifica libro (PUT /books/{book_id})
+ * - Modifica libro via MODALE custom (toggle ON/OFF)
  * ========================================================= */
 
 import "./styles.css";
+
+/* ===== Toggle modale ===== */
+const USE_MODAL_RENAME = true;  // ← metti false per tornare ai prompt()
 
 /* Config */
 const API_BASE_URL =
@@ -58,13 +61,53 @@ const fmtHHMM = (d=new Date())=>{
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-/* HERO helpers */
-function syncEditorButtonState(){
-  const editorBtn = $("#btn-editor"); if(!editorBtn) return;
-  const hasBook = !!(loadLastBook());
-  editorBtn.disabled = !hasBook;
-  editorBtn.title = hasBook ? "Scrivi e salva capitoli" : "Apri un libro dalla Libreria";
-  editorBtn.classList.toggle("is-disabled", !hasBook);
+/* ===== Modale: utilities ===== */
+function openModal(sel){ const el=$(sel); if(!el) return; el.classList.add("is-open"); el.setAttribute("aria-hidden","false"); }
+function closeModal(sel){ const el=$(sel); if(!el) return; el.classList.remove("is-open"); el.setAttribute("aria-hidden","true"); }
+["click","keydown"].forEach(evt=>{
+  document.addEventListener(evt,(e)=>{
+    const m = $("#modal-edit-book");
+    if(!m || !m.classList.contains("is-open")) return;
+    if(e.type==="click" && (e.target.matches("[data-meb-close]") || e.target===m)) closeModal("#modal-edit-book");
+    if(e.type==="keydown" && e.key==="Escape") closeModal("#modal-edit-book");
+  });
+});
+
+/* ===== Modale: apertura + salvataggio ===== */
+function openEditBookModal(bookId){
+  const b = uiState.books.find(x=>(x?.id||x?.book_id)===bookId) || {};
+  $("#meb-title-input").value  = b?.title  || "";
+  $("#meb-author-input").value = b?.author || "";
+  $("#meb-lang-input").value   = (b?.language || "it").toLowerCase();
+
+  $("#meb-save").onclick = async ()=>{
+    const title = $("#meb-title-input").value.trim();
+    const author= $("#meb-author-input").value.trim();
+    const lang  = ($("#meb-lang-input").value.trim().toLowerCase()||"it").replace(/[^a-z-]/g,"").slice(0,10)||"it";
+    try{
+      const r = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}`,{
+        method:"PUT", headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ title, author, language: lang })
+      });
+      if(!r.ok){ const t=await r.text().catch(()=> ""); throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`); }
+
+      rememberLastAuthor(author);
+      rememberLastLang(lang);
+
+      toast("✅ Libro aggiornato.");
+      closeModal("#modal-edit-book");
+      await fetchBooks();
+
+      if(uiState.currentBookId===bookId){
+        uiState.currentBookTitle = title;
+        uiState.currentLanguage  = lang;
+        const langEl=$("#languageInput"); if(langEl) langEl.value=lang;
+        await refreshChaptersList(bookId);
+      }
+    }catch(e){ toast("Errore aggiornamento: "+(e?.message||e)); }
+  };
+
+  openModal("#modal-edit-book");
 }
 
 /* ======== Status LED ======== */
@@ -376,14 +419,11 @@ async function deleteChapter(bookId, chapterId){
     if(!r.ok && r.status!==204) throw new Error(`HTTP ${r.status}`);
     toast("🗑️ Capitolo eliminato.");
 
-    // aggiorna editor
     await refreshChaptersList(bookId);
     if(uiState.currentChapterId===chapterId){
       $("#chapterText").value="";
       uiState.currentChapterId="";
     }
-
-    // 🔧 aggiorna anche le CARD in libreria
     await fetchBooks();
   }catch(e){
     toast("Errore eliminazione: "+(e?.message||e));
@@ -440,23 +480,16 @@ async function exportBook(bookId){
   const fmt = askFormat("pdf"); if(!fmt) return;
 
   if (fmt === "pdf") {
-    // Default: KDP-ready (6x9, no bleed). Per A4 semplice: usa classic=true
-    const params = new URLSearchParams({
-      trim: "6x9",
-      bleed: "false",
-      classic: "false"
-    });
+    const params = new URLSearchParams({ trim: "6x9", bleed: "false", classic: "false" });
     const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/pdf?${params.toString()}`;
     window.open(url, "_blank", "noopener");
     return;
   }
-
   if (fmt === "md" || fmt === "txt") {
     const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/${fmt}`;
     window.open(url, "_blank", "noopener");
     return;
   }
-
   toast("Formato non supportato.");
 }
 
@@ -508,7 +541,10 @@ function wireButtons(){
     if(!bookId) return;
     if(action==="open"){ rememberLastBook(bookId); showEditor(bookId); }
     else if(action==="delete"){ await deleteBook(bookId); }
-    else if(action==="rename"){ await renameBook(bookId, btn.getAttribute("data-oldtitle")||""); }
+    else if(action==="rename"){
+      if (USE_MODAL_RENAME) openEditBookModal(bookId);
+      else await renameBook(bookId, btn.getAttribute("data-oldtitle")||"");
+    }
     else if(action==="export"){ await exportBook(bookId); }
   });
 
@@ -540,7 +576,7 @@ function wireButtons(){
     showMenuForButton(ev.currentTarget, items, async (val)=>{
       $("#bookIdInput").value = val;
       rememberLastBook(val);
-      await showEditor(val); // ricarica capitoli del nuovo libro
+      await showEditor(val);
     });
   });
 
@@ -609,7 +645,6 @@ async function deleteBook(bookId){
   }
 }
 async function renameBook(bookId, oldTitle){
-  // recupera metadati correnti
   const b = uiState.books.find(x=>(x?.id||x?.book_id)===bookId) || {};
   const curAuthor  = b?.author || loadLastAuthor();
   const curLang    = (b?.language || loadLastLang() || "it").toLowerCase();
@@ -638,12 +673,10 @@ async function renameBook(bookId, oldTitle){
     toast("✅ Libro aggiornato.");
     await fetchBooks();
 
-    // se è il libro aperto aggiorna stato editor
     if(uiState.currentBookId===bookId){
       uiState.currentBookTitle = newTitle;
       uiState.currentLanguage  = newLang;
-      const langEl=$("#languageInput");
-      if(langEl) langEl.value=newLang;
+      const langEl=$("#languageInput"); if(langEl) langEl.value=newLang;
       await refreshChaptersList(bookId);
     }
   }catch(e){
