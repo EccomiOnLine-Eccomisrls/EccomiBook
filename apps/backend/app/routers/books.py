@@ -1,7 +1,6 @@
-# apps/backend/app/routers/books.py
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Header
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Dict, Any, List
@@ -25,6 +24,16 @@ class BookIn(BaseModel):
     language: str = "it"
     plan: str | None = None
     chapters: List[Dict[str, Any]] = []
+
+class BookUpdateIn(BaseModel):
+    # tutti opzionali, aggiorna solo ciò che arriva
+    title: str | None = None
+    author: str | None = None
+    abstract: str | None = None
+    description: str | None = None
+    genre: str | None = None
+    language: str | None = None
+    plan: str | None = None
 
 class ChapterUpdate(BaseModel):
     content: str
@@ -58,6 +67,9 @@ def _ensure_book_folder(book_id: str) -> Path:
     folder = storage.CHAPTERS_DIR / book_id
     folder.mkdir(parents=True, exist_ok=True)
     return folder
+
+def _find_book(books: List[Dict[str, Any]], book_id: str) -> Dict[str, Any] | None:
+    return next((b for b in books if (b.get("id") or b.get("book_id")) == book_id), None)
 
 # --------------- API: LIBRI ----------------------
 
@@ -94,6 +106,35 @@ def create_book(data: BookIn):
 
     return {"ok": True, "book_id": book_id, "title": book["title"]}
 
+@router.put("/books/{book_id}", summary="Update Book (title/author/language/…)")
+def update_book(book_id: str, data: BookUpdateIn, x_api_key: str | None = Header(default=None)):
+    # NB: per ora nessuna auth forte; l'header è lasciato per futura compatibilità
+    books = _book_index()
+    b = _find_book(books, book_id)
+    if not b:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+
+    # aggiorna solo i campi presenti
+    if data.title is not None:
+        b["title"] = data.title
+    if data.author is not None:
+        b["author"] = data.author
+    if data.language is not None:
+        b["language"] = (data.language or "it")
+    if data.abstract is not None:
+        b["abstract"] = data.abstract
+    if data.description is not None:
+        b["description"] = data.description
+    if data.genre is not None:
+        b["genre"] = data.genre
+    if data.plan is not None:
+        b["plan"] = data.plan
+
+    b["updated_at"] = _now_iso()
+    _save_index(books)
+
+    return {"ok": True, "book": b}
+
 @router.delete("/books/{book_id}", status_code=204, summary="Delete Book")
 def delete_book(book_id: str):
     books = _book_index()
@@ -128,7 +169,7 @@ def upsert_chapter(book_id: str, chapter_id: str, data: ChapterUpdate):
 
     # aggiorna indice
     books = _book_index()
-    b = next((x for x in books if (x.get("id") or x.get("book_id")) == book_id), None)
+    b = _find_book(books, book_id)
     if not b:
         # se manca il libro in indice (caso limite), crealo al volo
         b = {
@@ -167,7 +208,7 @@ def delete_chapter(book_id: str, chapter_id: str):
 
     # aggiorna indice
     books = _book_index()
-    b = next((x for x in books if (x.get("id") or x.get("book_id")) == book_id), None)
+    b = _find_book(books, book_id)
     if b:
         ch = b.get("chapters") or []
         ch = [c for c in ch if (c.get("id") or c.get("chapter_id")) != chapter_id]
