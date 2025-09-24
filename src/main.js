@@ -1,10 +1,11 @@
 /* =========================================================
  * EccomiBook — Frontend
- * src/main.js — v3.9 (modal rename + PUT)
+ * src/main.js — v3.9.1 (export menu + fixes)
  * - LED stato backend
  * - Libreria + Editor
  * - Dropdown custom per pulsanti verdi (Book/Chapter)
  * - Modifica libro via MODALE custom (toggle ON/OFF)
+ * - Export capitolo/libro con menù formati (PDF/MD/TXT)
  * ========================================================= */
 
 import "./styles.css";
@@ -21,7 +22,7 @@ const API_BASE_URL =
 /* Helpers */
 const $  = (s, r=document)=>r.querySelector(s);
 const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
-const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;","&gt;": "&gt;",'"':"&quot;","'":"&#39;" }[m]));
 const escapeAttr = (s)=>escapeHtml(s).replace(/"/g,"&quot;");
 const toast = (m)=>alert(m);
 
@@ -292,6 +293,15 @@ async function showEditor(bookId){
 }
 function closeEditor(){ stopAutosave(); $("#editor-card").style.display="none"; }
 
+/* HERO helpers */
+function syncEditorButtonState(){
+  const editorBtn = $("#btn-editor"); if(!editorBtn) return;
+  const hasBook = !!(loadLastBook());
+  editorBtn.disabled = !hasBook;
+  editorBtn.title = hasBook ? "Scrivi e salva capitoli" : "Apri un libro dalla Libreria";
+  editorBtn.classList.toggle("is-disabled", !hasBook);
+}
+
 /* Metadati libro corrente */
 async function loadBookMeta(bookId){
   try{
@@ -449,7 +459,7 @@ async function saveCurrentChapter(showToast=true){
     uiState.lastSavedSnapshot=content;
     if(showToast) toast("✅ Capitolo salvato.");
     await refreshChaptersList(bookId);
-    await fetchBooks();            // 🔵 <— aggiungi questa riga
+    await fetchBooks();            // mantiene in sync le card
   }catch(e){
     toast("Errore salvataggio: "+(e?.message||e));
   }
@@ -465,33 +475,43 @@ async function maybeAutosaveNow(){
   }
 }
 
-/* ======== Export ======== */
-function askFormat(defaultFmt="pdf"){
-  const a=prompt("Formato? (pdf / md / txt)",defaultFmt)?.trim().toLowerCase();
-  if(!a) return null;
-  if(!["pdf","md","txt"].includes(a)){ toast("Formato non valido."); return null; }
-  return a;
-}
-function downloadChapter(bookId, chapterId){
-  const fmt=askFormat("pdf"); if(!fmt) return;
-  window.open(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}/${fmt}`,
-              "_blank","noopener");
-}
-async function exportBook(bookId){
-  const fmt = askFormat("pdf"); if(!fmt) return;
+/* ======== Export (MENU) ======== */
+/* ——— RIMOSSO askFormat(); sostituito con menù 3 scelte ——— */
 
-  if (fmt === "pdf") {
-    const params = new URLSearchParams({ trim: "6x9", bleed: "false", classic: "false" });
-    const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/pdf?${params.toString()}`;
+// voci formato
+const EXPORT_FORMATS = [
+  { label: "📄 PDF",      value: "pdf" },
+  { label: "📝 Markdown", value: "md"  },
+  { label: "📃 TXT",      value: "txt" }
+];
+// mostra menù e restituisce fmt al callback
+function chooseFormat(anchorBtn, cb){
+  showMenuForButton(anchorBtn || document.body, EXPORT_FORMATS, (fmt)=>{
+    if(!fmt) return;
+    cb(fmt);
+  });
+}
+
+function downloadChapter(bookId, chapterId, anchorBtn){
+  chooseFormat(anchorBtn, (fmt)=>{
+    const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}.${fmt}`;
     window.open(url, "_blank", "noopener");
-    return;
-  }
-  if (fmt === "md" || fmt === "txt") {
+  });
+}
+
+async function exportBook(bookId, anchorBtn){
+  chooseFormat(anchorBtn, (fmt)=>{
+    if (fmt === "pdf") {
+      // PDF libro intero (KDP-ready 6x9 no-bleed)
+      const params = new URLSearchParams({ trim: "6x9", bleed: "false", classic: "false" });
+      const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/pdf?${params.toString()}`;
+      window.open(url, "_blank", "noopener");
+      return;
+    }
+    // MD/TXT libro intero
     const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/${fmt}`;
     window.open(url, "_blank", "noopener");
-    return;
-  }
-  toast("Formato non supportato.");
+  });
 }
 
 /* ======== Toggle Libreria ======== */
@@ -546,7 +566,7 @@ function wireButtons(){
       if (USE_MODAL_RENAME) openEditBookModal(bookId);
       else await renameBook(bookId, btn.getAttribute("data-oldtitle")||"");
     }
-    else if(action==="export"){ await exportBook(bookId); }
+    else if(action==="export"){ await exportBook(bookId, btn); } // ← passiamo il bottone per posizionare il menù
   });
 
   // Editor list actions
@@ -564,7 +584,7 @@ function wireButtons(){
     if(openBtn)      await openChapter(bid,cid);
     else if(delBtn)  await deleteChapter(bid,cid);
     else if(editBtn) editChapter(cid);
-    else if(dlBtn)   downloadChapter(bid,cid);
+    else if(dlBtn)   downloadChapter(bid,cid, dlBtn);  // ← menù formati sul tasto giusto
   });
 
   // ===== Pulsanti verdi: MENU =====
@@ -706,7 +726,7 @@ async function generateWithAI(){
     toast(`✨ Testo generato (bozza) — lingua: ${language.toUpperCase()}`);
     await saveCurrentChapter(false);
     await refreshChaptersList(bookId);
-    await fetchBooks();   // 🔵 qui
+    await fetchBooks();   // sincronizza le card libreria
   }catch(e){
     toast("⚠️ AI di test: "+(e?.message||e));
   }
