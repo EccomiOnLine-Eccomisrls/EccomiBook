@@ -752,28 +752,29 @@ async function generateWithAI(){
 
 /* ===== UI Tweaks: Editor capitolo ===== */
 function tweakChapterEditorUI() {
-  // 0) Contenitore editor
-  const editor =
+  const root =
     document.querySelector('[data-component="chapter-editor"]') ||
-    document.querySelector('#editor-card') ||
-    document;
-  if (!editor) return;
+    document.querySelector('#editor-card') || document;
+  if (!root) return;
 
-  // 1) NASCONDI il campo manuale duplicato "ch_0001" (non #chapterIdInput)
-  const extraChIdInput = Array.from(editor.querySelectorAll('input[type="text"]'))
+  // --- 1) NASCONDI il campo duplicato "ch_0001" (non #chapterIdInput) ---
+  const extraCh = Array.from(root.querySelectorAll('input[type="text"]'))
     .find(i => i.id !== 'chapterIdInput' && /^ch[_-]?\d{3,}$/i.test(i.value || ''));
-  const extraChIdField = extraChIdInput?.closest('.field, .form-row, .card, label, div');
-  if (extraChIdField) {
-    extraChIdField.style.display = 'none';
-    extraChIdField.setAttribute('aria-hidden', 'true');
+  const extraWrap = extraCh?.closest('.field, .form-row, .card, label, div');
+  if (extraWrap) {
+    extraWrap.style.display = 'none';
+    extraWrap.setAttribute('aria-hidden', 'true');
   }
 
-  // 2) Recupera nodi Topic e Lingua
-  let topicEl = editor.querySelector('#topicInput');
-  const langEl  = editor.querySelector('#languageInput');
-  if (!langEl) return; // senza lingua non procedo (evito errori)
+  // --- 2) Prendi i nodi esistenti ---
+  let topicEl = root.querySelector('#topicInput');
+  const langEl = root.querySelector('#languageInput');
+  const chIdEl = root.querySelector('#chapterIdInput');
+  const chIdBlock = chIdEl?.closest('.field, .form-row, .card, label, div');
 
-  // 3) Converte Topic in <textarea> se fosse ancora <input>
+  if (!langEl || !chIdBlock) return;
+
+  // --- 3) Topic -> textarea con placeholder utile ---
   if (topicEl && topicEl.tagName.toLowerCase() === 'input') {
     const ta = document.createElement('textarea');
     Array.from(topicEl.attributes).forEach(a => ta.setAttribute(a.name, a.value));
@@ -788,38 +789,26 @@ function tweakChapterEditorUI() {
     topicEl.placeholder ||= 'Istruzioni per l’AI: tono, target, stile, obiettivi, riferimenti…';
   }
 
-  // 4) Trova i "blocchi" (label/div.field) di Topic e Lingua
-  const topicField =
-    topicEl?.closest('.field, .form-row, .card, label, div') || topicEl?.parentElement;
-  const langField =
-    langEl?.closest('.field, .form-row, .card, label, div') || langEl?.parentElement;
-  if (!topicField || !langField) return;
+  const topicBlock = topicEl?.closest('.field, .form-row, .card, label, div') || topicEl?.parentElement;
+  const langBlock  = langEl.closest('.field, .form-row, .card, label, div') || langEl.parentElement;
+  if (!topicBlock || !langBlock) return;
 
-  // 5) Crea/usa un wrapper .fields e metti Topic (sx) + Lingua (dx) dentro
-  let fieldsWrap =
-    editor.querySelector('#editor-card .fields') ||
-    editor.querySelector('.fields');
-
-  if (!fieldsWrap) {
-    // inserisco il wrapper subito PRIMA del blocco Topic (o Lingua)
-    const firstBlock = topicField || langField;
-    fieldsWrap = document.createElement('div');
-    fieldsWrap.className = 'fields';
-    firstBlock.parentNode.insertBefore(fieldsWrap, firstBlock);
+  // --- 4) Crea un wrapper .fields subito DOPO "Chapter ID" ---
+  let fields = chIdBlock.nextElementSibling;
+  if (!(fields && fields.classList?.contains('fields'))) {
+    fields = document.createElement('div');
+    fields.className = 'fields';
+    chIdBlock.parentNode.insertBefore(fields, chIdBlock.nextSibling);
   }
 
-  // Se i blocchi non sono già figli del wrapper, spostali in ordine
-  if (topicField.parentNode !== fieldsWrap) fieldsWrap.appendChild(topicField);
-  if (langField.parentNode  !== fieldsWrap) fieldsWrap.appendChild(langField);
+  // --- 5) Ordine e posizione: TOPIC a sinistra (col 1), LINGUA a destra (col 2) ---
+  // (=> "scambia" le posizioni rispetto allo screenshot: il giallo va su a dx; il rosso resta e si allarga a sx)
+  if (topicBlock.parentNode !== fields) fields.appendChild(topicBlock);
+  if (langBlock.parentNode  !== fields) fields.appendChild(langBlock);
 
-  // 6) Piccoli aggiustamenti inline (il layout vero lo fa il CSS)
-  topicField.style.width = '100%';
-  langField.style.maxWidth = '220px';
-}
-
-// Richiamalo quando l’editor è visibile / rerenderizzato
-function afterEditorRendered() {
-  setTimeout(tweakChapterEditorUI, 0);
+  // piccoli hint (il layout lo fa il CSS)
+  topicBlock.style.width = '100%';
+  langBlock.style.maxWidth = '220px';
 }
 /* ===== Init ===== */
 document.addEventListener("DOMContentLoaded", async ()=>{
