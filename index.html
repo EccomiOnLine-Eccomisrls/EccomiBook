@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>EccomiBook</title>
+    <!-- Vite dev: /src/styles.css — in build sarà bundlata -->
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
@@ -60,14 +61,15 @@
       <section id="editor-card" class="card editor-card" style="display:none; margin-top:20px;">
         <div class="card-head"><strong>✏️ Editor capitolo</strong></div>
 
-        <!-- Book ID + pulsante lista -->
+        <!-- Book ID + menu -->
         <label for="bookIdInput">Book ID</label>
         <div class="input-row">
           <input id="bookIdInput" type="text" placeholder="ID libro" list="books-dl" autocomplete="off"/>
           <button id="btn-book-menu" class="iconbtn" title="Elenco libri">▼</button>
         </div>
 
-        <div class="grid">
+        <!-- Chapter ID + controlli -->
+        <div class="grid" style="margin-top:12px">
           <div>
             <label for="chapterIdInput">Chapter ID</label>
             <div class="input-row">
@@ -76,28 +78,35 @@
               <button id="btn-ch-new" class="iconbtn" title="Nuovo capitolo">＋</button>
             </div>
           </div>
-          <div>
-            <label for="topicInput">Topic (per AI)
-              <span title="Suggerimento: indica obiettivo, tono, pubblico, punti da coprire e vincoli di stile. Esempio: 'Capitolo introduttivo per liceali, tono amichevole, 5 sezioni con esempi e un esercizio finale.'">ℹ️</span>
-            </label>
-            <input id="topicInput" type="text"
-                   placeholder="Obiettivo, tono, pubblico, punti chiave, vincoli (es. 5 sezioni + esercizio finale)" />
-          </div>
           <div style="display:flex;align-items:flex-end">
             <div id="nextChHint" class="inline-hint" aria-hidden="true">—</div>
           </div>
+        </div>
+
+        <!-- Wrapper a due colonne: Topic (largo) + Lingua (compatta a destra) -->
+        <div class="fields" style="margin-top:8px">
+          <label class="field" style="grid-column:1 / 2" for="topicInput">
+            <span>Topic (per AI) <span title="Indica obiettivo, tono, pubblico, punti da coprire e vincoli di stile.">ℹ️</span></span>
+            <!-- TEXTAREA larga -->
+            <textarea id="topicInput" rows="4"
+              placeholder="Obiettivo, tono, pubblico, punti chiave, vincoli (es. 5 sezioni + esercizio finale)"></textarea>
+          </label>
+
+          <label class="field" style="grid-column:2 / 3" for="languageInput">
+            <span>Lingua</span>
+            <input id="languageInput" type="text" placeholder="it, en, es…" maxlength="10" />
+          </label>
         </div>
 
         <!-- datalist fallback -->
         <datalist id="books-dl"></datalist>
         <datalist id="chapters-dl"></datalist>
 
-        <label for="languageInput">Lingua</label>
-        <input id="languageInput" type="text" placeholder="it, en, es…" />
+        <!-- Contenuto capitolo -->
+        <label for="chapterText" style="margin-top:10px">Contenuto</label>
+        <textarea id="chapterText" rows="12" placeholder="Scrivi qui il contenuto del capitolo…"></textarea>
 
-        <label for="chapterText">Contenuto</label>
-        <textarea id="chapterText" rows="10" placeholder="Scrivi qui il contenuto del capitolo…"></textarea>
-
+        <!-- Toolbar -->
         <div class="row-right" style="margin-top:12px">
           <button id="btn-ai-generate" class="btn btn-secondary">✨ Scrivi con AI</button>
           <button id="btn-ed-save" class="btn btn-primary">💾 Salva</button>
@@ -105,6 +114,7 @@
           <button id="btn-ed-close" class="btn btn-secondary">Chiudi</button>
         </div>
 
+        <!-- Elenco capitoli -->
         <div class="card" style="margin-top:18px">
           <div class="card-head"><strong>Capitoli del libro</strong></div>
           <div id="chapters-list">
@@ -116,7 +126,7 @@
       <p class="footer">© EccomiBook</p>
     </main>
 
-    <!-- Modal: Modifica libro (mettila SEMPRE dentro <body>) -->
+    <!-- Modal: Modifica libro (sempre nel body) -->
     <div id="modal-edit-book" class="modal" aria-hidden="true">
       <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="meb-title">
         <div class="modal__head">
@@ -144,6 +154,7 @@
       </div>
     </div>
 
+    <!-- Vite dev: /src/main.js — in build sarà bundlato -->
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
