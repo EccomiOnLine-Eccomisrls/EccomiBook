@@ -790,45 +790,74 @@ async function generateWithAI(){
   }
 }
 
-/* ===== UI Tweaks: Editor capitolo ===== */
+/* ===== UI Tweaks: Editor capitolo (robusto) ===== */
 function tweakChapterEditorUI() {
   const root =
     document.querySelector('[data-component="chapter-editor"]') ||
     document.querySelector('#editor-card') || document;
   if (!root) return;
 
-  // --- 1) NASCONDI il campo duplicato "ch_0001" (non #chapterIdInput) ---
-  const extraCh = Array.from(root.querySelectorAll('input[type="text"]'))
-    .find(i => i.id !== 'chapterIdInput' && /^ch[_-]?\d{3,}$/i.test(i.value || ''));
-  const extraWrap = extraCh?.closest('.field, .form-row, .card, label, div');
-  if (extraWrap) {
-    extraWrap.style.display = 'none';
-    extraWrap.setAttribute('aria-hidden', 'true');
+  /* --- A) NASCONDI il DUPLICATO "ch_0001" (qualsiasi nodo “pill”) --- */
+  const chIdEl    = root.querySelector('#chapterIdInput');
+  const chIdBlock = chIdEl?.closest('.field, .form-row, .card, label, div') || null;
+
+  // trova qualunque elemento che visualizzi solo "ch_####"
+  const allNodes = Array.from(root.querySelectorAll('*'));
+  const dupNode = allNodes.find(el => {
+    if (!el || el === chIdEl) return false;
+    // non prendere l'input ufficiale e i suoi antenati
+    if (chIdBlock && (el === chIdBlock || chIdBlock.contains(el))) return false;
+    const t = (el.textContent || '').trim();
+    return /^ch_\d{4}$/i.test(t);
+  });
+
+  if (dupNode) {
+    // nascondi il contenitore "pill" intero se c'è, altrimenti il nodo stesso
+    const pill =
+      dupNode.closest('.inline-hint, .badge, .pill, .tag, .field, .form-row, .card, label, div') || dupNode;
+    pill.style.display = 'none';
+    pill.setAttribute('aria-hidden', 'true');
   }
 
-  // --- 2) Trasforma Topic in textarea larga ---
+  /* --- B) TOPIC → textarea large + full-width --- */
   let topicEl = root.querySelector('#topicInput');
-  if (topicEl && topicEl.tagName.toLowerCase() === 'input') {
+  if (!topicEl) return;
+
+  // se è un input, trasformalo in textarea
+  if (topicEl.tagName.toLowerCase() === 'input') {
     const ta = document.createElement('textarea');
     Array.from(topicEl.attributes).forEach(a => ta.setAttribute(a.name, a.value));
-    ta.value = topicEl.value || '';
-    ta.rows = 4;   // più alto di default
     ta.id = 'topicInput';
-    ta.placeholder = 'Istruzioni per l’AI: tono, target, stile, obiettivi, riferimenti…';
+    ta.value = topicEl.value || '';
     topicEl.replaceWith(ta);
     topicEl = ta;
-  } else if (topicEl) {
-    topicEl.rows = 4;
-    topicEl.placeholder ||= 'Istruzioni per l’AI: tono, target, stile, obiettivi, riferimenti…';
   }
+  topicEl.rows = Math.max(4, Number(topicEl.rows || 0) || 4);
+  topicEl.placeholder ||= 'Istruzioni per l’AI: tono, target, stile, obiettivi, riferimenti…';
 
-  // --- 3) Topic full-width ---
-  const topicBlock = topicEl?.closest('.field, .form-row, .card, label, div') || topicEl?.parentElement;
-  if (topicBlock) {
+  // porta Topic a tutta riga (anche se non c’è già il wrapper .fields)
+  const topicBlock = topicEl.closest('.field, .form-row, .card, label, div') || topicEl.parentElement;
+  const langEl     = root.querySelector('#languageInput');
+  const langBlock  = langEl?.closest('.field, .form-row, .card, label, div') || langEl?.parentElement;
+
+  // crea/usa un wrapper a 2 colonne subito dopo il blocco Chapter ID
+  if (topicBlock && langBlock && chIdBlock) {
+    let fields = chIdBlock.nextElementSibling;
+    if (!(fields && fields.classList && fields.classList.contains('fields'))) {
+      fields = document.createElement('div');
+      fields.className = 'fields';
+      chIdBlock.parentNode.insertBefore(fields, chIdBlock.nextSibling);
+    }
+    if (topicBlock.parentNode !== fields) fields.appendChild(topicBlock);
+    if (langBlock.parentNode  !== fields) fields.appendChild(langBlock);
+
+    // suggerimenti inline (il grid lo fa il CSS già aggiunto in styles.css)
+    topicBlock.style.gridColumn = '1 / -1'; // full width se il CSS non è caricato
     topicBlock.style.width = '100%';
-    topicBlock.style.gridColumn = '1 / -1';
+    langBlock.style.maxWidth = '220px';
   }
 }
+
 /* ===== Init ===== */
 document.addEventListener("DOMContentLoaded", async ()=>{
   wireButtons();
