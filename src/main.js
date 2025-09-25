@@ -327,7 +327,7 @@ async function showEditor(bookId){
 
   await loadBookMeta(uiState.currentBookId);
   await refreshChaptersList(uiState.currentBookId);
-  afterEditorRendered();
+  tweakChapterEditorUI();
 
   if(!(uiState.chapters?.length)){
     const nid = nextChapterId([]);
@@ -784,7 +784,7 @@ async function generateWithAI(){
     await saveCurrentChapter(false);
     await refreshChaptersList(bookId);
     await fetchBooks();
-    afterEditorRendered();
+    tweakChapterEditorUI();
   }catch(e){
     toast("⚠️ AI di test: "+(e?.message||e));
   }
