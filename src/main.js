@@ -20,6 +20,8 @@ const API_BASE_URL =
   "https://eccomibook-backend.onrender.com";
 
 /* Helpers */
+const DEMO_HINT = "Scrivi qui il contenuto del capitolo…";
+
 const $  = (s, r=document)=>r.querySelector(s);
 const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
 const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({
@@ -312,10 +314,14 @@ async function showEditor(bookId){
   $("#bookIdInput").value=uiState.currentBookId;
 
   const ch=$("#chapterIdInput"); if(!ch.value) ch.value="";
-  const ta=$("#chapterText"); if(!ta.value) ta.value="Scrivi qui il contenuto del capitolo…";
-  uiState.currentChapterId=ch.value.trim();
-  uiState.lastSavedSnapshot=ta.value;
-
+  const ta = $("#chapterText");
+  if (ta) {
+  ta.placeholder = DEMO_HINT;      // ← esempio visivo
+  if (!ta.value) ta.value = "";     // ← niente testo finto nel valore
+}
+uiState.currentChapterId = ch.value.trim();
+uiState.lastSavedSnapshot = ta?.value || "";
+  
   await loadBookMeta(uiState.currentBookId);
   await refreshChaptersList(uiState.currentBookId);
   afterEditorRendered();
