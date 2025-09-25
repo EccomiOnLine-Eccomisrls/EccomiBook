@@ -282,7 +282,8 @@ async function showEditor(bookId){
 
   await loadBookMeta(uiState.currentBookId);
   await refreshChaptersList(uiState.currentBookId);
-
+  afterEditorRendered();
+  
   if(!(uiState.chapters?.length)){
     const nid = nextChapterId([]);
     $("#chapterIdInput").value = nid;
@@ -743,6 +744,7 @@ async function generateWithAI(){
     await saveCurrentChapter(false);
     await refreshChaptersList(bookId);
     await fetchBooks();   // sincronizza le card libreria
+    afterEditorRendered();
   }catch(e){
     toast("⚠️ AI di test: "+(e?.message||e));
   }
