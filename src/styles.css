@@ -41,10 +41,10 @@ body{
   padding:8px 12px;color:var(--text);
   box-shadow:0 10px 24px rgba(0,0,0,.15);
 }
-.statusbox__led{width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 12px rgba(0,0,0,.25)}
-.led--ok{ background: var(--ok); box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 10px rgba(47,191,113,.6) }
-.led--ko{ background: var(--err); box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 10px rgba(239,68,68,.6) }
-.led--warn{ background: var(--warn); box-shadow:0 0 0 2px rgba(255,255,255,.08) inset, 0 0 10px rgba(245,158,11,.6) }
+.statusbox__led{width:12px;height:12px;border-radius:50%}
+.led--ok{ background: var(--ok) }
+.led--ko{ background: var(--err) }
+.led--warn{ background: var(--warn) }
 
 .statusbox__text{display:flex;flex-direction:column;line-height:1.1}
 .statusbox__title{font-weight:700;font-size:14px}
@@ -89,7 +89,7 @@ body{
 /* righe input con pulsanti verdi */
 .input-row{display:flex;gap:8px;align-items:center}
 
-/* ===== Rimuove le freccette native dagli input con datalist ===== */
+/* datalist cleanup */
 input[list]{ padding-right:12px; appearance:none; -moz-appearance:textfield; background-image:none !important; }
 input[list]::-webkit-calendar-picker-indicator{ display:none !important; -webkit-appearance:none; }
 input[type="search"]::-webkit-search-decoration,
@@ -149,7 +149,7 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
 .cta.is-active{box-shadow:0 0 0 2px rgba(45,126,247,.35) inset}
 .cta[disabled],.cta.is-disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
 
-/* ===== Popup menu custom ===== */
+/* Popup menu */
 .menu-pop{
   position:absolute; z-index:50; min-width:260px; max-width:min(560px, 92vw);
   max-height:280px; overflow:auto; padding:6px;
@@ -163,7 +163,7 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
 .menu-pop button:hover{ background:rgba(255,255,255,.06) }
 .menu-pop .muted{ color:var(--muted); font-size:12px }
 
-/* ===== Modal ===== */
+/* Modal */
 .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
 .modal.is-open{display:flex}
 .modal__dialog{width:min(520px,92vw);background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:10px;box-shadow:0 20px 50px rgba(0,0,0,.5)}
@@ -180,7 +180,26 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
   color:#e5e7eb;
 }
 
-/* ===== Layout Editor capitolo: Topic largo + Lingua compatta ===== */
-#editor-card .fields{display:grid;grid-template-columns:1fr 200px;gap:12px 16px;align-items:start}
+/* Layout Editor capitolo: Topic largo + Lingua compatta */
+#editor-card .fields{
+  display:grid;
+  grid-template-columns: 1fr 200px;
+  gap:12px 16px;
+  align-items:start;
+}
 #editor-card #topicInput{width:100%;grid-column:1/2}
 #editor-card #languageInput{width:100%;max-width:200px;grid-column:2/3}
+
+/* ====== Drag & Drop capitoli ====== */
+.dnd-row{cursor:grab; transition:transform .06s ease}
+.dnd-row.dragging{opacity:.75; transform:scale(.995)}
+.drag-handle{
+  appearance:none; border:1px solid #2b3a53; background:#0c1522; color:#cfd9eb;
+  border-radius:8px; padding:6px 10px; cursor:grab; margin-right:8px;
+}
+.dnd-head{display:flex; align-items:center; gap:8px; margin-bottom:6px}
+.drop-hint{
+  height:10px; border-radius:6px;
+  border:1px dashed #2b3a53; background:rgba(255,255,255,.05);
+  margin:6px 0;
+}
