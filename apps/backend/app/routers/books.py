@@ -25,7 +25,6 @@ class BookIn(BaseModel):
     chapters: List[Dict[str, Any]] = []
 
 class BookUpdateIn(BaseModel):
-    # opzionali: aggiorni solo ciò che arriva
     title: str | None = None
     author: str | None = None
     abstract: str | None = None
@@ -36,6 +35,9 @@ class BookUpdateIn(BaseModel):
 
 class ChapterUpdate(BaseModel):
     content: str
+
+class ReorderIn(BaseModel):
+    order: List[str]  # lista di chapter_id, nell’ordine desiderato
 
 # --------------- Helpers ------------------
 SCHEMA_VERSION = 1
@@ -63,7 +65,6 @@ def _find_book(books: List[Dict[str, Any]], book_id: str) -> Dict[str, Any] | No
     return next((b for b in books if (b.get("id") or b.get("book_id")) == book_id), None)
 
 def _check_admin_key(x_api_key: str | None):
-    """Protezione semplice: se BACKUP_API_KEY è settata, l'header deve combaciare."""
     expected = os.getenv("BACKUP_API_KEY", "").strip()
     if expected and (x_api_key or "").strip() != expected:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -101,20 +102,18 @@ def create_book(data: BookIn):
         "created_at": _now_iso(),
         "updated_at": _now_iso(),
         "schema_version": SCHEMA_VERSION,
-        "chapters": [],
+        "chapters": [],  # l’ordine in questa lista È l’ordine mostrato
     }
     _ensure_book_folder(book_id)
     books = _book_index()
     books.append(book)
     _save_index(books)
-    # snapshot veloce
     try: storage.snapshot_zip(max_keep=20)
     except: pass
     return {"ok": True, "book_id": book_id, "title": book["title"]}
 
 @router.put("/books/{book_id}", summary="Update Book (title/author/language/…)")
 def update_book(book_id: str, data: BookUpdateIn, x_api_key: str | None = Header(default=None)):
-    # (header lasciato per compatibilità futura; non fa auth forte qui)
     books = _book_index()
     b = _find_book(books, book_id)
     if not b:
@@ -139,7 +138,6 @@ def delete_book(book_id: str):
     books = _book_index()
     books = [b for b in books if (b.get("id") or b.get("book_id")) != book_id]
     _save_index(books)
-    # elimina cartella capitoli
     folder = storage.CHAPTERS_DIR / book_id
     if folder.exists():
         for p in folder.glob("*"):
@@ -152,7 +150,7 @@ def delete_book(book_id: str):
     return
 
 # --------------- API: CAPITOLI ----------------------
-# --- EXPORT capitolo: PRIMA del get generico, e con estensione nel path ---
+# EXPORT capitolo
 @router.get("/books/{book_id}/chapters/{chapter_id}.md",
             response_class=PlainTextResponse, summary="Export Chapter Md")
 def export_chapter_md(book_id: str, chapter_id: str):
@@ -167,7 +165,6 @@ def export_chapter_txt(book_id: str, chapter_id: str):
 
 @router.get("/books/{book_id}/chapters/{chapter_id}.pdf", summary="Export Chapter Pdf")
 def export_chapter_pdf(book_id: str, chapter_id: str):
-    # mini PDF con ReportLab
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
@@ -186,7 +183,6 @@ def export_chapter_pdf(book_id: str, chapter_id: str):
 
 @router.get("/books/{book_id}/chapters/{chapter_id}", summary="Get Chapter")
 def get_chapter(book_id: str, chapter_id: str = Path(..., regex=r"[^.]+$")):
-    # regex: NON cattura 'ch_0003.pdf' → gli export sopra vincono
     text = storage.read_chapter_text(book_id, chapter_id)
     return {"book_id": book_id, "chapter_id": chapter_id, "content": text}
 
@@ -202,6 +198,7 @@ def upsert_chapter(book_id: str, chapter_id: str, data: ChapterUpdate):
             "schema_version": SCHEMA_VERSION, "chapters": [],
         }
         books.append(b)
+
     ch = b.get("chapters") or []
     found = next((c for c in ch if (c.get("id") or c.get("chapter_id")) == chapter_id), None)
     if not found:
@@ -209,6 +206,7 @@ def upsert_chapter(book_id: str, chapter_id: str, data: ChapterUpdate):
         b["chapters"] = ch
     else:
         found["updated_at"] = _now_iso()
+
     b["updated_at"] = _now_iso()
     _save_index(books)
     try: storage.snapshot_zip(max_keep=20)
@@ -229,6 +227,38 @@ def delete_chapter(book_id: str, chapter_id: str):
     try: storage.snapshot_zip(max_keep=20)
     except: pass
     return
+
+# --------- Reorder capitoli (NUOVO) ----------
+@router.put("/books/{book_id}/chapters/reorder", summary="Reorder chapters by list of IDs")
+def reorder_chapters(book_id: str, data: ReorderIn):
+    books = _book_index()
+    b = _find_book(books, book_id)
+    if not b:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+
+    existing = b.get("chapters") or []
+    by_id = { (c.get("id") or c.get("chapter_id")): c for c in existing }
+
+    # Mantieni solo gli ID validi e nell’ordine dato
+    new_list: List[Dict[str, Any]] = []
+    seen = set()
+    for cid in data.order:
+        c = by_id.get(cid)
+        if c and cid not in seen:
+            new_list.append(c); seen.add(cid)
+
+    # Aggiungi eventuali capitoli non menzionati (in coda, ordine attuale)
+    for c in existing:
+        cid = c.get("id") or c.get("chapter_id")
+        if cid not in seen:
+            new_list.append(c); seen.add(cid)
+
+    b["chapters"] = new_list
+    b["updated_at"] = _now_iso()
+    _save_index(books)
+    try: storage.snapshot_zip(max_keep=20)
+    except: pass
+    return {"ok": True, "count": len(new_list), "book_id": book_id}
 
 # --------- Rebuild libreria da DISCO ---------
 @router.post("/books/refresh", summary="Rebuild library metadata from disk")
@@ -269,15 +299,13 @@ def admin_backup(x_api_key: str | None = Header(default=None)):
     _check_admin_key(x_api_key)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        # index
         index_bytes = storage.books_index_bytes()
         zf.writestr("books_index.json", index_bytes)
-        # chapters
         root = storage.CHAPTERS_DIR
         if root.exists():
             for p in root.rglob("*"):
                 if p.is_file():
-                    zf.write(p, p.relative_to(root.parent))  # include 'chapters/...'
+                    zf.write(p, p.relative_to(root.parent))
     buf.seek(0)
     filename = f"eccomibook_backup_{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.zip"
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
@@ -288,10 +316,8 @@ def admin_restore(file: UploadFile = File(...), x_api_key: str | None = Header(d
     _check_admin_key(x_api_key)
     data = file.file.read()
     with zipfile.ZipFile(io.BytesIO(data), "r") as zf:
-        # ripristina index
         if "books_index.json" in zf.namelist():
             storage.save_books_index_bytes(zf.read("books_index.json"))
-        # estrai capitoli
         root = storage.CHAPTERS_DIR
         root.mkdir(parents=True, exist_ok=True)
         for name in zf.namelist():
@@ -300,6 +326,5 @@ def admin_restore(file: UploadFile = File(...), x_api_key: str | None = Header(d
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 with open(dest, "wb") as f:
                     f.write(zf.read(name))
-    # ricarica cache
     storage.BOOKS_CACHE = storage.load_books_from_disk()
     return {"ok": True, "restored": True}
