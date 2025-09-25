@@ -151,11 +151,14 @@ function onDocClick(e){
 }
 function showMenuForButton(btn, items, onPick){
   closeMenu();
+
   const rect = btn.getBoundingClientRect();
   const host = document.createElement("div");
   host.className = "menu-pop";
-  host.style.left = `${Math.max(10, rect.left + window.scrollX)}px`;
-  host.style.top  = `${rect.bottom + window.scrollY + 6}px`;
+  host.style.position = "absolute";
+  host.style.visibility = "hidden";   // prima misuriamo, poi visibile
+  host.style.left = "0px";
+  host.style.top  = "0px";
 
   if(!items.length){
     host.innerHTML = `<div class="muted" style="padding:6px 8px">Nessun elemento</div>`;
@@ -167,6 +170,40 @@ function showMenuForButton(btn, items, onPick){
     ).join("");
   }
 
+  document.body.appendChild(host);
+
+  const margin = 12;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+  const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+
+  const mw = Math.min(host.offsetWidth || 280, vw - margin*2);
+  const mh = Math.min(host.offsetHeight || 200, vh - margin*2);
+  host.style.maxWidth = `min(560px, ${vw - margin*2}px)`;
+  host.style.maxHeight = `${vh - margin*2}px`;
+  host.style.overflow = "auto";
+  host.style.zIndex = "1000";
+
+  // Clamp orizzontale
+  let left = rect.left + scrollX;
+  left = Math.min(left, scrollX + vw - mw - margin);
+  left = Math.max(left, scrollX + margin);
+
+  // Flip verticale se non c’è spazio sotto
+  const spaceBelow = (scrollY + vh) - (rect.bottom + scrollY);
+  const wantBelow = spaceBelow >= mh + margin;
+  let top = wantBelow
+    ? (rect.bottom + scrollY + 6)
+    : (rect.top + scrollY - mh - 6);
+
+  top = Math.max(top, scrollY + margin);
+  top = Math.min(top, scrollY + vh - mh - margin);
+
+  host.style.left = `${left}px`;
+  host.style.top  = `${top}px`;
+  host.style.visibility = "visible";
+
   host.addEventListener("click",(ev)=>{
     const b = ev.target.closest("button[data-val]");
     if(!b) return;
@@ -175,7 +212,6 @@ function showMenuForButton(btn, items, onPick){
     onPick?.(val);
   });
 
-  document.body.appendChild(host);
   uiState.openMenuEl = host;
   setTimeout(()=>{ document.addEventListener("click", onDocClick); },0);
   window.addEventListener("resize", closeMenu);
