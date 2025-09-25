@@ -748,6 +748,68 @@ async function generateWithAI(){
   }
 }
 
+/* ===== UI Tweaks: Editor capitolo ===== */
+function tweakChapterEditorUI() {
+  const editor =
+    document.querySelector('[data-component="chapter-editor"]') ||
+    document.querySelector('#editor-card') ||
+    document;
+
+  // --- (A) NASCONDI IL CAMPO MANUALE "CH_0001" IN PIÙ ---
+  // Cerca un input testuale che SOMIGLIA a un chapter-id (ch_0001) ma NON è #chapterIdInput
+  const extraChIdInput = Array.from(editor.querySelectorAll('input[type="text"]'))
+    .find(i => i.id !== 'chapterIdInput' && /^ch[_-]?\d{3,}$/i.test(i.value || ''));
+
+  const extraChIdField = extraChIdInput?.closest('.field, .form-row, .card, label, div');
+  if (extraChIdField) {
+    extraChIdField.style.display = 'none';
+    extraChIdField.setAttribute('aria-hidden', 'true');
+  }
+
+  // --- (B) SCAMBIA TOPIC E LINGUA + TOPIC FULL-WIDTH ---
+  // Prendiamo i container "field" (in modo tollerante)
+  const langEl   = editor.querySelector('#languageInput');
+  const topicEl  = editor.querySelector('#topicInput');
+
+  const langField =
+    langEl?.closest('.field, .form-row, .card, label, div') || langEl?.parentElement;
+  let topicField =
+    topicEl?.closest('.field, .form-row, .card, label, div') || topicEl?.parentElement;
+
+  if (langField && topicField && langField !== topicField) {
+    // Sposta Topic SOPRA Lingua
+    langField.parentNode.insertBefore(topicField, langField);
+
+    // Topic a tutta riga
+    topicField.style.gridColumn = '1 / -1';
+    topicField.style.width = '100%';
+
+    // Topic come textarea comoda
+    if (topicEl && topicEl.tagName.toLowerCase() === 'input') {
+      const ta = document.createElement('textarea');
+      Array.from(topicEl.attributes).forEach(a => ta.setAttribute(a.name, a.value));
+      ta.value = topicEl.value || '';
+      ta.rows = Math.max(3, Number(topicEl.rows || 0) || 3);
+      ta.id = 'topicInput';
+      ta.placeholder = 'Istruzioni per l’AI: tono, target, stile, obiettivi, riferimenti…';
+      topicEl.replaceWith(ta);
+      topicField = ta.closest('.field, .form-row, .card, label, div') || topicField;
+    } else if (topicEl) {
+      topicEl.rows = Math.max(3, Number(topicEl.rows || 0) || 3);
+      topicEl.placeholder = 'Istruzioni per l’AI: tono, target, stile, obiettivi, riferimenti…';
+    }
+
+    // Lingua compatta
+    langField.style.maxWidth = '220px';
+  }
+}
+
+// Richiamalo quando l’editor è visibile / rerenderizzato
+function afterEditorRendered() {
+  // piccolo delay per dare tempo al DOM di montare
+  setTimeout(tweakChapterEditorUI, 0);
+}
+
 /* ===== Init ===== */
 document.addEventListener("DOMContentLoaded", async ()=>{
   wireButtons();
