@@ -473,7 +473,7 @@ async function openChapter(bookId, chapterId){
     uiState.lastSavedSnapshot = $("#chapterText").value || "";
 
     toast(`📖 Aperto ${chapterId}`);
-    afterEditorRendered();
+    tweakChapterEditorUI();
   }catch(e){
     toast("Impossibile aprire il capitolo: "+(e?.message||e));
   }
