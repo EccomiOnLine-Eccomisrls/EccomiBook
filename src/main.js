@@ -1,11 +1,11 @@
 /* =========================================================
  * EccomiBook — Frontend
- * src/main.js — v3.9.1 (export menu + fixes)
+ * src/main.js — v4.0.0 (Export KDP + fixes)
  * - LED stato backend
  * - Libreria + Editor
  * - Dropdown custom per pulsanti verdi (Book/Chapter)
  * - Modifica libro via MODALE custom (toggle ON/OFF)
- * - Export capitolo/libro con menù formati (PDF/MD/TXT)
+ * - Export capitolo/libro con menù formati (PDF/KDP/MD/TXT)
  * ========================================================= */
 
 import "./styles.css";
@@ -22,7 +22,9 @@ const API_BASE_URL =
 /* Helpers */
 const $  = (s, r=document)=>r.querySelector(s);
 const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
-const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;","&gt;": "&gt;",'"':"&quot;","'":"&#39;" }[m]));
+const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[m]));
 const escapeAttr = (s)=>escapeHtml(s).replace(/"/g,"&quot;");
 const toast = (m)=>alert(m);
 
@@ -476,15 +478,15 @@ async function maybeAutosaveNow(){
 }
 
 /* ======== Export (MENU) ======== */
-/* ——— RIMOSSO askFormat(); sostituito con menù 3 scelte ——— */
+/* ——— Menù 4 scelte: PDF / KDP / MD / TXT ——— */
 
-// voci formato
 const EXPORT_FORMATS = [
-  { label: "📄 PDF",      value: "pdf" },
-  { label: "📝 Markdown", value: "md"  },
-  { label: "📃 TXT",      value: "txt" }
+  { label: "📄 PDF (stream)", value: "pdf" },
+  { label: "📘 KDP (salva su /static)", value: "kdp" },
+  { label: "📝 Markdown", value: "md" },
+  { label: "📃 TXT", value: "txt" }
 ];
-// mostra menù e restituisce fmt al callback
+
 function chooseFormat(anchorBtn, cb){
   showMenuForButton(anchorBtn || document.body, EXPORT_FORMATS, (fmt)=>{
     if(!fmt) return;
@@ -493,7 +495,9 @@ function chooseFormat(anchorBtn, cb){
 }
 
 function downloadChapter(bookId, chapterId, anchorBtn){
-  chooseFormat(anchorBtn, (fmt)=>{
+  // per i capitoli l'opzione KDP non ha senso → solo pdf/md/txt
+  const items = EXPORT_FORMATS.filter(x=>x.value!=="kdp");
+  showMenuForButton(anchorBtn || document.body, items, (fmt)=>{
     const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}.${fmt}`;
     window.open(url, "_blank", "noopener");
   });
@@ -502,8 +506,20 @@ function downloadChapter(bookId, chapterId, anchorBtn){
 async function exportBook(bookId, anchorBtn){
   chooseFormat(anchorBtn, (fmt)=>{
     if (fmt === "pdf") {
-      // PDF libro intero (KDP-ready 6x9 no-bleed)
+      // PDF libro intero (KDP-ready 6x9 no-bleed, non salva su disco)
       const params = new URLSearchParams({ trim: "6x9", bleed: "false", classic: "false" });
+      const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/pdf?${params.toString()}`;
+      window.open(url, "_blank", "noopener");
+      return;
+    }
+    if (fmt === "kdp") {
+      // KDP e salva su /static/books (cache_to_disk=true)
+      const params = new URLSearchParams({
+        trim: "6x9",
+        bleed: "false",
+        classic: "false",
+        cache_to_disk: "true"
+      });
       const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/pdf?${params.toString()}`;
       window.open(url, "_blank", "noopener");
       return;
@@ -566,7 +582,7 @@ function wireButtons(){
       if (USE_MODAL_RENAME) openEditBookModal(bookId);
       else await renameBook(bookId, btn.getAttribute("data-oldtitle")||"");
     }
-    else if(action==="export"){ await exportBook(bookId, btn); } // ← passiamo il bottone per posizionare il menù
+    else if(action==="export"){ await exportBook(bookId, btn); } // menù formati sul tasto giusto
   });
 
   // Editor list actions
@@ -584,7 +600,7 @@ function wireButtons(){
     if(openBtn)      await openChapter(bid,cid);
     else if(delBtn)  await deleteChapter(bid,cid);
     else if(editBtn) editChapter(cid);
-    else if(dlBtn)   downloadChapter(bid,cid, dlBtn);  // ← menù formati sul tasto giusto
+    else if(dlBtn)   downloadChapter(bid,cid, dlBtn);
   });
 
   // ===== Pulsanti verdi: MENU =====
