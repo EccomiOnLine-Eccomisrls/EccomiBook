@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Header, Path, UploadFile, File
+from fastapi import APIRouter, HTTPException, Header, Path as FPath, UploadFile, File
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Dict, Any, List
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path as FSPath
 from random import randint
 import io, zipfile, os
 
@@ -56,7 +56,7 @@ def _save_index(books: List[Dict[str, Any]]) -> None:
     storage.save_books_to_disk(books)
     storage.BOOKS_CACHE = books
 
-def _ensure_book_folder(book_id: str) -> Path:
+def _ensure_book_folder(book_id: str) -> FSPath:
     folder = storage.CHAPTERS_DIR / book_id
     folder.mkdir(parents=True, exist_ok=True)
     return folder
@@ -182,7 +182,7 @@ def export_chapter_pdf(book_id: str, chapter_id: str):
     return StreamingResponse(io.BytesIO(pdf), media_type="application/pdf", headers=headers)
 
 @router.get("/books/{book_id}/chapters/{chapter_id}", summary="Get Chapter")
-def get_chapter(book_id: str, chapter_id: str = Path(..., regex=r"[^.]+$")):
+def get_chapter(book_id: str, chapter_id: str = FPath(..., pattern=r"[^.]+$")):
     text = storage.read_chapter_text(book_id, chapter_id)
     return {"book_id": book_id, "chapter_id": chapter_id, "content": text}
 
