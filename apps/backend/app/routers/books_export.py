@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse, PlainTextResponse
+from fastapi.responses import StreamingResponse, FileResponse, PlainTextResponse
 from typing import List, Dict, Tuple
 import io
 from datetime import datetime
 from pathlib import Path
+import hashlib
 
 # ReportLab
 from reportlab.platypus import (
@@ -21,7 +24,7 @@ from app import storage
 
 router = APIRouter()
 
-# ----------------- UTILS & COSTANTI -----------------
+# ----------------- COSTANTI & UTILS -----------------
 INCH = 72.0
 TRIMS = {
     "6x9":   (6*INCH, 9*INCH),
@@ -37,7 +40,11 @@ def _kdp_gutter(pages: int) -> float:
 
 def _register_ttf() -> Tuple[str,bool]:
     """
-    Cerca un TTF incorporabile.
+    Prova a registrare un TTF incorporabile (embedded).
+    Percorsi tentati (metti il file in uno di questi):
+    - /app/fonts/DejaVuSerif.ttf
+    - ./fonts/DejaVuSerif.ttf
+    - /usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf
     """
     candidates = [
         Path("/app/fonts/DejaVuSerif.ttf"),
@@ -51,7 +58,7 @@ def _register_ttf() -> Tuple[str,bool]:
                 return "BodySerif", True
         except Exception:
             pass
-    # fallback (non embedded)
+    # fallback (non embedded, KDP può segnalare avviso)
     return "Helvetica", False
 
 def _styles(font_name:str):
@@ -66,7 +73,7 @@ def _styles(font_name:str):
 
 def _make_story(book_title:str, author:str, chapters:List[Dict], styles) -> List:
     story=[]
-    # Copertina
+    # Frontespizio minimal
     story.append(Paragraph(book_title or "Senza titolo", styles["H1"]))
     if author:
         story.append(Paragraph(f"Autore: {author}", styles["Italic"]))
@@ -91,7 +98,8 @@ def _make_story(book_title:str, author:str, chapters:List[Dict], styles) -> List
 
 def _build_pdf_mirror(page_size, margins, story):
     """
-    Impaginazione con margini specchiati (gutter interno alternato pari/dispari).
+    Impaginazione con margini 'specchiati' (gutter interno alternato pari/dispari).
+    margins: {left, right, top, bottom}
     """
     buf = io.BytesIO()
     doc = BaseDocTemplate(
@@ -116,6 +124,7 @@ def _build_pdf_mirror(page_size, margins, story):
     )
 
     def on_page(canvas, doc):
+        # footer con numero pagina (leggero)
         page = canvas.getPageNumber()
         canvas.setFont("Helvetica", 8)
         canvas.setFillGray(0.25)
@@ -126,14 +135,14 @@ def _build_pdf_mirror(page_size, margins, story):
         PageTemplate(id='even', frames=[frame_even], onPage=on_page)
     ])
     doc.build(story)
-    return buf.getvalue(), getattr(doc, "page", 1)  # bytes, page_count
+    return buf.getvalue(), doc.page  # bytes, page_count
 
 def _read_chapter_file(book_id:str, chapter_id:str) -> str:
     """
-    Legge il capitolo dalla cartella storage:
-    <BASE_DIR>/chapters/{book_id}/{chapter_id}.md|.txt
+    Legge il capitolo dalla cartella storage locale, provando .md poi .txt.
+    Path: <BASE_DIR>/chapters/{book_id}/{chapter_id}.md|txt
     """
-    base = storage.BASE_DIR / "chapters" / book_id
+    base = storage.CHAPTERS_DIR / book_id
     for ext in (".md", ".txt"):
         p = (base / f"{chapter_id}{ext}")
         if p.exists():
@@ -143,30 +152,27 @@ def _read_chapter_file(book_id:str, chapter_id:str) -> str:
                 return ""
     return ""
 
-def _list_chapter_ids_from_disk(book_id: str) -> List[str]:
+def _content_signature(chapters:List[Dict]) -> str:
     """
-    Se i metadati non sono aggiornati, ricaviamo l'elenco capitoli
-    direttamente dai file presenti su disco.
+    Crea una firma contenuti basata su id + hash del testo (per invalidare cache se cambia).
+    NB: per semplicità usiamo solo id+length; se vuoi, usa sha1(contents).
     """
-    base = storage.BASE_DIR / "chapters" / book_id
-    if not base.exists():
-        return []
-    ids = {p.stem for p in base.glob("*.md")}
-    ids |= {p.stem for p in base.glob("*.txt")}
-    # Ordina tipo ch_0001, ch_0002, ...
-    def _key(cid: str):
-        try:
-            return int(cid.split("_", 1)[1])
-        except Exception:
-            return cid
-    return sorted(ids, key=_key)
+    h = hashlib.sha1()
+    for ch in chapters:
+        cid = (ch.get("id") or "").encode("utf-8", "ignore")
+        txt = (ch.get("content") or "").encode("utf-8", "ignore")
+        h.update(cid + b"|" + str(len(txt)).encode("ascii") + b";")
+    return h.hexdigest()[:12]
 
 # ----------------- EXPORT CORE -----------------
 def build_book_pdf_kdp(book_title:str, author:str, chapters:List[Dict],
                        trim:str="6x9", bleed:bool=False,
                        outer_margin_in:float=0.5, top_bottom_in:float=0.5) -> Tuple[bytes,int,bool]:
     """
-    Genera PDF pronto KDP (trim/gutter/margini specchiati).
+    Genera PDF:
+      - trim e bleed opzionali
+      - font TTF embedded (se disponibile)
+      - gutter KDP e margini specchiati
     Ritorna: (pdf_bytes, page_count, fonts_embedded)
     """
     page_w, page_h = TRIMS.get(trim, TRIMS["6x9"])
@@ -185,12 +191,12 @@ def build_book_pdf_kdp(book_title:str, author:str, chapters:List[Dict],
         bottom=(top_bottom_in*INCH)+bleed_add,
     )
     _, prelim_pages = _build_pdf_mirror(page_size, prelim_margins, prelim)
-    prelim_pages = max(24, prelim_pages or 24)
+    prelim_pages = max(24, prelim_pages or 24)  # “minimo editoriale” ragionevole
 
     # Gutter in base alle pagine
     gutter = _kdp_gutter(prelim_pages)
 
-    # Margini finali
+    # Margini finali: aggiungiamo il gutter al “lato interno”, ottenuto col mirroring
     final_margins = dict(
         left=(outer_margin_in*INCH + gutter)+bleed_add,
         right=(outer_margin_in*INCH)+bleed_add,
@@ -209,58 +215,49 @@ async def export_book_pdf_kdp(book_id: str,
                               bleed: bool = False,
                               outer_margin: float = 0.5,
                               top_bottom_margin: float = 0.5,
-                              classic: bool = False):
+                              classic: bool = False,
+                              cache_to_disk: bool = True):
     """
     Esporta l'intero libro in PDF.
     - trim: 6x9 | 5x8 | 8.5x11
     - bleed: true/false
-    - classic: true -> A4 semplice (senza gutter)
+    - classic: true -> A4, margini standard 2cm, nessun gutter
+    - cache_to_disk: salva anche su /static/books/{book_id}_kdp_*.pdf
     """
-    # 1) carica sempre da disco per evitare inconsistenze
+    # 1) Carica indice libri (sempre da disco per coerenza)
     try:
         all_books = storage.load_books_from_disk()
     except Exception:
-        all_books = []
+        all_books = getattr(storage, "BOOKS_CACHE", []) or []
 
-    # compat: metadati libro
-    meta = None
-    if isinstance(all_books, dict) and "items" in all_books:
-        all_books = all_books["items"]
-    if isinstance(all_books, list):
-        for b in all_books:
-            if isinstance(b, dict) and (b.get("id") or b.get("book_id")) == book_id:
-                meta = b
-                break
+    # Alcuni ambienti possono avere “stray” records non-dict (vedi log con curl)
+    safe_books = [b for b in (all_books or []) if isinstance(b, dict)]
+    meta = next((b for b in safe_books if (b.get("id") or b.get("book_id")) == book_id), None)
     if not meta:
         raise HTTPException(status_code=404, detail="Libro non trovato.")
 
-    # 2) prendi capitoli: prima metadati, se vuoti leggi dal disco
-    ch_list = (meta.get("chapters") or [])
-    if not ch_list:
-        ch_ids = _list_chapter_ids_from_disk(book_id)
-        ch_list = [{"id": cid, "title": cid} for cid in ch_ids]
-
+    ch_list = meta.get("chapters") or []
     if not ch_list:
         raise HTTPException(status_code=404, detail="Nessun capitolo nel libro.")
 
-    # 3) carica i contenuti
+    # 2) Carica contenuti capitoli da DISCO
     chapters_full = []
     for ch in ch_list:
-        cid = ch.get("id") if isinstance(ch, dict) else str(ch)
+        if not isinstance(ch, dict):  # ignora elementi corrotti
+            continue
+        cid = ch.get("id") or ch.get("chapter_id")
         if not cid:
             continue
         text = _read_chapter_file(book_id, cid)
         if not text and hasattr(storage, "read_chapter_text"):
-            try:
-                text = storage.read_chapter_text(book_id, cid) or ""
-            except Exception:
-                text = ""
-        chapters_full.append({"id": cid, "title": (ch.get("title") if isinstance(ch, dict) else cid) or cid, "content": text})
+            try: text = storage.read_chapter_text(book_id, cid) or ""
+            except Exception: text = ""
+        chapters_full.append({"id": cid, "title": ch.get("title") or cid, "content": text})
 
     if not chapters_full:
         raise HTTPException(status_code=404, detail="Impossibile assemblare i capitoli.")
 
-    # 4) genera PDF
+    # 3) Classic (A4 semplice) oppure KDP
     if classic:
         font_name, embedded = _register_ttf()
         styles = _styles(font_name)
@@ -274,25 +271,60 @@ async def export_book_pdf_kdp(book_id: str,
         doc.addPageTemplates([PageTemplate(id='a4', frames=[frame])])
         doc.build(_make_story(meta.get("title") or book_id, meta.get("author") or "", chapters_full, styles))
         pdf_bytes = buffer.getvalue(); buffer.close()
-        pages = getattr(doc, "page", 1)
-        embedded = True  # se abbiamo usato TTF
-    else:
-        pdf_bytes, pages, embedded = build_book_pdf_kdp(
-            book_title = meta.get("title") or book_id,
-            author     = meta.get("author") or "",
-            chapters   = chapters_full,
-            trim       = trim,
-            bleed      = bleed,
-            outer_margin_in = outer_margin,
-            top_bottom_in   = top_bottom_margin
-        )
+        pages = doc.page
+        embedded = (font_name != "Helvetica")
+        # opzionale cache A4 su disco? al momento no.
+        headers = {
+            "Content-Disposition": f'attachment; filename="{(meta.get("title") or book_id).replace(" ","_")}_A4.pdf"',
+            "X-Pages": str(pages),
+            "X-Fonts-Embedded": "yes" if embedded else "no"
+        }
+        return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers=headers)
 
-    filename = f"{(meta.get('title') or book_id).replace(' ','_')}.pdf"
+    # 4) KDP-ready
+    pdf_bytes, pages, embedded = build_book_pdf_kdp(
+        book_title = meta.get("title") or book_id,
+        author     = meta.get("author") or "",
+        chapters   = chapters_full,
+        trim       = trim,
+        bleed      = bleed,
+        outer_margin_in    = outer_margin,
+        top_bottom_in      = top_bottom_margin
+    )
+
+    # 5) Cache su DISCO (per avere link fisso in /static/books)
+    # filename: {book_id}_kdp_{trim}{_bleed}_{sig}.pdf  (sig = firma contenuti)
     headers = {
-        "Content-Disposition": f'attachment; filename="{filename}"',
         "X-KDP-Pages": str(pages),
         "X-Fonts-Embedded": "yes" if embedded else "no"
     }
+
+    if cache_to_disk:
+        try:
+            sig = _content_signature(chapters_full)
+            suffix = f"{trim}{'_bleed' if bleed else ''}_{sig}"
+            fname = f"{(meta.get('title') or book_id).replace(' ','_')}_kdp_{suffix}.pdf"
+            out_path = storage.BOOKS_DIR / fname
+            storage.BOOKS_DIR.mkdir(parents=True, exist_ok=True)
+            out_path.write_bytes(pdf_bytes)
+
+            # rispondi servendo il file dal disco (beneficia di etag/length ecc.)
+            headers.update({
+                "X-File-Path": str(out_path),
+                "Cache-Control": "no-cache",
+            })
+            return FileResponse(path=out_path, media_type="application/pdf",
+                                filename=fname, headers=headers)
+        except Exception:
+            # se fallisce il salvataggio, ripiega sullo stream diretto
+            pass
+
+    # fallback: stream diretto
+    dl_name = f"{(meta.get('title') or book_id).replace(' ','_')}_kdp_{trim}{'_bleed' if bleed else ''}.pdf"
+    headers.update({
+        "Content-Disposition": f'attachment; filename="{dl_name}"',
+        "Cache-Control": "no-cache",
+    })
     return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers=headers)
 
 
@@ -300,42 +332,34 @@ async def export_book_pdf_kdp(book_id: str,
 @router.get("/books/{book_id}/export/txt", response_class=PlainTextResponse, name="Export Book Txt")
 async def export_book_text(request: Request, book_id: str):
     """
-    Esporta tutto il libro in MD/TXT.
-    Se i metadati non contengono i capitoli, li ricava dai file su disco.
+    Esporta il libro come Markdown/TXT, leggendo i testi da disco.
     """
     try:
         all_books = storage.load_books_from_disk()
     except Exception:
-        all_books = []
-
-    meta = None
-    if isinstance(all_books, dict) and "items" in all_books:
-        all_books = all_books["items"]
-    if isinstance(all_books, list):
-        for b in all_books:
-            if isinstance(b, dict) and (b.get("id") or b.get("book_id")) == book_id:
-                meta = b
-                break
+        all_books = getattr(storage, "BOOKS_CACHE", []) or []
+    safe_books = [b for b in (all_books or []) if isinstance(b, dict)]
+    meta = next((b for b in safe_books if (b.get("id") or b.get("book_id")) == book_id), None)
     if not meta:
         raise HTTPException(status_code=404, detail="Libro non trovato.")
-
-    ch_list = (meta.get("chapters") or [])
-    if not ch_list:
-        ch_ids = _list_chapter_ids_from_disk(book_id)
-        ch_list = [{"id": cid, "title": cid} for cid in ch_ids]
+    ch_list = meta.get("chapters") or []
     if not ch_list:
         raise HTTPException(status_code=404, detail="Nessun capitolo nel libro.")
 
     chunks = [f"# {meta.get('title') or book_id}\n\nAutore: {meta.get('author') or '—'}\n"]
     for ch in ch_list:
-        cid = ch.get("id") if isinstance(ch, dict) else str(ch)
-        title = (ch.get("title") if isinstance(ch, dict) else cid) or cid
+        if not isinstance(ch, dict):
+            continue
+        cid = ch.get("id") or ch.get("chapter_id")
+        if not cid:
+            continue
+        t = ch.get("title") or cid
         txt = _read_chapter_file(book_id, cid)
         if not txt and hasattr(storage, "read_chapter_text"):
             try:
                 txt = storage.read_chapter_text(book_id, cid) or ""
             except Exception:
                 txt = ""
-        chunks.append(f"\n\n# {title}\n\n{txt}")
+        chunks.append(f"\n\n# {t}\n\n{txt}")
     body = "".join(chunks)
     return PlainTextResponse(body, media_type="text/markdown; charset=utf-8")
