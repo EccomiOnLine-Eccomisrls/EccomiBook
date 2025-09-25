@@ -176,18 +176,18 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
 /* Layout Editor capitolo: Topic largo + Lingua compatta */
 #editor-card .fields {
   display: grid;
-  grid-template-columns: 1fr 200px; /* Topic a sinistra, Lingua a destra */
+  grid-template-columns: 1fr 200px;
   gap: 12px 16px;
   align-items: start;
 }
 
 #editor-card #topicInput {
   width: 100%;
-  grid-column: 1 / 2;   /* forzato a sinistra */
+  grid-column: 1 / 2;
 }
 
 #editor-card #languageInput {
   width: 100%;
   max-width: 200px;
-  grid-column: 2 / 3;   /* forzato a destra */
+  grid-column: 2 / 3;
 }
