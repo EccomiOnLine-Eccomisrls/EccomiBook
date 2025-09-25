@@ -1,18 +1,12 @@
 /* =========================================================
  * EccomiBook — Frontend
- * src/main.js — v4.0.0 (Export KDP + fixes)
- * - LED stato backend
- * - Libreria + Editor
- * - Dropdown custom per pulsanti verdi (Book/Chapter)
- * - Modifica libro via MODALE custom (toggle ON/OFF)
- * - Export capitolo/libro con menù formati (PDF/KDP/MD/TXT)
- * - UI tweaks: Topic↑ / Lingua↓, menu clamp/flip, placeholder non salvato
+ * src/main.js — v4.1.0 (Drag&Drop capitoli + clamp menu + placeholder safe)
  * ========================================================= */
 
 import "./styles.css";
 
 /* ===== Toggle modale ===== */
-const USE_MODAL_RENAME = true;  // ← metti false per tornare ai prompt()
+const USE_MODAL_RENAME = true;
 
 /* ===== Config ===== */
 const API_BASE_URL =
@@ -21,13 +15,11 @@ const API_BASE_URL =
   "https://eccomibook-backend.onrender.com";
 
 /* ===== Helpers ===== */
-const DEMO_HINT = "Scrivi qui il contenuto del capitolo…"; // placeholder esempio (non salvato)
+const DEMO_HINT = "Scrivi qui il contenuto del capitolo…";
 
 const $  = (s, r=document)=>r.querySelector(s);
 const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
-const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({
-  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-}[m]));
+const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const escapeAttr = (s)=>escapeHtml(s).replace(/"/g,"&quot;");
 const toast = (m)=>alert(m);
 
@@ -57,8 +49,7 @@ const uiState = {
 /* ===== Date utils ===== */
 const fmtLast = (iso)=>{
   if(!iso) return "";
-  const d = new Date(iso);
-  if(isNaN(d)) return iso;
+  const d = new Date(iso); if(isNaN(d)) return iso;
   const pad = n=>String(n).padStart(2,"0");
   return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
@@ -67,7 +58,7 @@ const fmtHHMM = (d=new Date())=>{
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-/* ===== Modale: utilities ===== */
+/* ===== Modale utilities ===== */
 function openModal(sel){ const el=$(sel); if(!el) return; el.classList.add("is-open"); el.setAttribute("aria-hidden","false"); }
 function closeModal(sel){ const el=$(sel); if(!el) return; el.classList.remove("is-open"); el.setAttribute("aria-hidden","true"); }
 ["click","keydown"].forEach(evt=>{
@@ -141,7 +132,7 @@ async function pingBackend(){
   }
 }
 
-/* ======== Menu popup custom (per pulsanti verdi) ======== */
+/* ======== Menu popup custom (clamp + flip) ======== */
 function closeMenu(){
   uiState.openMenuEl?.remove();
   uiState.openMenuEl = null;
@@ -152,8 +143,6 @@ function closeMenu(){
 function onDocClick(e){
   if (uiState.openMenuEl && !uiState.openMenuEl.contains(e.target)) closeMenu();
 }
-
-/* Menu con clamp orizzontale + flip verticale */
 function showMenuForButton(btn, items, onPick){
   closeMenu();
 
@@ -161,7 +150,7 @@ function showMenuForButton(btn, items, onPick){
   const host = document.createElement("div");
   host.className = "menu-pop";
   host.style.position = "absolute";
-  host.style.visibility = "hidden";   // prima misuriamo, poi visibile
+  host.style.visibility = "hidden";
   host.style.left = "0px";
   host.style.top  = "0px";
 
@@ -190,17 +179,13 @@ function showMenuForButton(btn, items, onPick){
   host.style.overflow = "auto";
   host.style.zIndex = "1000";
 
-  // Clamp orizzontale
   let left = rect.left + scrollX;
   left = Math.min(left, scrollX + vw - mw - margin);
   left = Math.max(left, scrollX + margin);
 
-  // Flip verticale se non c’è spazio sotto
   const spaceBelow = (scrollY + vh) - (rect.bottom + scrollY);
   const wantBelow = spaceBelow >= mh + margin;
-  let top = wantBelow
-    ? (rect.bottom + scrollY + 6)
-    : (rect.top + scrollY - mh - 6);
+  let top = wantBelow ? (rect.bottom + scrollY + 6) : (rect.top + scrollY - mh - 6);
 
   top = Math.max(top, scrollY + margin);
   top = Math.min(top, scrollY + vh - mh - margin);
@@ -319,8 +304,8 @@ async function showEditor(bookId){
   const ch=$("#chapterIdInput"); if(!ch.value) ch.value="";
   const ta = $("#chapterText");
   if (ta) {
-    ta.placeholder = DEMO_HINT;   // esempio visivo
-    if (!ta.value) ta.value = ""; // niente testo finto
+    ta.placeholder = DEMO_HINT;
+    if (!ta.value) ta.value = "";
   }
   uiState.currentChapterId = ch.value.trim();
   uiState.lastSavedSnapshot = ta?.value || "";
@@ -391,6 +376,7 @@ async function refreshChaptersList(bookId){
     if(list) list.innerHTML=`<div class="error">Errore: ${escapeHtml(e?.message||String(e))}</div>`;
   }
 }
+
 function renderChaptersList(bookId, chapters){
   const list=$("#chapters-list");
   if(!list) return;
@@ -399,6 +385,8 @@ function renderChaptersList(bookId, chapters){
     return;
   }
   list.innerHTML="";
+
+  // Navigazione veloce
   const nav=document.createElement("div");
   nav.className="row-right";
   nav.style.justifyContent="flex-start";
@@ -409,23 +397,34 @@ function renderChaptersList(bookId, chapters){
 
   const bookTitle = uiState.currentBookTitle || "";
 
+  // Lista capitoli DnD
+  const ul = document.createElement("div");
+  ul.setAttribute("role","list");
+  list.appendChild(ul);
+
   chapters.forEach(ch=>{
     const cid     = ch.id;
     const title   = (ch.title||"").trim();
     const shown   = title || "(senza titolo)";
     const updated = ch.updated_at||"";
 
-    const li=document.createElement("div");
-    li.className="card chapter-row";
-    li.style.margin="8px 0";
-    li.innerHTML=`
-      <div class="chapter-head">
-        <div>
-          <div style="font-weight:600">${escapeHtml(shown)}</div>
-          <div class="muted">
-            ID: ${escapeHtml(cid)}
-            ${bookTitle ? ` · Libro: ${escapeHtml(bookTitle)}` : ""}
-            ${updated ? ` · ${escapeHtml(fmtLast(updated))}` : ""}
+    const row=document.createElement("div");
+    row.className="card chapter-row dnd-row";
+    row.style.margin="8px 0";
+    row.draggable = true;
+    row.dataset.cid = cid;
+
+    row.innerHTML=`
+      <div class="dnd-head">
+        <button class="drag-handle" title="Trascina per riordinare" aria-label="Trascina">⠿</button>
+        <div class="chapter-head">
+          <div>
+            <div style="font-weight:600">${escapeHtml(shown)}</div>
+            <div class="muted">
+              ID: ${escapeHtml(cid)}
+              ${bookTitle ? ` · Libro: ${escapeHtml(bookTitle)}` : ""}
+              ${updated ? ` · ${escapeHtml(fmtLast(updated))}` : ""}
+            </div>
           </div>
         </div>
       </div>
@@ -435,13 +434,98 @@ function renderChaptersList(bookId, chapters){
         <button class="btn btn-ghost" data-ch-del="${escapeAttr(cid)}">Elimina</button>
         <button class="btn btn-ghost" data-ch-dl="${escapeAttr(cid)}">Scarica</button>
       </div>`;
-    list.appendChild(li);
+
+    ul.appendChild(row);
+  });
+
+  // DnD wiring
+  enableChapterDragAndDrop(ul, async (newOrder)=>{
+    try{
+      await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/reorder`,{
+        method:"PUT",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ order: newOrder })
+      });
+      // Aggiorna stato locale e UI
+      uiState.chapters.sort((a,b)=> newOrder.indexOf(a.id) - newOrder.indexOf(b.id));
+      toast("✅ Ordine capitoli salvato.");
+    }catch(e){
+      toast("Errore salvataggio ordine: "+(e?.message||e));
+      // ricarico lista per sicurezza
+      refreshChaptersList(bookId);
+    }
   });
 
   $("#btn-ch-prev")?.addEventListener("click",()=>stepChapter(-1));
   $("#btn-ch-next")?.addEventListener("click",()=>stepChapter(+1));
 }
 
+function enableChapterDragAndDrop(container, onCommit){
+  let dragging = null;
+  let placeholder = document.createElement("div");
+  placeholder.className = "drop-hint";
+
+  container.addEventListener("dragstart", (e)=>{
+    const row = e.target.closest(".dnd-row");
+    if(!row) return;
+    dragging = row;
+    row.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    try{ e.dataTransfer.setData("text/plain", row.dataset.cid || ""); }catch{}
+  });
+
+  container.addEventListener("dragend", ()=>{
+    dragging?.classList.remove("dragging");
+    dragging = null;
+    placeholder.remove();
+  });
+
+  container.addEventListener("dragover", (e)=>{
+    if(!dragging) return;
+    e.preventDefault();
+    const after = getRowAfter(container, e.clientY);
+    if(after == null){
+      container.appendChild(placeholder);
+    }else{
+      container.insertBefore(placeholder, after);
+    }
+  });
+
+  container.addEventListener("drop", async (e)=>{
+    e.preventDefault();
+    if(!dragging) return;
+    const after = getRowAfter(container, e.clientY);
+    if(after == null){
+      container.appendChild(dragging);
+    }else{
+      container.insertBefore(dragging, after);
+    }
+    placeholder.remove();
+
+    const order = Array.from(container.querySelectorAll(".dnd-row")).map(r=>r.dataset.cid);
+    await onCommit?.(order);
+  });
+
+  function getRowAfter(container, y){
+    const rows = [...container.querySelectorAll(".dnd-row:not(.dragging)")];
+    return rows.find(row=>{
+      const box = row.getBoundingClientRect();
+      return y <= box.top + box.height/2;
+    }) || null;
+  }
+
+  // Fai partire il drag solo se si prende la maniglia (desktop)
+  container.addEventListener("mousedown",(e)=>{
+    const handle = e.target.closest(".drag-handle");
+    if(!handle) return;
+    const row = handle.closest(".dnd-row");
+    if(row){
+      row.draggable = true;
+    }
+  });
+}
+
+/* Navigazione tra capitoli */
 const chapterIndex=(cid)=>uiState.chapters.findIndex(c=>c.id===cid);
 function stepChapter(delta){
   if(!uiState.chapters.length) return;
@@ -463,9 +547,7 @@ async function openChapter(bookId, chapterId){
     $("#bookIdInput").value    = bookId;
     $("#chapterIdInput").value = chapterId;
 
-    // contenuto reale nel value
     $("#chapterText").value       = data?.content || "";
-    // esempio solo come placeholder
     $("#chapterText").placeholder = DEMO_HINT;
 
     uiState.currentBookId     = bookId;
@@ -508,7 +590,7 @@ async function saveCurrentChapter(showToast=true){
   const bookId=$("#bookIdInput").value.trim();
   const chapterId=$("#chapterIdInput").value.trim();
   let content=$("#chapterText").value;
-  if (content === DEMO_HINT) content = ""; // non salvare il placeholder
+  if (content === DEMO_HINT) content = "";
   if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
   try{
     const r=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,{
@@ -518,7 +600,7 @@ async function saveCurrentChapter(showToast=true){
     uiState.lastSavedSnapshot=content;
     if(showToast) toast("✅ Capitolo salvato.");
     await refreshChaptersList(bookId);
-    await fetchBooks();            // mantiene in sync le card
+    await fetchBooks();
   }catch(e){
     toast("Errore salvataggio: "+(e?.message||e));
   }
@@ -790,40 +872,35 @@ async function generateWithAI(){
   }
 }
 
-/* ===== UI Tweaks: Editor capitolo (robusto) ===== */
+/* ===== UI Tweaks Editor ===== */
 function tweakChapterEditorUI() {
   const root =
     document.querySelector('[data-component="chapter-editor"]') ||
     document.querySelector('#editor-card') || document;
   if (!root) return;
 
-  /* --- A) NASCONDI il DUPLICATO "ch_0001" (qualsiasi nodo “pill”) --- */
+  // A) nascondi pill duplicata ch_#### (non l'input vero)
   const chIdEl    = root.querySelector('#chapterIdInput');
   const chIdBlock = chIdEl?.closest('.field, .form-row, .card, label, div') || null;
-
-  // trova qualunque elemento che visualizzi solo "ch_####"
-  const allNodes = Array.from(root.querySelectorAll('*'));
-  const dupNode = allNodes.find(el => {
+  const dupNode = Array.from(root.querySelectorAll('*')).find(el=>{
     if (!el || el === chIdEl) return false;
-    // non prendere l'input ufficiale e i suoi antenati
     if (chIdBlock && (el === chIdBlock || chIdBlock.contains(el))) return false;
     const t = (el.textContent || '').trim();
     return /^ch_\d{4}$/i.test(t);
   });
-
   if (dupNode) {
-    // nascondi il contenitore "pill" intero se c'è, altrimenti il nodo stesso
-    const pill =
-      dupNode.closest('.inline-hint, .badge, .pill, .tag, .field, .form-row, .card, label, div') || dupNode;
+    const pill = dupNode.closest('.inline-hint, .badge, .pill, .tag, .field, .form-row, .card, label, div') || dupNode;
     pill.style.display = 'none';
     pill.setAttribute('aria-hidden', 'true');
   }
 
-  /* --- B) TOPIC → textarea large + full-width --- */
+  // B) topic → textarea grande + spostamento con lingua a destra
   let topicEl = root.querySelector('#topicInput');
-  if (!topicEl) return;
+  const langEl = root.querySelector('#languageInput');
+  const chBlock = chIdEl?.closest('.field, .form-row, .card, label, div');
 
-  // se è un input, trasformalo in textarea
+  if (!topicEl || !langEl || !chBlock) return;
+
   if (topicEl.tagName.toLowerCase() === 'input') {
     const ta = document.createElement('textarea');
     Array.from(topicEl.attributes).forEach(a => ta.setAttribute(a.name, a.value));
@@ -835,27 +912,21 @@ function tweakChapterEditorUI() {
   topicEl.rows = Math.max(4, Number(topicEl.rows || 0) || 4);
   topicEl.placeholder ||= 'Istruzioni per l’AI: tono, target, stile, obiettivi, riferimenti…';
 
-  // porta Topic a tutta riga (anche se non c’è già il wrapper .fields)
   const topicBlock = topicEl.closest('.field, .form-row, .card, label, div') || topicEl.parentElement;
-  const langEl     = root.querySelector('#languageInput');
-  const langBlock  = langEl?.closest('.field, .form-row, .card, label, div') || langEl?.parentElement;
+  const langBlock  = langEl.closest('.field, .form-row, .card, label, div') || langEl.parentElement;
 
-  // crea/usa un wrapper a 2 colonne subito dopo il blocco Chapter ID
-  if (topicBlock && langBlock && chIdBlock) {
-    let fields = chIdBlock.nextElementSibling;
-    if (!(fields && fields.classList && fields.classList.contains('fields'))) {
-      fields = document.createElement('div');
-      fields.className = 'fields';
-      chIdBlock.parentNode.insertBefore(fields, chIdBlock.nextSibling);
-    }
-    if (topicBlock.parentNode !== fields) fields.appendChild(topicBlock);
-    if (langBlock.parentNode  !== fields) fields.appendChild(langBlock);
-
-    // suggerimenti inline (il grid lo fa il CSS già aggiunto in styles.css)
-    topicBlock.style.gridColumn = '1 / -1'; // full width se il CSS non è caricato
-    topicBlock.style.width = '100%';
-    langBlock.style.maxWidth = '220px';
+  let fields = chBlock.nextElementSibling;
+  if (!(fields && fields.classList?.contains('fields'))) {
+    fields = document.createElement('div');
+    fields.className = 'fields';
+    chBlock.parentNode.insertBefore(fields, chBlock.nextSibling);
   }
+  if (topicBlock.parentNode !== fields) fields.appendChild(topicBlock);
+  if (langBlock.parentNode  !== fields) fields.appendChild(langBlock);
+
+  topicBlock.style.gridColumn = '1 / 2';
+  topicBlock.style.width = '100%';
+  langBlock.style.maxWidth = '220px';
 }
 
 /* ===== Init ===== */
