@@ -6,6 +6,7 @@
  * - Dropdown custom per pulsanti verdi (Book/Chapter)
  * - Modifica libro via MODALE custom (toggle ON/OFF)
  * - Export capitolo/libro con menù formati (PDF/KDP/MD/TXT)
+ * - UI tweaks: Topic↑ / Lingua↓, menu clamp/flip, placeholder non salvato
  * ========================================================= */
 
 import "./styles.css";
@@ -13,14 +14,14 @@ import "./styles.css";
 /* ===== Toggle modale ===== */
 const USE_MODAL_RENAME = true;  // ← metti false per tornare ai prompt()
 
-/* Config */
+/* ===== Config ===== */
 const API_BASE_URL =
   (import.meta?.env?.VITE_API_BASE_URL) ||
   window.VITE_API_BASE_URL ||
   "https://eccomibook-backend.onrender.com";
 
-/* Helpers */
-const DEMO_HINT = "Scrivi qui il contenuto del capitolo…";
+/* ===== Helpers ===== */
+const DEMO_HINT = "Scrivi qui il contenuto del capitolo…"; // placeholder esempio (non salvato)
 
 const $  = (s, r=document)=>r.querySelector(s);
 const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
@@ -30,7 +31,7 @@ const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({
 const escapeAttr = (s)=>escapeHtml(s).replace(/"/g,"&quot;");
 const toast = (m)=>alert(m);
 
-/* Local storage */
+/* ===== Local storage ===== */
 const rememberLastBook   = (id)=>{ try{ localStorage.setItem("last_book_id", id||""); }catch{} };
 const loadLastBook       = ()=>{ try{ return localStorage.getItem("last_book_id")||""; }catch{ return ""; } };
 const rememberLastLang   = (lang)=>{ try{ localStorage.setItem("last_language", String(lang||"").toLowerCase()); }catch{} };
@@ -38,7 +39,7 @@ const loadLastLang       = ()=>{ try{ return (localStorage.getItem("last_languag
 const rememberLastAuthor = (a)=>{ try{ localStorage.setItem("last_author", a||"Nome artista"); }catch{} };
 const loadLastAuthor     = ()=>{ try{ return localStorage.getItem("last_author") || "Nome artista"; }catch{ return "Nome artista"; } };
 
-/* UI state */
+/* ===== UI state ===== */
 const uiState = {
   libraryVisible: true,
   currentBookId: "",
@@ -53,7 +54,7 @@ const uiState = {
   openMenuEl: null,
 };
 
-/* Date utils */
+/* ===== Date utils ===== */
 const fmtLast = (iso)=>{
   if(!iso) return "";
   const d = new Date(iso);
@@ -151,6 +152,8 @@ function closeMenu(){
 function onDocClick(e){
   if (uiState.openMenuEl && !uiState.openMenuEl.contains(e.target)) closeMenu();
 }
+
+/* Menu con clamp orizzontale + flip verticale */
 function showMenuForButton(btn, items, onPick){
   closeMenu();
 
@@ -316,16 +319,16 @@ async function showEditor(bookId){
   const ch=$("#chapterIdInput"); if(!ch.value) ch.value="";
   const ta = $("#chapterText");
   if (ta) {
-  ta.placeholder = DEMO_HINT;      // ← esempio visivo
-  if (!ta.value) ta.value = "";     // ← niente testo finto nel valore
-}
-uiState.currentChapterId = ch.value.trim();
-uiState.lastSavedSnapshot = ta?.value || "";
-  
+    ta.placeholder = DEMO_HINT;   // esempio visivo
+    if (!ta.value) ta.value = ""; // niente testo finto
+  }
+  uiState.currentChapterId = ch.value.trim();
+  uiState.lastSavedSnapshot = ta?.value || "";
+
   await loadBookMeta(uiState.currentBookId);
   await refreshChaptersList(uiState.currentBookId);
   afterEditorRendered();
-  
+
   if(!(uiState.chapters?.length)){
     const nid = nextChapterId([]);
     $("#chapterIdInput").value = nid;
@@ -450,23 +453,33 @@ function stepChapter(delta){
   }
 }
 
+/* ===== Apri capitolo ===== */
 async function openChapter(bookId, chapterId){
   try{
     const r=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?ts=${Date.now()}`,{cache:"no-store"});
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
     const data=await r.json();
-    $("#bookIdInput").value=bookId;
-    $("#chapterIdInput").value=chapterId;
-    $("#chapterText").value=data?.content||"";
-    uiState.currentBookId=bookId;
-    uiState.currentChapterId=chapterId;
-    uiState.lastSavedSnapshot=$("#chapterText").value;
+
+    $("#bookIdInput").value    = bookId;
+    $("#chapterIdInput").value = chapterId;
+
+    // contenuto reale nel value
+    $("#chapterText").value       = data?.content || "";
+    // esempio solo come placeholder
+    $("#chapterText").placeholder = DEMO_HINT;
+
+    uiState.currentBookId     = bookId;
+    uiState.currentChapterId  = chapterId;
+    uiState.lastSavedSnapshot = $("#chapterText").value || "";
+
     toast(`📖 Aperto ${chapterId}`);
+    afterEditorRendered();
   }catch(e){
     toast("Impossibile aprire il capitolo: "+(e?.message||e));
   }
 }
 
+/* ===== Delete/Edit capitolo ===== */
 async function deleteChapter(bookId, chapterId){
   if(!confirm(`Eliminare il capitolo ${chapterId}?`)) return;
   try{
@@ -484,17 +497,18 @@ async function deleteChapter(bookId, chapterId){
     toast("Errore eliminazione: "+(e?.message||e));
   }
 }
-
 function editChapter(cid){
   $("#chapterIdInput").value=cid;
   uiState.currentChapterId=cid;
   openChapter(uiState.currentBookId,cid).then(()=>$("#chapterText")?.focus());
 }
 
+/* ===== Save capitolo ===== */
 async function saveCurrentChapter(showToast=true){
   const bookId=$("#bookIdInput").value.trim();
   const chapterId=$("#chapterIdInput").value.trim();
-  const content=$("#chapterText").value;
+  let content=$("#chapterText").value;
+  if (content === DEMO_HINT) content = ""; // non salvare il placeholder
   if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
   try{
     const r=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,{
@@ -510,7 +524,7 @@ async function saveCurrentChapter(showToast=true){
   }
 }
 
-/* Autosave */
+/* ===== Autosave ===== */
 function startAutosave(){ stopAutosave(); uiState.autosaveTimer=setInterval(maybeAutosaveNow,30_000); }
 function stopAutosave(){ if(uiState.autosaveTimer) clearInterval(uiState.autosaveTimer); uiState.autosaveTimer=null; }
 async function maybeAutosaveNow(){
@@ -521,53 +535,37 @@ async function maybeAutosaveNow(){
 }
 
 /* ======== Export (MENU) ======== */
-/* ——— Menù 4 scelte: PDF / KDP / MD / TXT ——— */
-
 const EXPORT_FORMATS = [
   { label: "📄 PDF (stream)", value: "pdf" },
   { label: "📘 KDP (salva su /static)", value: "kdp" },
   { label: "📝 Markdown", value: "md" },
   { label: "📃 TXT", value: "txt" }
 ];
-
 function chooseFormat(anchorBtn, cb){
   showMenuForButton(anchorBtn || document.body, EXPORT_FORMATS, (fmt)=>{
     if(!fmt) return;
     cb(fmt);
   });
 }
-
 function downloadChapter(bookId, chapterId, anchorBtn){
-  // per i capitoli l'opzione KDP non ha senso → solo pdf/md/txt
   const items = EXPORT_FORMATS.filter(x=>x.value!=="kdp");
   showMenuForButton(anchorBtn || document.body, items, (fmt)=>{
     const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}.${fmt}`;
     window.open(url, "_blank", "noopener");
   });
 }
-
 async function exportBook(bookId, anchorBtn){
   chooseFormat(anchorBtn, (fmt)=>{
     if (fmt === "pdf") {
-      // PDF libro intero (KDP-ready 6x9 no-bleed, non salva su disco)
       const params = new URLSearchParams({ trim: "6x9", bleed: "false", classic: "false" });
       const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/pdf?${params.toString()}`;
-      window.open(url, "_blank", "noopener");
-      return;
+      window.open(url, "_blank", "noopener"); return;
     }
     if (fmt === "kdp") {
-      // KDP e salva su /static/books (cache_to_disk=true)
-      const params = new URLSearchParams({
-        trim: "6x9",
-        bleed: "false",
-        classic: "false",
-        cache_to_disk: "true"
-      });
+      const params = new URLSearchParams({ trim:"6x9", bleed:"false", classic:"false", cache_to_disk:"true" });
       const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/pdf?${params.toString()}`;
-      window.open(url, "_blank", "noopener");
-      return;
+      window.open(url, "_blank", "noopener"); return;
     }
-    // MD/TXT libro intero
     const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/${fmt}`;
     window.open(url, "_blank", "noopener");
   });
@@ -625,7 +623,7 @@ function wireButtons(){
       if (USE_MODAL_RENAME) openEditBookModal(bookId);
       else await renameBook(bookId, btn.getAttribute("data-oldtitle")||"");
     }
-    else if(action==="export"){ await exportBook(bookId, btn); } // menù formati sul tasto giusto
+    else if(action==="export"){ await exportBook(bookId, btn); }
   });
 
   // Editor list actions
@@ -785,7 +783,7 @@ async function generateWithAI(){
     toast(`✨ Testo generato (bozza) — lingua: ${language.toUpperCase()}`);
     await saveCurrentChapter(false);
     await refreshChaptersList(bookId);
-    await fetchBooks();   // sincronizza le card libreria
+    await fetchBooks();
     afterEditorRendered();
   }catch(e){
     toast("⚠️ AI di test: "+(e?.message||e));
@@ -799,7 +797,7 @@ function tweakChapterEditorUI() {
     document.querySelector('#editor-card') || document;
   if (!root) return;
 
-  // --- 1) NASCONDI il campo duplicato "ch_0001" (non #chapterIdInput) ---
+  // (A) NASCONDI il campo duplicato "ch_0001" (non #chapterIdInput)
   const extraCh = Array.from(root.querySelectorAll('input[type="text"]'))
     .find(i => i.id !== 'chapterIdInput' && /^ch[_-]?\d{3,}$/i.test(i.value || ''));
   const extraWrap = extraCh?.closest('.field, .form-row, .card, label, div');
@@ -808,7 +806,7 @@ function tweakChapterEditorUI() {
     extraWrap.setAttribute('aria-hidden', 'true');
   }
 
-  // --- 2) Prendi i nodi esistenti ---
+  // (B) Prendi i nodi esistenti
   let topicEl = root.querySelector('#topicInput');
   const langEl = root.querySelector('#languageInput');
   const chIdEl = root.querySelector('#chapterIdInput');
@@ -816,7 +814,7 @@ function tweakChapterEditorUI() {
 
   if (!langEl || !chIdBlock) return;
 
-  // --- 3) Topic -> textarea con placeholder utile ---
+  // Topic → textarea con placeholder utile
   if (topicEl && topicEl.tagName.toLowerCase() === 'input') {
     const ta = document.createElement('textarea');
     Array.from(topicEl.attributes).forEach(a => ta.setAttribute(a.name, a.value));
@@ -835,7 +833,7 @@ function tweakChapterEditorUI() {
   const langBlock  = langEl.closest('.field, .form-row, .card, label, div') || langEl.parentElement;
   if (!topicBlock || !langBlock) return;
 
-  // --- 4) Crea un wrapper .fields subito DOPO "Chapter ID" ---
+  // Crea wrapper .fields subito dopo Chapter ID
   let fields = chIdBlock.nextElementSibling;
   if (!(fields && fields.classList?.contains('fields'))) {
     fields = document.createElement('div');
@@ -843,15 +841,19 @@ function tweakChapterEditorUI() {
     chIdBlock.parentNode.insertBefore(fields, chIdBlock.nextSibling);
   }
 
-  // --- 5) Ordine e posizione: TOPIC a sinistra (col 1), LINGUA a destra (col 2) ---
-  // (=> "scambia" le posizioni rispetto allo screenshot: il giallo va su a dx; il rosso resta e si allarga a sx)
+  // Ordine e posizione
   if (topicBlock.parentNode !== fields) fields.appendChild(topicBlock);
   if (langBlock.parentNode  !== fields) fields.appendChild(langBlock);
 
-  // piccoli hint (il layout lo fa il CSS)
   topicBlock.style.width = '100%';
   langBlock.style.maxWidth = '220px';
 }
+
+// Piccolo helper per far girare i tweaks quando l'editor è montato
+function afterEditorRendered(){
+  setTimeout(tweakChapterEditorUI, 0);
+}
+
 /* ===== Init ===== */
 document.addEventListener("DOMContentLoaded", async ()=>{
   wireButtons();
