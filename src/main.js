@@ -797,7 +797,7 @@ function tweakChapterEditorUI() {
     document.querySelector('#editor-card') || document;
   if (!root) return;
 
-  // (A) NASCONDI il campo duplicato "ch_0001" (non #chapterIdInput)
+  // --- 1) NASCONDI il campo duplicato "ch_0001" (non #chapterIdInput) ---
   const extraCh = Array.from(root.querySelectorAll('input[type="text"]'))
     .find(i => i.id !== 'chapterIdInput' && /^ch[_-]?\d{3,}$/i.test(i.value || ''));
   const extraWrap = extraCh?.closest('.field, .form-row, .card, label, div');
@@ -806,54 +806,29 @@ function tweakChapterEditorUI() {
     extraWrap.setAttribute('aria-hidden', 'true');
   }
 
-  // (B) Prendi i nodi esistenti
+  // --- 2) Trasforma Topic in textarea larga ---
   let topicEl = root.querySelector('#topicInput');
-  const langEl = root.querySelector('#languageInput');
-  const chIdEl = root.querySelector('#chapterIdInput');
-  const chIdBlock = chIdEl?.closest('.field, .form-row, .card, label, div');
-
-  if (!langEl || !chIdBlock) return;
-
-  // Topic → textarea con placeholder utile
   if (topicEl && topicEl.tagName.toLowerCase() === 'input') {
     const ta = document.createElement('textarea');
     Array.from(topicEl.attributes).forEach(a => ta.setAttribute(a.name, a.value));
     ta.value = topicEl.value || '';
-    ta.rows = Math.max(3, Number(topicEl.rows || 0) || 3);
+    ta.rows = 4;   // più alto di default
     ta.id = 'topicInput';
     ta.placeholder = 'Istruzioni per l’AI: tono, target, stile, obiettivi, riferimenti…';
     topicEl.replaceWith(ta);
     topicEl = ta;
   } else if (topicEl) {
-    topicEl.rows = Math.max(3, Number(topicEl.rows || 0) || 3);
+    topicEl.rows = 4;
     topicEl.placeholder ||= 'Istruzioni per l’AI: tono, target, stile, obiettivi, riferimenti…';
   }
 
+  // --- 3) Topic full-width ---
   const topicBlock = topicEl?.closest('.field, .form-row, .card, label, div') || topicEl?.parentElement;
-  const langBlock  = langEl.closest('.field, .form-row, .card, label, div') || langEl.parentElement;
-  if (!topicBlock || !langBlock) return;
-
-  // Crea wrapper .fields subito dopo Chapter ID
-  let fields = chIdBlock.nextElementSibling;
-  if (!(fields && fields.classList?.contains('fields'))) {
-    fields = document.createElement('div');
-    fields.className = 'fields';
-    chIdBlock.parentNode.insertBefore(fields, chIdBlock.nextSibling);
+  if (topicBlock) {
+    topicBlock.style.width = '100%';
+    topicBlock.style.gridColumn = '1 / -1';
   }
-
-  // Ordine e posizione
-  if (topicBlock.parentNode !== fields) fields.appendChild(topicBlock);
-  if (langBlock.parentNode  !== fields) fields.appendChild(langBlock);
-
-  topicBlock.style.width = '100%';
-  langBlock.style.maxWidth = '220px';
 }
-
-// Piccolo helper per far girare i tweaks quando l'editor è montato
-function afterEditorRendered(){
-  setTimeout(tweakChapterEditorUI, 0);
-}
-
 /* ===== Init ===== */
 document.addEventListener("DOMContentLoaded", async ()=>{
   wireButtons();
