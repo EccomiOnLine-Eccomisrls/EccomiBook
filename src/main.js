@@ -5,6 +5,37 @@
 
 import "./styles.css";
 
+// URL API: prima prendo quello forzato da index.html, altrimenti default
+const API_BASE_URL = window.VITE_API_BASE_URL || "https://eccomibook-backend.onrender.com/api/v1";
+
+// piccolo helper
+const $ = (s, r=document)=>r.querySelector(s);
+
+// LED backend robusto (prova /ping, se fallisce prova /health)
+async function checkBackend() {
+  const led = $("#backend-status");
+  async function tryFetch(path) {
+    const res = await fetch(`${API_BASE_URL}${path}`, { mode: "cors", cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json().catch(() => ({}));
+  }
+
+  try {
+    let data = await tryFetch("/ping");            // 1ª scelta
+    if (!(data && (data.pong || data.ok))) {
+      data = await tryFetch("/health");            // fallback
+    }
+    led.textContent = "🟢 Online";
+    led.style.color = "limegreen";
+    console.log("✅ Backend online", data);
+  } catch (e) {
+    led.textContent = "🔴 Offline";
+    led.style.color = "red";
+    console.warn("❌ Backend offline:", e);
+  }
+}
+checkBackend();
+
 /* ===== Toggle modale ===== */
 const USE_MODAL_RENAME = true;
 
