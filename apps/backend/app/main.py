@@ -23,9 +23,9 @@ from .routers import books_export as books_export_router  # export intero libro
 settings = get_settings()
 ENV = (settings.environment or "development").lower()
 
-# Docs/Redoc solo se NON siamo in production
-DOCS_URL  = "/docs"  if ENV != "production" else None
-REDOC_URL = "/redoc" if ENV != "production" else None
+# Docs/Redoc sempre attive (anche in production)
+DOCS_URL  = "/docs"
+REDOC_URL = "/redoc"
 
 # CORS da settings (se presenti), altrimenti fallback permissivo
 # Puoi definire ad es. in settings: cors_allow_origins = ["https://eccomibook.com", "https://eccomibook.vercel.app"]
