@@ -190,7 +190,7 @@ app.add_middleware(
     allow_origins=CORS_ALLOW_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
-    # allow_credentials=False  # per ora non servono cookie/sessioni
+    allow_credentials=False,
 )
 
 # =========================
