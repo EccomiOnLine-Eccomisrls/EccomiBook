@@ -1,24 +1,43 @@
 # apps/backend/app/main.py
 from __future__ import annotations
 
+from pathlib import Path
+import shutil
+
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import shutil
 
 from .settings import get_settings
 from . import storage
 from .routers import books as books_router
 from .routers import generate as generate_router
-from .routers import books_export as books_export_router   # export intero libro
+from .routers import books_export as books_export_router  # export intero libro
 
 app = FastAPI(
     title="EccomiBook Backend",
     version="0.2.0",
     openapi_url="/openapi.json",
-    docs_url="/",
+    docs_url="/docs",     # Swagger UI su /docs
+    redoc_url="/redoc",   # ReDoc opzionale
 )
+
+# Root "gentile" → reindirizza alle docs
+@app.get("/", include_in_schema=False)
+def home():
+    return HTMLResponse(
+        "<!doctype html><meta http-equiv='refresh' content='0; url=/docs'>"
+        "<p>Vai alle <a href='/docs'>API Docs</a>.</p>"
+    )
+
+# Favicon: serve /static/favicon.ico se esiste, altrimenti 204 (niente 404 in log)
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    fav = Path("static/favicon.ico")
+    if fav.exists():
+        return FileResponse(fav)
+    return Response(status_code=204)
 
 # Inizializza filesystem e mount statici
 storage.ensure_dirs()
@@ -36,7 +55,7 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     storage.ensure_dirs()
-    # 👇 Carica da DISCO e sincronizza cache + app.state
+    # Carica da DISCO e sincronizza cache + app.state
     books = storage.load_books_from_disk()
     storage.BOOKS_CACHE = books
     app.state.books = books
