@@ -1,94 +1,59 @@
 <!doctype html>
 <html lang="it">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <meta name="api-base" content="https://eccomibook-backend.onrender.com/api/v1">
-  <title>EccomiBook Frontend — Status</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EccomiBook — Stato Frontend</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; text-align: center; }
+      h1 { color: #c00; }
+      .ok { color: green; font-weight: bold; }
+      .err { color: red; font-weight: bold; }
+      .box { margin-top: 2rem; padding: 1rem; border: 1px solid #ddd; display: inline-block; }
+      button { margin: 0.3rem; padding: 0.5rem 1rem; }
+    </style>
+  </head>
+  <body>
+    <h1>✅ EccomiBook Frontend attivo</h1>
+    <p>Benvenuto! Questa è la pagina di stato del <strong>frontend</strong> EccomiBook.</p>
 
-  <!-- (opzionale) puoi sovrascrivere l'API base con un meta -->
-  <!-- <meta name="api-base" content="https://eccomibook-backend.onrender.com/api/v1"> -->
+    <div class="box">
+      <button onclick="location.href='/'">Entra nell’app</button>
+      <button onclick="location.href='https://eccomibook-backend.onrender.com/docs'">API Docs</button>
+      <button onclick="location.href='https://eccomibook-backend.onrender.com/redoc'">ReDoc</button>
+      <button onclick="location.href='https://eccomibook-backend.onrender.com/api/v1/ping'">API Health</button>
+    </div>
 
-  <style>
-    :root { --c1:#d62828; --c2:#0077b6; --c2h:#0096c7; --ok:#1a7f37; --ko:#b00020; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-           text-align:center; margin:6vh 4vw; background:#fafafa; color:#222; }
-    h1 { color: var(--c1); font-size: clamp(28px,4vw,42px); margin:.2em 0 .4em; }
-    p  { margin:1em 0; line-height:1.45; }
-    a.button, button.button {
-      display:inline-block; padding:10px 20px; background:var(--c2); color:#fff;
-      text-decoration:none; border-radius:8px; font-weight:600; margin:.35rem; border:0; cursor:pointer;
-    }
-    a.button:hover, button.button:hover { background:var(--c2h); }
-    .muted { color:#666; font-size:.95em; }
-    code { background:#f1f1f1; padding:.2em .4em; border-radius:4px; }
-    .tags { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:10px; }
-    .tag { display:inline-block; padding:.28em .6em; border-radius:6px; background:#eee; font-size:.92em; }
-    .ok { color:var(--ok); }
-    .ko { color:var(--ko); }
-    .grid { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
-    footer { margin-top:36px; color:#888; font-size:.9em; }
-  </style>
-</head>
-<body>
-  <h1>✅ EccomiBook Frontend attivo</h1>
-  <p>Benvenuto! Questa è la pagina di <strong>stato</strong> del frontend EccomiBook.</p>
+    <div class="box">
+      <p><strong>Backend:</strong> <span id="backend-status">Verifica...</span></p>
+      <p><strong>Env frontend:</strong> production</p>
+      <p><strong>Versione FE:</strong> 4.0.0</p>
+      <p><strong>API base:</strong> <code>https://eccomibook-backend.onrender.com/api/v1</code></p>
+    </div>
 
-  <div class="grid">
-    <a class="button" href="/">Entra nell’app</a>
-    <a class="button" href="https://eccomibook-backend.onrender.com/docs" target="_blank" rel="noopener">API Docs</a>
-    <a class="button" href="https://eccomibook-backend.onrender.com/redoc" target="_blank" rel="noopener">ReDoc</a>
-    <button class="button" id="btnHealth">API Health</button>
-  </div>
+    <p><a href="https://github.com/EccomiOnLine-Eccomisrls/EccomiBook">Apri il repository GitHub</a></p>
+    <p>© EccomiBook</p>
 
-  <div class="tags">
-    <span class="tag">Backend: <span id="led">verifica…</span></span>
-    <span class="tag">Env frontend: <code>production</code></span>
-    <span class="tag">Versione FE: <code id="feVersion">carico…</code></span>
-  </div>
-
-  <p class="muted" id="apiBaseLine">API base: <code id="apiBaseCode">—</code></p>
-  <p class="muted"><a href="https://github.com/EccomiOnLine-Eccomisrls/EccomiBook" target="_blank" rel="noopener">Apri il repository GitHub</a></p>
-
-  <footer>© EccomiBook</footer>
-
-  <script>
-  const API_BASE = window.VITE_API_BASE_URL
-    || document.querySelector('meta[name="api-base"]')?.content
-    || 'https://eccomibook-backend.onrender.com/api/v1';
-
-  const led = document.getElementById('led');
-  const apiBaseCode = document.getElementById('apiBaseCode');
-  apiBaseCode.textContent = API_BASE;
-
-  async function checkHealth() {
-    try {
-      led.textContent = 'ping…';
-      const res = await fetch(`${API_BASE}/health`, {
-        mode: 'cors',        // esplicito
-        credentials: 'omit', // niente cookie
-        cache: 'no-store'    // evita cache
-      });
-      const txt = await res.text();     // leggo testo per debug
-      let data = {};
-      try { data = JSON.parse(txt); } catch {}
-      if (res.ok && (data.ok === true || data.status === 'ok')) {
-        led.textContent = `🟢 Online (${data.env || 'n/a'})`;
-        led.classList.add('ok'); led.classList.remove('ko');
-      } else {
-        led.textContent = `🔴 KO (${res.status})`;
-        led.classList.add('ko'); led.classList.remove('ok');
-        console.warn('Health response:', res.status, txt);
+    <script>
+      async function checkBackend() {
+        const el = document.getElementById("backend-status");
+        try {
+          const res = await fetch("https://eccomibook-backend.onrender.com/api/v1/ping");
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const data = await res.json();
+          if (data.ok) {
+            el.innerHTML = "🟢 Online (v" + data.version + ")";
+            el.className = "ok";
+          } else {
+            el.innerHTML = "🔴 Offline (risposta non valida)";
+            el.className = "err";
+          }
+        } catch (e) {
+          el.innerHTML = "🔴 Offline";
+          el.className = "err";
+        }
       }
-    } catch (e) {
-      led.textContent = '🔴 Offline';
-      led.classList.add('ko'); led.classList.remove('ok');
-      console.error('Health fetch error:', e);
-    }
-  }
-
-  document.getElementById('btnHealth')?.addEventListener('click', checkHealth);
-  checkHealth();
-</script>
-</body>
+      checkBackend();
+    </script>
+  </body>
 </html>
