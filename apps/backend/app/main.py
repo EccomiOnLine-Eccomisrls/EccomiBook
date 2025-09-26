@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import logging
 import shutil
+import os
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response, JSONResponse
@@ -16,24 +17,21 @@ from .routers import books as books_router
 from .routers import generate as generate_router
 from .routers import books_export as books_export_router  # export intero libro
 
-
 # =========================
 # Config dinamica da settings
 # =========================
 settings = get_settings()
 ENV = (settings.environment or "development").lower()
 
-# Docs/Redoc sempre attive (anche in production)
+# ✅ Docs & ReDoc SEMPRE attive (anche in production)
 DOCS_URL  = "/docs"
 REDOC_URL = "/redoc"
 
-# CORS da settings (se presenti), altrimenti fallback permissivo
-# Puoi definire ad es. in settings: cors_allow_origins = ["https://eccomibook.com", "https://eccomibook.vercel.app"]
+# CORS presi da settings
 CORS_ALLOW_ORIGINS = getattr(settings, "cors_allow_origins", None) or ["*"]
 
 # Prefisso versionamento API
 API_PREFIX = "/api/v1"
-
 
 # =========================
 # FastAPI app
@@ -46,13 +44,11 @@ app = FastAPI(
     redoc_url=REDOC_URL,
 )
 
-
 # =========================
 # Homepage HTML “gentile”
 # =========================
 @app.get("/", include_in_schema=False)
-def home():
-    # Link ai docs solo se attivi
+def home_get():
     docs_btn  = f"<p><a class='button' href='{DOCS_URL}'>Vai alle API Docs</a></p>" if DOCS_URL else ""
     redoc_btn = f"<p><a class='button' href='{REDOC_URL}'>Vai alla ReDoc</a></p>"   if REDOC_URL else ""
     return HTMLResponse(f"""
@@ -92,6 +88,10 @@ def home():
     </html>
     """)
 
+# ✅ Gestione esplicita di HEAD / per evitare 405 nei log
+@app.head("/", include_in_schema=False)
+def home_head():
+    return Response(status_code=200)
 
 # =========================
 # Favicon “silenziosa”
@@ -103,21 +103,17 @@ def favicon():
         return FileResponse(fav)
     return Response(status_code=204)
 
-
 # =========================
-# Middleware: logging richieste
+# Middleware: logging richieste (usa logger tuo!)
 # =========================
-logger = logging.getLogger("uvicorn.access")
+logger = logging.getLogger("eccomibook")  # ⬅️ NON usare "uvicorn.access"
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    # Log ingresso
     logger.info(f"➡️  {request.method} {request.url}")
     response = await call_next(request)
-    # Log uscita
     logger.info(f"⬅️  {request.method} {request.url} {response.status_code}")
     return response
-
 
 # =========================
 # Startup / Shutdown
@@ -129,7 +125,6 @@ def on_startup() -> None:
     storage.BOOKS_CACHE = books
     app.state.books = books
     app.state.counters = {"books": len(books)}
-
     print(f"✅ APP STARTED | ENV: {ENV} | STORAGE_ROOT={storage.BASE_DIR}")
 
 @app.on_event("shutdown")
@@ -138,9 +133,8 @@ def on_shutdown() -> None:
     storage.save_books_to_disk(books)
     print("💾 Books salvati su disco in shutdown.")
 
-
 # =========================
-# Health & Test (doppio: root e API prefix)
+# Health & Test
 # =========================
 @app.get("/health", tags=["default"])
 def health_root():
@@ -149,7 +143,6 @@ def health_root():
 @app.get(f"{API_PREFIX}/health", tags=["default"])
 def health_api():
     return {"ok": True, "env": ENV, "service": "eccomibook", "version": "0.2.0"}
-
 
 # =========================
 # Download generico sicuro
@@ -163,9 +156,8 @@ def download_file(subpath: str):
         raise HTTPException(status_code=404, detail="File non trovato")
     return FileResponse(full_path)
 
-
 # =========================
-# Debug storage (non sensibile, sample limit)
+# Debug storage
 # =========================
 @app.get(f"{API_PREFIX}/debug/storage", tags=["default"])
 def debug_storage():
@@ -183,14 +175,12 @@ def debug_storage():
         "disk_bytes": {"total": total, "used": used, "free": free},
     }
 
-
 # =========================
 # Static mounts
 # =========================
 storage.ensure_dirs()
 app.mount("/static/chapters", StaticFiles(directory=str(storage.CHAPTERS_DIR)), name="chapters")
 app.mount("/static/books", StaticFiles(directory=str(storage.BOOKS_DIR)), name="books")
-
 
 # =========================
 # CORS
@@ -200,8 +190,8 @@ app.add_middleware(
     allow_origins=CORS_ALLOW_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
+    # allow_credentials=False  # per ora non servono cookie/sessioni
 )
-
 
 # =========================
 # Routers (versionati)
@@ -209,7 +199,6 @@ app.add_middleware(
 app.include_router(books_router.router,  prefix=f"{API_PREFIX}/books",    tags=["books"])
 app.include_router(generate_router.router, prefix=f"{API_PREFIX}",        tags=["generate"])
 app.include_router(books_export_router.router, prefix=f"{API_PREFIX}/export", tags=["export"])
-
 
 # =========================
 # Ping JSON (facoltativo)
