@@ -105,7 +105,11 @@ def debug_storage():
         "books_sample": books,
         "disk_bytes": {"total": total, "used": used, "free": free},
     }
-
+# ---------------- ROUTES EXTRA ----------------
+@app.get("/")
+def root():
+    """Healthcheck e messaggio di benvenuto"""
+    return JSONResponse({"status": "ok", "service": "EccomiBook Backend", "version": "0.2.0"})
 # Routers
 app.include_router(books_router.router, tags=["books"])
 app.include_router(generate_router.router, tags=["generate"])
