@@ -53,47 +53,42 @@
   <footer>© EccomiBook</footer>
 
   <script>
-    // --- Rilevamento API base ---
-    // Ordine priorità: window.VITE_API_BASE_URL (se iniettata dalla SPA) > <meta name="api-base"> > default
-    const metaApi = document.querySelector('meta[name="api-base"]')?.content;
-    const API_BASE = window.VITE_API_BASE_URL || metaApi || 'https://eccomibook-backend.onrender.com/api/v1';
+  const API_BASE = window.VITE_API_BASE_URL
+    || document.querySelector('meta[name="api-base"]')?.content
+    || 'https://eccomibook-backend.onrender.com/api/v1';
 
-    document.getElementById('apiBaseCode').textContent = API_BASE;
+  const led = document.getElementById('led');
+  const apiBaseCode = document.getElementById('apiBaseCode');
+  apiBaseCode.textContent = API_BASE;
 
-    // --- Ping backend /health ---
-    const led = document.getElementById('led');
-    async function checkHealth() {
-      try {
-        led.textContent = 'ping…';
-        const res = await fetch(`${API_BASE}/health`, { cache: 'no-store' });
-        const data = await res.json();
-        if (res.ok && data?.ok) {
-          led.textContent = `🟢 Online (${data.env})`;
-          led.classList.add('ok'); led.classList.remove('ko');
-        } else {
-          led.textContent = '🔴 KO';
-          led.classList.add('ko'); led.classList.remove('ok');
-        }
-      } catch (e) {
-        led.textContent = '🔴 Offline';
+  async function checkHealth() {
+    try {
+      led.textContent = 'ping…';
+      const res = await fetch(`${API_BASE}/health`, {
+        mode: 'cors',        // esplicito
+        credentials: 'omit', // niente cookie
+        cache: 'no-store'    // evita cache
+      });
+      const txt = await res.text();     // leggo testo per debug
+      let data = {};
+      try { data = JSON.parse(txt); } catch {}
+      if (res.ok && (data.ok === true || data.status === 'ok')) {
+        led.textContent = `🟢 Online (${data.env || 'n/a'})`;
+        led.classList.add('ok'); led.classList.remove('ko');
+      } else {
+        led.textContent = `🔴 KO (${res.status})`;
         led.classList.add('ko'); led.classList.remove('ok');
+        console.warn('Health response:', res.status, txt);
       }
+    } catch (e) {
+      led.textContent = '🔴 Offline';
+      led.classList.add('ko'); led.classList.remove('ok');
+      console.error('Health fetch error:', e);
     }
-    document.getElementById('btnHealth').addEventListener('click', checkHealth);
-    checkHealth();
+  }
 
-    // --- Versione FE: prova a leggere /version.txt se esiste (public/version.txt) ---
-    (async () => {
-      const el = document.getElementById('feVersion');
-      try {
-        const r = await fetch('/version.txt', { cache: 'no-store' });
-        if (!r.ok) throw 0;
-        const t = (await r.text()).trim();
-        el.textContent = t || 'unknown';
-      } catch {
-        el.textContent = 'unknown';
-      }
-    })();
-  </script>
+  document.getElementById('btnHealth')?.addEventListener('click', checkHealth);
+  checkHealth();
+</script>
 </body>
 </html>
