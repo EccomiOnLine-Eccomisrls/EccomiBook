@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>EccomiBook Frontend attivo</title>
+  <style>
+    :root { --c1:#d62828; --c2:#0077b6; --c2h:#0096c7; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+           text-align:center; margin: 6vh 4vw; background:#fafafa; color:#222; }
+    h1 { color: var(--c1); font-size: clamp(28px,4vw,42px); margin:.2em 0 .4em; }
+    p { margin: 1em 0; line-height:1.4; }
+    .muted { color:#666; font-size:.95em; }
+    a.button, button.button {
+      display:inline-block; padding:10px 20px; background:var(--c2); color:#fff;
+      text-decoration:none; border-radius:8px; font-weight:600; margin:.35rem; border:0; cursor:pointer;
+    }
+    a.button:hover, button.button:hover { background:var(--c2h); }
+    .grid { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+    code { background:#f1f1f1; padding:.2em .4em; border-radius:4px; }
+    .tag { display:inline-block; padding:.25em .6em; border-radius:6px; background:#eee; font-size:.9em; }
+    .ok { color:#1a7f37; }
+    .ko { color:#b00020; }
+  </style>
+</head>
+<body>
+  <h1>✅ EccomiBook Frontend attivo</h1>
+  <p>Benvenuto! Questa è la pagina di stato del <strong>frontend</strong> EccomiBook.</p>
+
+  <div class="grid">
+    <a class="button" href="/">Entra nell’app</a>
+    <a class="button" href="https://eccomibook-backend.onrender.com/docs" target="_blank" rel="noopener">API Docs</a>
+    <a class="button" href="https://eccomibook-backend.onrender.com/redoc" target="_blank" rel="noopener">ReDoc</a>
+    <button class="button" id="btnHealth">API Health</button>
+  </div>
+
+  <p id="healthLine" class="muted">Backend: <span id="healthStatus" class="tag">verifica…</span></p>
+  <p class="muted">Env frontend: <code>production</code></p>
+
+  <script>
+    // Legge la base URL dal build-time env di Vite, se presente
+    const API_BASE = (window.__VITE_API_BASE_URL__) || (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE_URL : null)
+                     || 'https://eccomibook-backend.onrender.com/api/v1';
+
+    const el = document.getElementById('healthStatus');
+    const btn = document.getElementById('btnHealth');
+
+    async function checkHealth() {
+      try {
+        el.textContent = 'ping…';
+        const res = await fetch(`${API_BASE}/health`, { cache: 'no-store' });
+        const data = await res.json();
+        if (res.ok && data?.ok) {
+          el.textContent = `OK (${data.env})`;
+          el.classList.add('ok');
+          el.classList.remove('ko');
+        } else {
+          el.textContent = 'KO';
+          el.classList.add('ko');
+          el.classList.remove('ok');
+        }
+      } catch (e) {
+        el.textContent = 'KO (offline)';
+        el.classList.add('ko');
+        el.classList.remove('ok');
+      }
+    }
+
+    // Bottone e auto-check all’avvio
+    btn.addEventListener('click', checkHealth);
+    checkHealth();
+
+    // Espone la variabile per eventuali override inline (facoltativo)
+    window.__VITE_API_BASE_URL__ = API_BASE;
+  </script>
+</body>
+</html>
