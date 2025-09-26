@@ -1,53 +1,22 @@
 /* =========================================================
  * EccomiBook — Frontend
- * src/main.js — v4.1.0 (Drag&Drop capitoli + clamp menu + placeholder safe)
+ * src/main.js — v4.1.1 (fix duplicati, API base robusta)
  * ========================================================= */
 
 import "./styles.css";
 
-// URL API: prima prendo quello forzato da index.html, altrimenti default
-const API_BASE_URL = window.VITE_API_BASE_URL || "https://eccomibook-backend.onrender.com/api/v1";
-
-// piccolo helper
-const $ = (s, r=document)=>r.querySelector(s);
-
-// LED backend robusto (prova /ping, se fallisce prova /health)
-async function checkBackend() {
-  const led = $("#backend-status");
-  async function tryFetch(path) {
-    const res = await fetch(`${API_BASE_URL}${path}`, { mode: "cors", cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json().catch(() => ({}));
-  }
-
-  try {
-    let data = await tryFetch("/ping");            // 1ª scelta
-    if (!(data && (data.pong || data.ok))) {
-      data = await tryFetch("/health");            // fallback
-    }
-    led.textContent = "🟢 Online";
-    led.style.color = "limegreen";
-    console.log("✅ Backend online", data);
-  } catch (e) {
-    led.textContent = "🔴 Offline";
-    led.style.color = "red";
-    console.warn("❌ Backend offline:", e);
-  }
-}
-checkBackend();
-
-/* ===== Toggle modale ===== */
-const USE_MODAL_RENAME = true;
-
-/* ===== Config ===== */
+/* ===== Config: API base =====
+   Precedenze:
+   1) window.VITE_API_BASE_URL (impostata in index.html)
+   2) import.meta.env.VITE_API_BASE_URL (env di Vite)
+   3) fallback production
+*/
 const API_BASE_URL =
+  (typeof window !== "undefined" && window.VITE_API_BASE_URL) ||
   (import.meta?.env?.VITE_API_BASE_URL) ||
-  window.VITE_API_BASE_URL ||
   "https://eccomibook-backend.onrender.com/api/v1";
 
 /* ===== Helpers ===== */
-const DEMO_HINT = "Scrivi qui il contenuto del capitolo…";
-
 const $  = (s, r=document)=>r.querySelector(s);
 const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
 const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
@@ -89,54 +58,8 @@ const fmtHHMM = (d=new Date())=>{
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-/* ===== Modale utilities ===== */
-function openModal(sel){ const el=$(sel); if(!el) return; el.classList.add("is-open"); el.setAttribute("aria-hidden","false"); }
-function closeModal(sel){ const el=$(sel); if(!el) return; el.classList.remove("is-open"); el.setAttribute("aria-hidden","true"); }
-["click","keydown"].forEach(evt=>{
-  document.addEventListener(evt,(e)=>{
-    const m = $("#modal-edit-book");
-    if(!m || !m.classList.contains("is-open")) return;
-    if(e.type==="click" && (e.target.matches("[data-meb-close]") || e.target===m)) closeModal("#modal-edit-book");
-    if(e.type==="keydown" && e.key==="Escape") closeModal("#modal-edit-book");
-  });
-});
-
-/* ===== Modale: apertura + salvataggio ===== */
-function openEditBookModal(bookId){
-  const b = uiState.books.find(x=>(x?.id||x?.book_id)===bookId) || {};
-  $("#meb-title-input").value  = b?.title  || "";
-  $("#meb-author-input").value = b?.author || "";
-  $("#meb-lang-input").value   = (b?.language || "it").toLowerCase();
-
-  $("#meb-save").onclick = async ()=>{
-    const title = $("#meb-title-input").value.trim();
-    const author= $("#meb-author-input").value.trim();
-    const lang  = ($("#meb-lang-input").value.trim().toLowerCase()||"it").replace(/[^a-z-]/g,"").slice(0,10)||"it";
-    try{
-      const r = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}`,{
-        method:"PUT", headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ title, author, language: lang })
-      });
-      if(!r.ok){ const t=await r.text().catch(()=> ""); throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`); }
-
-      rememberLastAuthor(author);
-      rememberLastLang(lang);
-
-      toast("✅ Libro aggiornato.");
-      closeModal("#modal-edit-book");
-      await fetchBooks();
-
-      if(uiState.currentBookId===bookId){
-        uiState.currentBookTitle = title;
-        uiState.currentLanguage  = lang;
-        const langEl=$("#languageInput"); if(langEl) langEl.value=lang;
-        await refreshChaptersList(bookId);
-      }
-    }catch(e){ toast("Errore aggiornamento: "+(e?.message||e)); }
-  };
-
-  openModal("#modal-edit-book");
-}
+/* ===== Feature flags ===== */
+const USE_MODAL_RENAME = true;
 
 /* ======== Status LED ======== */
 function renderStatus({mode,title,sub}){
@@ -154,16 +77,24 @@ function renderStatus({mode,title,sub}){
 async function pingBackend(){
   renderStatus({mode:"warn", title:"EccomiBook Live", sub:"Verifica in corso..."});
   try{
-    const r=await fetch(`${API_BASE_URL}/health`,{cache:"no-store"});
-    renderStatus(r.ok
-      ? {mode:"ok", title:"EccomiBook Live", sub:`Ultimo aggiornamento: ${fmtHHMM()}`}
-      : {mode:"ko", title:"EccomiBook Offline", sub:`Errore ${r.status}`});
-  }catch{
+    // prova /ping, poi /health
+    const tryFetch = async (path) => {
+      const res = await fetch(`${API_BASE_URL}${path}`, { mode:"cors", cache:"no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json().catch(()=> ({}));
+    };
+    let data = await tryFetch("/ping").catch(()=>null);
+    if (!(data && (data.pong || data.ok))) data = await tryFetch("/health");
+
+    renderStatus({mode:"ok", title:"EccomiBook Live", sub:`Ultimo aggiornamento: ${fmtHHMM()}`});
+    console.log("✅ Backend online", data);
+  }catch(e){
     renderStatus({mode:"ko", title:"EccomiBook Offline", sub:"Servizio non raggiungibile"});
+    console.warn("❌ Backend offline:", e);
   }
 }
 
-/* ======== Menu popup custom (clamp + flip) ======== */
+/* ===== Menu popup custom (clamp + flip) ===== */
 function closeMenu(){
   uiState.openMenuEl?.remove();
   uiState.openMenuEl = null;
@@ -239,7 +170,7 @@ function showMenuForButton(btn, items, onPick){
   window.addEventListener("scroll", closeMenu, true);
 }
 
-/* ======== Libreria ======== */
+/* ===== Libreria ===== */
 async function fetchBooks(){
   const box=$("#library-list"); if(box) box.innerHTML='<div class="muted">Carico libreria…</div>';
   try{
@@ -311,7 +242,7 @@ function renderLibrary(books){
   });
 }
 
-/* ======== Capitoli / Editor ======== */
+/* ===== Capitoli / Editor ===== */
 function nextChapterId(existing=[]) {
   const nums = existing
     .map(c=>String(c.id||""))
@@ -335,7 +266,7 @@ async function showEditor(bookId){
   const ch=$("#chapterIdInput"); if(!ch.value) ch.value="";
   const ta = $("#chapterText");
   if (ta) {
-    ta.placeholder = DEMO_HINT;
+    ta.placeholder = "Scrivi qui il contenuto del capitolo…";
     if (!ta.value) ta.value = "";
   }
   uiState.currentChapterId = ch.value.trim();
@@ -477,12 +408,10 @@ function renderChaptersList(bookId, chapters){
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ order: newOrder })
       });
-      // Aggiorna stato locale e UI
       uiState.chapters.sort((a,b)=> newOrder.indexOf(a.id) - newOrder.indexOf(b.id));
       toast("✅ Ordine capitoli salvato.");
     }catch(e){
       toast("Errore salvataggio ordine: "+(e?.message||e));
-      // ricarico lista per sicurezza
       refreshChaptersList(bookId);
     }
   });
@@ -545,7 +474,6 @@ function enableChapterDragAndDrop(container, onCommit){
     }) || null;
   }
 
-  // Fai partire il drag solo se si prende la maniglia (desktop)
   container.addEventListener("mousedown",(e)=>{
     const handle = e.target.closest(".drag-handle");
     if(!handle) return;
@@ -579,7 +507,7 @@ async function openChapter(bookId, chapterId){
     $("#chapterIdInput").value = chapterId;
 
     $("#chapterText").value       = data?.content || "";
-    $("#chapterText").placeholder = DEMO_HINT;
+    $("#chapterText").placeholder = "Scrivi qui il contenuto del capitolo…";
 
     uiState.currentBookId     = bookId;
     uiState.currentChapterId  = chapterId;
@@ -621,7 +549,7 @@ async function saveCurrentChapter(showToast=true){
   const bookId=$("#bookIdInput").value.trim();
   const chapterId=$("#chapterIdInput").value.trim();
   let content=$("#chapterText").value;
-  if (content === DEMO_HINT) content = "";
+  if (content === "Scrivi qui il contenuto del capitolo…") content = "";
   if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
   try{
     const r=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,{
@@ -647,7 +575,7 @@ async function maybeAutosaveNow(){
   }
 }
 
-/* ======== Export (MENU) ======== */
+/* ===== Export ===== */
 const EXPORT_FORMATS = [
   { label: "📄 PDF (stream)", value: "pdf" },
   { label: "📘 KDP (salva su /static)", value: "kdp" },
@@ -684,7 +612,7 @@ async function exportBook(bookId, anchorBtn){
   });
 }
 
-/* ======== Toggle Libreria ======== */
+/* ===== Toggle Libreria ===== */
 async function toggleLibrary(force){
   const lib=$("#library-section"); if(!lib) return;
   uiState.libraryVisible=(typeof force==="boolean")?force:!uiState.libraryVisible;
@@ -692,14 +620,12 @@ async function toggleLibrary(force){
   if(uiState.libraryVisible) await fetchBooks();
 }
 
-/* ======== Wiring ======== */
+/* ===== Wiring ===== */
 function wireButtons(){
-  // CTA
   $("#btn-create-book")?.addEventListener("click",createBookSimple);
   $("#btn-library")?.addEventListener("click",()=>toggleLibrary());
   $("#btn-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
 
-  // Toolbar editor
   $("#btn-ed-close")?.addEventListener("click",closeEditor);
   $("#btn-ed-save")?.addEventListener("click",()=>saveCurrentChapter(true));
   $("#btn-ai-generate")?.addEventListener("click",generateWithAI);
@@ -709,7 +635,6 @@ function wireButtons(){
     await deleteChapter(bookId,chapterId);
   });
 
-  // Input changes
   $("#chapterText")?.addEventListener("input",()=>{
     if(uiState.saveSoon) clearTimeout(uiState.saveSoon);
     uiState.saveSoon=setTimeout(maybeAutosaveNow,1500);
@@ -724,7 +649,6 @@ function wireButtons(){
     uiState.currentLanguage=v; rememberLastLang(v);
   });
 
-  // Libreria: actions
   $("#library-list")?.addEventListener("click",async(ev)=>{
     const btn=ev.target.closest("button[data-action]"); if(!btn) return;
     const action=btn.getAttribute("data-action");
@@ -739,7 +663,6 @@ function wireButtons(){
     else if(action==="export"){ await exportBook(bookId, btn); }
   });
 
-  // Editor list actions
   $("#chapters-list")?.addEventListener("click",async(ev)=>{
     const openBtn=ev.target.closest("[data-ch-open]"),
           editBtn=ev.target.closest("[data-ch-edit]"),
@@ -757,7 +680,6 @@ function wireButtons(){
     else if(dlBtn)   downloadChapter(bid,cid, dlBtn);
   });
 
-  // ===== Pulsanti verdi: MENU =====
   $("#btn-book-menu")?.addEventListener("click",(ev)=>{
     if(!uiState.books.length){ toast("Nessun libro caricato."); return; }
     const items = uiState.books.map(b=>{
@@ -910,7 +832,6 @@ function tweakChapterEditorUI() {
     document.querySelector('#editor-card') || document;
   if (!root) return;
 
-  // A) nascondi pill duplicata ch_#### (non l'input vero)
   const chIdEl    = root.querySelector('#chapterIdInput');
   const chIdBlock = chIdEl?.closest('.field, .form-row, .card, label, div') || null;
   const dupNode = Array.from(root.querySelectorAll('*')).find(el=>{
@@ -925,7 +846,6 @@ function tweakChapterEditorUI() {
     pill.setAttribute('aria-hidden', 'true');
   }
 
-  // B) topic → textarea grande + spostamento con lingua a destra
   let topicEl = root.querySelector('#topicInput');
   const langEl = root.querySelector('#languageInput');
   const chBlock = chIdEl?.closest('.field, .form-row, .card, label, div');
