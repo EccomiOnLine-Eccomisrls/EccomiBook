@@ -196,7 +196,7 @@ app.add_middleware(
 # =========================
 # Routers (versionati)
 # =========================
-app.include_router(books_router.router,  prefix=f"{API_PREFIX}/books",    tags=["books"])
+app.include_router(books_router.router,  prefix=f"{API_PREFIX}", tags=["books"])
 app.include_router(generate_router.router, prefix=f"{API_PREFIX}",        tags=["generate"])
 app.include_router(books_export_router.router, prefix=f"{API_PREFIX}/export", tags=["export"])
 
