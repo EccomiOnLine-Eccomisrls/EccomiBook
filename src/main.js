@@ -12,7 +12,7 @@ const USE_MODAL_RENAME = true;
 const API_BASE_URL =
   (import.meta?.env?.VITE_API_BASE_URL) ||
   window.VITE_API_BASE_URL ||
-  "https://eccomibook-backend.onrender.com";
+  "https://eccomibook-backend.onrender.com/api/v1";
 
 /* ===== Helpers ===== */
 const DEMO_HINT = "Scrivi qui il contenuto del capitolo…";
