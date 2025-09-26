@@ -38,7 +38,7 @@
       async function checkBackend() {
         const el = document.getElementById("backend-status");
         try {
-          const res = await fetch("https://eccomibook-backend.onrender.com/api/v1/ping");
+          const res = await fetch("https://eccomibook-backend.onrender.com/ping");
           if (!res.ok) throw new Error("HTTP " + res.status);
           const data = await res.json();
           if (data.ok) {
