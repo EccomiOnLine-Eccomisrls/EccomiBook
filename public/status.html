@@ -3,29 +3,35 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>EccomiBook Frontend attivo</title>
+  <title>EccomiBook Frontend — Status</title>
+
+  <!-- (opzionale) puoi sovrascrivere l'API base con un meta -->
+  <!-- <meta name="api-base" content="https://eccomibook-backend.onrender.com/api/v1"> -->
+
   <style>
-    :root { --c1:#d62828; --c2:#0077b6; --c2h:#0096c7; }
+    :root { --c1:#d62828; --c2:#0077b6; --c2h:#0096c7; --ok:#1a7f37; --ko:#b00020; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-           text-align:center; margin: 6vh 4vw; background:#fafafa; color:#222; }
+           text-align:center; margin:6vh 4vw; background:#fafafa; color:#222; }
     h1 { color: var(--c1); font-size: clamp(28px,4vw,42px); margin:.2em 0 .4em; }
-    p { margin: 1em 0; line-height:1.4; }
-    .muted { color:#666; font-size:.95em; }
+    p  { margin:1em 0; line-height:1.45; }
     a.button, button.button {
       display:inline-block; padding:10px 20px; background:var(--c2); color:#fff;
       text-decoration:none; border-radius:8px; font-weight:600; margin:.35rem; border:0; cursor:pointer;
     }
     a.button:hover, button.button:hover { background:var(--c2h); }
-    .grid { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+    .muted { color:#666; font-size:.95em; }
     code { background:#f1f1f1; padding:.2em .4em; border-radius:4px; }
-    .tag { display:inline-block; padding:.25em .6em; border-radius:6px; background:#eee; font-size:.9em; }
-    .ok { color:#1a7f37; }
-    .ko { color:#b00020; }
+    .tags { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:10px; }
+    .tag { display:inline-block; padding:.28em .6em; border-radius:6px; background:#eee; font-size:.92em; }
+    .ok { color:var(--ok); }
+    .ko { color:var(--ko); }
+    .grid { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+    footer { margin-top:36px; color:#888; font-size:.9em; }
   </style>
 </head>
 <body>
   <h1>✅ EccomiBook Frontend attivo</h1>
-  <p>Benvenuto! Questa è la pagina di stato del <strong>frontend</strong> EccomiBook.</p>
+  <p>Benvenuto! Questa è la pagina di <strong>stato</strong> del frontend EccomiBook.</p>
 
   <div class="grid">
     <a class="button" href="/">Entra nell’app</a>
@@ -34,44 +40,59 @@
     <button class="button" id="btnHealth">API Health</button>
   </div>
 
-  <p id="healthLine" class="muted">Backend: <span id="healthStatus" class="tag">verifica…</span></p>
-  <p class="muted">Env frontend: <code>production</code></p>
+  <div class="tags">
+    <span class="tag">Backend: <span id="led">verifica…</span></span>
+    <span class="tag">Env frontend: <code>production</code></span>
+    <span class="tag">Versione FE: <code id="feVersion">carico…</code></span>
+  </div>
+
+  <p class="muted" id="apiBaseLine">API base: <code id="apiBaseCode">—</code></p>
+  <p class="muted"><a href="https://github.com/EccomiOnLine-Eccomisrls/EccomiBook" target="_blank" rel="noopener">Apri il repository GitHub</a></p>
+
+  <footer>© EccomiBook</footer>
 
   <script>
-    // Legge la base URL dal build-time env di Vite, se presente
-    const API_BASE = (window.__VITE_API_BASE_URL__) || (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE_URL : null)
-                     || 'https://eccomibook-backend.onrender.com/api/v1';
+    // --- Rilevamento API base ---
+    // Ordine priorità: window.VITE_API_BASE_URL (se iniettata dalla SPA) > <meta name="api-base"> > default
+    const metaApi = document.querySelector('meta[name="api-base"]')?.content;
+    const API_BASE = window.VITE_API_BASE_URL || metaApi || 'https://eccomibook-backend.onrender.com/api/v1';
 
-    const el = document.getElementById('healthStatus');
-    const btn = document.getElementById('btnHealth');
+    document.getElementById('apiBaseCode').textContent = API_BASE;
 
+    // --- Ping backend /health ---
+    const led = document.getElementById('led');
     async function checkHealth() {
       try {
-        el.textContent = 'ping…';
+        led.textContent = 'ping…';
         const res = await fetch(`${API_BASE}/health`, { cache: 'no-store' });
         const data = await res.json();
         if (res.ok && data?.ok) {
-          el.textContent = `OK (${data.env})`;
-          el.classList.add('ok');
-          el.classList.remove('ko');
+          led.textContent = `🟢 Online (${data.env})`;
+          led.classList.add('ok'); led.classList.remove('ko');
         } else {
-          el.textContent = 'KO';
-          el.classList.add('ko');
-          el.classList.remove('ok');
+          led.textContent = '🔴 KO';
+          led.classList.add('ko'); led.classList.remove('ok');
         }
       } catch (e) {
-        el.textContent = 'KO (offline)';
-        el.classList.add('ko');
-        el.classList.remove('ok');
+        led.textContent = '🔴 Offline';
+        led.classList.add('ko'); led.classList.remove('ok');
       }
     }
-
-    // Bottone e auto-check all’avvio
-    btn.addEventListener('click', checkHealth);
+    document.getElementById('btnHealth').addEventListener('click', checkHealth);
     checkHealth();
 
-    // Espone la variabile per eventuali override inline (facoltativo)
-    window.__VITE_API_BASE_URL__ = API_BASE;
+    // --- Versione FE: prova a leggere /version.txt se esiste (public/version.txt) ---
+    (async () => {
+      const el = document.getElementById('feVersion');
+      try {
+        const r = await fetch('/version.txt', { cache: 'no-store' });
+        if (!r.ok) throw 0;
+        const t = (await r.text()).trim();
+        el.textContent = t || 'unknown';
+      } catch {
+        el.textContent = 'unknown';
+      }
+    })();
   </script>
 </body>
 </html>
