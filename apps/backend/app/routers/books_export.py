@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, PlainTextResponse
 from pathlib import Path
-from typing import Literal, List, Dict, Any
+from typing import Literal, Dict, Any, List
 from io import BytesIO
 
 from reportlab.pdfgen import canvas
@@ -14,35 +14,28 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 from app import storage
 
-router = APIRouter(
-    prefix="/api/v1/export",
-    tags=["export"]
-)
+router = APIRouter(tags=["export"])
 
-# ---------- Font embedding (KDP raccomandato) ----------
-# Se il TTF è presente lo embeddiamo; se manca, fallback a Helvetica.
-_EMBEDDED_FONT_NAME = "DejaVuSerif"
-_EMBEDDED_FONT_FILE = Path(__file__).parent.parent / "assets" / "fonts" / "DejaVuSerif.ttf"
-_HAS_EMBED_FONT = False
+# ---------- Font embedding per KDP ----------
+_EMBED_FONT_NAME = "DejaVuSerif"
+_EMBED_FONT_FILE = Path(__file__).parent.parent / "assets" / "fonts" / "DejaVuSerif.ttf"
+_HAS_EMBED = False
 try:
-    if _EMBEDDED_FONT_FILE.exists():
-        pdfmetrics.registerFont(TTFont(_EMBEDDED_FONT_NAME, str(_EMBEDDED_FONT_FILE)))
-        _HAS_EMBED_FONT = True
+    if _EMBED_FONT_FILE.exists():
+        pdfmetrics.registerFont(TTFont(_EMBED_FONT_NAME, str(_EMBED_FONT_FILE)))
+        _HAS_EMBED = True
 except Exception:
-    _HAS_EMBED_FONT = False
+    _HAS_EMBED = False
 
 
-# ---------- Utils ----------
+# ---------- Helpers ----------
 def _read_book(book_id: str) -> Dict[str, Any]:
-    """Carica il book.json + capitoli dallo storage."""
     book_dir = storage.BOOKS_DIR / book_id
-    book_json = book_dir / "book.json"
-    if not book_json.exists():
-        raise HTTPException(status_code=404, detail=f"Libro {book_id} non trovato")
-
-    data = storage.read_json(book_json)
-    # Capitoli: se nel JSON non ci sono i testi, proviamo cartella chapters
-    chapters: List[Dict[str, Any]] = data.get("chapters", [])
+    meta = book_dir / "book.json"
+    if not meta.exists():
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    data = storage.read_json(meta)
+    chapters: List[Dict[str, Any]] = data.get("chapters") or []
     if not chapters:
         ch_dir = storage.CHAPTERS_DIR / book_id
         if ch_dir.exists():
@@ -52,93 +45,81 @@ def _read_book(book_id: str) -> Dict[str, Any]:
     return data
 
 
-def _draw_paragraphs(c: canvas.Canvas, text: str, left: float, top: float, width: float, leading: float):
-    """Stampa testo semplice, a capo su parole."""
-    # Semplice word-wrap
+def _wrap_lines(cpl: int, text: str):
     from textwrap import wrap
-    # 1000/width ~ stima character-per-line, dipende dal font; empirico per testi semplici
-    est_cpl = max(35, min(95, int(width / 6.2)))
-    y = top
     for line in text.splitlines():
         if not line.strip():
-            y -= leading
-            continue
-        for chunk in wrap(line, est_cpl):
-            c.drawString(left, y, chunk)
-            y -= leading
-    return y
+            yield ""  # blank
+        else:
+            for chunk in wrap(line, cpl):
+                yield chunk
 
 
-def _pdf_bytes_normal(book: Dict[str, Any]) -> bytes:
-    """PDF normale (A4) — download diretto."""
+def _pdf_normal(book: Dict[str, Any]) -> bytes:
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     c.setTitle(book.get("title") or "Documento")
-
-    # Font
-    if _HAS_EMBED_FONT:
-        c.setFont(_EMBEDDED_FONT_NAME, 12)
-    else:
-        c.setFont("Helvetica", 12)
+    font = _EMBED_FONT_NAME if _HAS_EMBED else "Helvetica"
+    font_b = _EMBED_FONT_NAME if _HAS_EMBED else "Helvetica-Bold"
 
     width, height = A4
     margin = 25 * mm
     text_w = width - margin * 2
     y = height - margin
 
-    # Titolo / autore
-    c.setFont((_EMBEDDED_FONT_NAME if _HAS_EMBED_FONT else "Helvetica-Bold"), 16)
-    c.drawString(margin, y, (book.get("title") or "Senza titolo"))
+    c.setFont(font_b, 16)
+    c.drawString(margin, y, book.get("title") or "Senza titolo")
     y -= 20
-    c.setFont((_EMBEDDED_FONT_NAME if _HAS_EMBED_FONT else "Helvetica"), 11)
-    author = book.get("author") or ""
-    if author:
-        c.drawString(margin, y, f"Autore: {author}")
-        y -= 18
+    c.setFont(font, 11)
+    if book.get("author"):
+        c.drawString(margin, y, f"Autore: {book['author']}")
+        y -= 16
     y -= 6
     c.line(margin, y, margin + text_w, y)
     y -= 22
 
-    # Capitoli
     leading = 16
-    for i, ch in enumerate(book.get("chapters", []), start=1):
+    c.setFont(font, 12)
+    for i, ch in enumerate(book["chapters"], start=1):
         title = ch.get("title") or f"Capitolo {i}"
         content = (ch.get("content") or "").strip()
 
-        # Se non c'è spazio, nuova pagina
         if y < 80 * mm:
             c.showPage()
-            if _HAS_EMBED_FONT:
-                c.setFont(_EMBEDDED_FONT_NAME, 12)
-            else:
-                c.setFont("Helvetica", 12)
+            c.setFont(font, 12)
             y = height - margin
 
-        # titolo capitolo
-        c.setFont((_EMBEDDED_FONT_NAME if _HAS_EMBED_FONT else "Helvetica-Bold"), 13)
+        c.setFont(font_b, 13)
         c.drawString(margin, y, title)
         y -= 18
-        c.setFont((_EMBEDDED_FONT_NAME if _HAS_EMBED_FONT else "Helvetica"), 12)
-        y = _draw_paragraphs(c, content, margin, y, text_w, leading) - 14
+        c.setFont(font, 12)
+
+        cpl = max(35, min(95, int((text_w) / 6.2)))
+        for chunk in _wrap_lines(cpl, content):
+            if not chunk:
+                y -= leading
+            else:
+                c.drawString(margin, y, chunk)
+                y -= leading
+            if y < 25 * mm:
+                c.showPage()
+                c.setFont(font, 12)
+                y = height - margin
+        y -= 12
 
     c.showPage()
     c.save()
     return buf.getvalue()
 
 
-def _page_size_for_kdp(size: Literal["a5", "6x9"]):
-    if size == "6x9":
+def _page_size(trim: Literal["a5", "6x9"]):
+    if trim.lower() == "6x9":
         return (6 * inch, 9 * inch)
-    # default A5
-    return (148 * mm, 210 * mm)
+    return (148 * mm, 210 * mm)  # A5 default
 
 
-def _pdf_bytes_kdp(book: Dict[str, Any], size: Literal["a5", "6x9"]) -> bytes:
-    """PDF KDP — formato libro, margini/gutter, font embedded, metadata puliti."""
-    page_w, page_h = _page_size_for_kdp(size)
-
-    # Margini consigliati KDP (indicativi):
-    # interno (gutter) 0.75", esterno 0.5", alto 0.5", basso 0.5"
+def _pdf_kdp(book: Dict[str, Any], trim: Literal["a5", "6x9"]) -> bytes:
+    page_w, page_h = _page_size(trim)
     gutter = 0.75 * inch
     outer = 0.50 * inch
     top = 0.50 * inch
@@ -146,124 +127,160 @@ def _pdf_bytes_kdp(book: Dict[str, Any], size: Literal["a5", "6x9"]) -> bytes:
 
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=(page_w, page_h))
-    # Metadata
     c.setTitle(book.get("title") or "")
     c.setAuthor(book.get("author") or "")
     c.setSubject(f"Language: {book.get('language','it').upper()}")
 
-    # Font (embed se disponibile)
-    base_font = _EMBEDDED_FONT_NAME if _HAS_EMBED_FONT else "Times-Roman"
-    bold_font = _EMBEDDED_FONT_NAME if _HAS_EMBED_FONT else "Times-Bold"
-    c.setFont(base_font, 11.5)
+    base = _EMBED_FONT_NAME if _HAS_EMBED else "Times-Roman"
+    bold = _EMBED_FONT_NAME if _HAS_EMBED else "Times-Bold"
+    c.setFont(base, 11.5)
 
-    # area testo (pagina destra/sinistra: qui non alterniamo gutter per semplicità -> area centrale)
     left = gutter
-    right_margin = outer
-    text_w = page_w - left - right_margin
+    text_w = page_w - left - outer
     y = page_h - top
 
-    # front matter: titolo
-    c.setFont(bold_font, 14)
-    c.drawString(left, y, (book.get("title") or ""))
-    y -= 18
-    c.setFont(base_font, 11.5)
+    c.setFont(bold, 14)
+    if book.get("title"):
+        c.drawString(left, y, book["title"])
+        y -= 18
+    c.setFont(base, 11.5)
     if book.get("author"):
         c.drawString(left, y, f"di {book['author']}")
         y -= 16
-
     y -= 8
     c.line(left, y, left + text_w, y)
     y -= 22
 
-    # numerazione pagine (richiesta spesso in corpo libro)
     page_num = 1
 
-    def _footer():
+    def footer():
         nonlocal page_num
-        c.setFont(base_font, 9)
+        c.setFont(base, 9)
         c.drawCentredString(page_w / 2, bottom - 0.2 * inch + 20, f"{page_num}")
-        c.setFont(base_font, 11.5)
+        c.setFont(base, 11.5)
         page_num += 1
 
     leading = 15.5
 
-    # Capitoli
-    for i, ch in enumerate(book.get("chapters", []), start=1):
+    for i, ch in enumerate(book["chapters"], start=1):
         title = ch.get("title") or f"Capitolo {i}"
         content = (ch.get("content") or "").strip()
 
-        # se poco spazio, pagina nuova
         if y < (bottom + 80):
-            _footer()
-            c.showPage()
-            c.setPageSize((page_w, page_h))
-            c.setFont(base_font, 11.5)
-            y = page_h - top
+            footer(); c.showPage(); c.setPageSize((page_w, page_h)); c.setFont(base, 11.5); y = page_h - top
 
-        c.setFont(bold_font, 12.5)
+        c.setFont(bold, 12.5)
         c.drawString(left, y, title)
         y -= 18
-        c.setFont(base_font, 11.5)
-        # wrap
-        from textwrap import wrap
-        est_cpl = max(35, min(90, int(text_w / 5.8)))
-        for line in content.splitlines():
-            if not line.strip():
-                y -= leading
-                continue
-            for chunk in wrap(line, est_cpl):
-                c.drawString(left, y, chunk)
-                y -= leading
-                if y < (bottom + 40):
-                    _footer()
-                    c.showPage()
-                    c.setPageSize((page_w, page_h))
-                    c.setFont(base_font, 11.5)
-                    y = page_h - top
+        c.setFont(base, 11.5)
 
+        cpl = max(35, min(90, int(text_w / 5.8)))
+        for chunk in _wrap_lines(cpl, content):
+            if not chunk:
+                y -= leading
+            else:
+                c.drawString(left, y, chunk); y -= leading
+            if y < (bottom + 40):
+                footer(); c.showPage(); c.setPageSize((page_w, page_h)); c.setFont(base, 11.5); y = page_h - top
         y -= 12
 
-    _footer()
+    footer()
     c.showPage()
     c.save()
     return buf.getvalue()
 
 
-# ---------- ROUTES ----------
-
-@router.get("/books/{book_id}/export/pdf", summary="PDF normale (A4) — download")
-def export_pdf_stream(book_id: str):
-    book = _read_book(book_id)
-    pdf_bytes = _pdf_bytes_normal(book)
-    filename = f"{book_id}.pdf"
+def _stream_pdf(bytes_: bytes, filename: str):
     return StreamingResponse(
-        BytesIO(pdf_bytes),
+        BytesIO(bytes_),
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
 
-@router.post(
-    "/books/{book_id}/export/kdp",
-    summary="KDP PDF (A5 o 6x9) — salva su /static e restituisce URL"
-)
-def export_kdp_save(
-    book_id: str,
-    size: Literal["a5", "6x9"] = Query(default="a5", description="Formato pagina KDP")
-):
+def _md_text(book: Dict[str, Any]) -> str:
+    parts = [f"# {book.get('title','Senza titolo')}\n"]
+    if book.get("author"):
+        parts.append(f"*di {book['author']}*\n")
+    for i, ch in enumerate(book["chapters"], start=1):
+        parts.append(f"\n## {ch.get('title') or f'Capitolo {i}'}\n\n{ch.get('content') or ''}\n")
+    return "".join(parts)
+
+
+def _txt_text(book: Dict[str, Any]) -> str:
+    parts = [f"{book.get('title','Senza titolo')}\n"]
+    if book.get("author"):
+        parts.append(f"di {book['author']}\n")
+    for i, ch in enumerate(book["chapters"], start=1):
+        parts.append(f"\n=== {ch.get('title') or f'Capitolo {i}'} ===\n{ch.get('content') or ''}\n")
+    return "".join(parts)
+
+
+# --------- HANDLER PRINCIPALE (PDF/KDP) ----------
+def _handle_pdf(book_id: str,
+                trim: str | None,
+                cache_to_disk: bool) -> StreamingResponse:
     book = _read_book(book_id)
-    pdf_bytes = _pdf_bytes_kdp(book, size=size)
 
-    # Salvataggio su /static/books/<book_id>/exports/
-    out_dir = storage.BOOKS_DIR / book_id / "exports"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_name = f"{book_id}_kdp_{size}.pdf"
-    out_path = out_dir / out_name
-    out_path.write_bytes(pdf_bytes)
+    # KDP MODE: usiamo il TUO flag esistente cache_to_disk=true + trim (a5/6x9)
+    kdp_mode = cache_to_disk is True
+    filename = f"{book_id}.pdf"
 
-    # URL pubblico (montato in app.main come StaticFiles su /static/books)
-    # Se BOOKS_DIR è montata su /static/books, calcoliamo il relativo:
-    rel = out_path.relative_to(storage.BOOKS_DIR)
-    url = f"/static/books/{rel.as_posix()}"
+    if kdp_mode:
+        size = "6x9" if (trim or "").lower() == "6x9" else "a5"
+        pdf = _pdf_kdp(book, trim=size)  # conforme KDP
+        # salvataggio su /static (come facevi prima)
+        out_dir = storage.BOOKS_DIR / book_id / "exports"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"{book_id}_kdp_{size}.pdf"
+        out_path.write_bytes(pdf)
+        filename = out_path.name
+        return _stream_pdf(pdf, filename)
 
-    return JSONResponse({"status": "ok", "size": size, "path": str(rel), "url": url})
+    # PDF normale
+    pdf = _pdf_normal(book)
+    return _stream_pdf(pdf, filename)
+
+
+# --------- ROUTES (compat legacy + api/v1) ----------
+# LEGACY
+@router.get("/export/books/{book_id}/export/pdf")
+def export_pdf_legacy(
+    book_id: str,
+    trim: str | None = Query(default=None, description='usa "6x9" per 6×9, altro=A5'),
+    bleed: str | None = None,
+    classic: str | None = None,
+    cache_to_disk: bool = Query(default=False)
+):
+    return _handle_pdf(book_id, trim, cache_to_disk)
+
+@router.get("/export/books/{book_id}/export/md")
+def export_md_legacy(book_id: str):
+    book = _read_book(book_id)
+    return PlainTextResponse(_md_text(book), media_type="text/markdown")
+
+@router.get("/export/books/{book_id}/export/txt")
+def export_txt_legacy(book_id: str):
+    book = _read_book(book_id)
+    return PlainTextResponse(_txt_text(book), media_type="text/plain; charset=utf-8")
+
+# API V1 (stessi handler)
+@router.get("/api/v1/export/books/{book_id}/export/pdf")
+def export_pdf_v1(
+    book_id: str,
+    trim: str | None = Query(default=None),
+    bleed: str | None = None,
+    classic: str | None = None,
+    cache_to_disk: bool = Query(default=False)
+):
+    return _handle_pdf(book_id, trim, cache_to_disk)
+
+@router.get("/api/v1/export/books/{book_id}/export/md")
+def export_md_v1(book_id: str):
+    book = _read_book(book_id)
+    return PlainTextResponse(_md_text(book), media_type="text/markdown")
+
+@router.get("/api/v1/export/books/{book_id}/export/txt")
+def export_txt_v1(book_id: str):
+    book = _read_book(book_id)
+    return PlainTextResponse(_txt_text(book), media_type="text/plain; charset=utf-8")
