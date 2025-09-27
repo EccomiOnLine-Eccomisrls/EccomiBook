@@ -577,17 +577,19 @@ async function maybeAutosaveNow(){
 
 /* ===== Export ===== */
 const EXPORT_FORMATS = [
-  { label: "📄 PDF (stream)", value: "pdf" },
-  { label: "📘 KDP (salva su /static)", value: "kdp" },
+  { label: "📄 PDF", value: "pdf" },
+  { label: "📘 KDP", value: "kdp" },
   { label: "📝 Markdown", value: "md" },
   { label: "📃 TXT", value: "txt" }
 ];
+
 function chooseFormat(anchorBtn, cb){
   showMenuForButton(anchorBtn || document.body, EXPORT_FORMATS, (fmt)=>{
     if(!fmt) return;
-    cb(fmt);
+    cb(fmt); // fmt è "pdf" | "kdp" | "md" | "txt"
   });
 }
+
 function downloadChapter(bookId, chapterId, anchorBtn){
   const items = EXPORT_FORMATS.filter(x=>x.value!=="kdp");
   showMenuForButton(anchorBtn || document.body, items, (fmt)=>{
@@ -595,23 +597,28 @@ function downloadChapter(bookId, chapterId, anchorBtn){
     window.open(url, "_blank", "noopener");
   });
 }
+
 async function exportBook(bookId, anchorBtn){
-  chooseFormat(anchorBtn, (fmt)=>{
-    const base = `${API_BASE_URL.replace(/\/$/, "")}/export/books/${encodeURIComponent(bookId)}/export`;
-
-    if (fmt === "pdf") {
-      const url = `${base}/pdf?trim=6x9&bleed=false&classic=false`;
-      window.open(url, "_blank", "noopener");
-      return;
+  chooseFormat(anchorBtn, async (fmt)=>{
+    const base = `${API_BASE_URL.replace(/\/$/, "")}/api/v1/export/books/${encodeURIComponent(bookId)}/export`;
+    try {
+      if (fmt === "pdf") {
+        window.open(`${base}/pdf`, "_blank", "noopener");
+        return;
+      }
+      if (fmt === "kdp") {
+        const size = "a5"; // cambia in "6x9" se vuoi
+        const res = await fetch(`${base}/kdp?size=${size}`, { method: "POST" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.detail || "Errore export KDP");
+        window.open(`${API_BASE_URL}${json.url}`, "_blank", "noopener");
+        return;
+      }
+      // Markdown / TXT (se implementati)
+      window.open(`${base}/${fmt}`, "_blank", "noopener");
+    } catch (e) {
+      alert("Errore export: " + e.message);
     }
-    if (fmt === "kdp") {
-      const url = `${base}/pdf?trim=6x9&bleed=false&classic=false&cache_to_disk=true`;
-      window.open(url, "_blank", "noopener");
-      return;
-    }
-
-    const url = `${base}/${fmt}`;
-    window.open(url, "_blank", "noopener");
   });
 }
 
