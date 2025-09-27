@@ -51,12 +51,9 @@ def save_books(books: List[Dict[str, Any]]) -> None:
     )
 
 
-# ====== SHIM di compatibilità per vecchi router ======
+# ====== SHIM di compatibilità per vecchi router (safe) ======
 def load_books_from_disk() -> List[Dict[str, Any]]:
-    """
-    Versione 'from_disk' usata da vecchi router.
-    Rilegge sempre da disco e aggiorna la cache.
-    """
+    """Legacy alias: rilegge sempre da disco e aggiorna la cache."""
     ensure_dirs()
     try:
         data = json.loads(BOOKS_JSON.read_text(encoding="utf-8"))
@@ -67,11 +64,10 @@ def load_books_from_disk() -> List[Dict[str, Any]]:
     BOOKS_CACHE = data
     return BOOKS_CACHE
 
-
 def save_books_to_disk(books: List[Dict[str, Any]]) -> None:
-    """Alias legacy di save_books()."""
+    """Legacy alias."""
     save_books(books)
-# =====================================================
+# ============================================================
 
 
 def find_book(book_id: str) -> Optional[Dict[str, Any]]:
@@ -93,10 +89,7 @@ def persist_book(book: Dict[str, Any]) -> None:
 
 
 def reorder_chapters(book_id: str, ordered_ids: List[str]) -> Dict[str, Any]:
-    """
-    Riordina i capitoli di un libro in base alla lista di ID fornita.
-    Mantiene eventuali capitoli non elencati in coda.
-    """
+    """Riordina i capitoli mantenendo eventuali 'orfani' in coda."""
     book = find_book(book_id)
     if not book:
         raise ValueError("Libro non trovato")
@@ -105,17 +98,14 @@ def reorder_chapters(book_id: str, ordered_ids: List[str]) -> Dict[str, Any]:
     new_list: List[Dict[str, Any]] = []
     seen = set()
 
-    # 1) nell'ordine richiesto
     for cid in ordered_ids:
         if cid in by_id and cid not in seen:
-            new_list.append(by_id[cid])
-            seen.add(cid)
-    # 2) aggiungi gli "orfani"
+            new_list.append(by_id[cid]); seen.add(cid)
+
     for c in chapters:
         cid = c.get("id")
         if cid and cid not in seen:
-            new_list.append(c)
-            seen.add(cid)
+            new_list.append(c); seen.add(cid)
 
     book["chapters"] = new_list
     persist_book(book)
