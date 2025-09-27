@@ -1,59 +1,43 @@
 <!doctype html>
 <html lang="it">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>EccomiBook — Stato Frontend</title>
-    <style>
-      body { font-family: system-ui, sans-serif; margin: 2rem; text-align: center; }
-      h1 { color: #c00; }
-      .ok { color: green; font-weight: bold; }
-      .err { color: red; font-weight: bold; }
-      .box { margin-top: 2rem; padding: 1rem; border: 1px solid #ddd; display: inline-block; }
-      button { margin: 0.3rem; padding: 0.5rem 1rem; }
-    </style>
-  </head>
-  <body>
-    <h1>✅ EccomiBook Frontend attivo</h1>
-    <p>Benvenuto! Questa è la pagina di stato del <strong>frontend</strong> EccomiBook.</p>
+<head>
+  <meta charset="UTF-8" />
+  <title>EccomiBook — Stato</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 2rem; text-align: center; }
+    .ok { color: #0a0; font-weight: 700; }
+    .fail { color: #c00; font-weight: 700; }
+    code { background:#f4f4f4; padding:.2em .35em; border-radius:4px; }
+  </style>
+</head>
+<body>
+  <h1>📊 EccomiBook — Stato servizi</h1>
 
-    <div class="box">
-      <button onclick="location.href='/'">Entra nell’app</button>
-      <button onclick="location.href='https://eccomibook-backend.onrender.com/docs'">API Docs</button>
-      <button onclick="location.href='https://eccomibook-backend.onrender.com/redoc'">ReDoc</button>
-      <button onclick="location.href='https://eccomibook-backend.onrender.com/api/v1/ping'">API Health</button>
-    </div>
+  <p>Frontend: <span class="ok">✅ Online</span> (<code>/status.html</code>)</p>
 
-    <div class="box">
-      <p><strong>Backend:</strong> <span id="backend-status">Verifica...</span></p>
-      <p><strong>Env frontend:</strong> production</p>
-      <p><strong>Versione FE:</strong> 4.0.0</p>
-      <p><strong>API base:</strong> <code>https://eccomibook-backend.onrender.com/api/v1</code></p>
-    </div>
+  <p id="backend">Backend: <span>⏳ Verifica…</span></p>
 
-    <p><a href="https://github.com/EccomiOnLine-Eccomisrls/EccomiBook">Apri il repository GitHub</a></p>
-    <p>© EccomiBook</p>
+  <p>
+    API Health:
+    <a href="https://eccomibook-backend.onrender.com/api/v1/health" target="_blank" rel="noopener">apri</a>
+  </p>
 
-    <script>
-      async function checkBackend() {
-        const el = document.getElementById("backend-status");
-        try {
-          const res = await fetch("https://eccomibook-backend.onrender.com/ping");
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          const data = await res.json();
-          if (data.ok) {
-            el.innerHTML = "🟢 Online (v" + data.version + ")";
-            el.className = "ok";
-          } else {
-            el.innerHTML = "🔴 Offline (risposta non valida)";
-            el.className = "err";
-          }
-        } catch (e) {
-          el.innerHTML = "🔴 Offline";
-          el.className = "err";
-        }
-      }
-      checkBackend();
-    </script>
-  </body>
+  <script>
+    const HEALTH = "https://eccomibook-backend.onrender.com/api/v1/health";
+    fetch(HEALTH, { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => {
+        const ok = d && d.ok !== false; // il tuo health risponde {"ok":true,...}
+        document.getElementById("backend").innerHTML =
+          ok
+            ? `Backend: <span class="ok">✅ Online</span> (v${d.version || "?"}, env: ${d.env || "?"})`
+            : `Backend: <span class="fail">❌ Offline</span>`;
+      })
+      .catch(err => {
+        document.getElementById("backend").innerHTML =
+          `Backend: <span class="fail">❌ Offline</span> (${String(err)})`;
+      });
+  </script>
+</body>
 </html>
