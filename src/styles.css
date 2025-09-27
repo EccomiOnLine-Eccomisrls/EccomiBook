@@ -163,6 +163,20 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
 .menu-pop button:hover{ background:rgba(255,255,255,.06) }
 .menu-pop .muted{ color:var(--muted); font-size:12px }
 
+/* Fix overlay export menu che copre i bottoni */
+.menu-pop{
+  z-index: 9999;           /* più alto di tutto */
+  pointer-events: auto;    /* il menu resta cliccabile */
+}
+.menu-pop *{ pointer-events: auto; }
+
+.book-card,
+.actions button,
+.cta{
+  position: relative;
+  z-index: 1;              /* bottoni restano cliccabili */
+}
+
 /* Modal */
 .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
 .modal.is-open{display:flex}
