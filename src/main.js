@@ -597,17 +597,20 @@ function downloadChapter(bookId, chapterId, anchorBtn){
 }
 async function exportBook(bookId, anchorBtn){
   chooseFormat(anchorBtn, (fmt)=>{
+    const base = `${API_BASE_URL.replace(/\/$/, "")}/export/books/${encodeURIComponent(bookId)}/export`;
+
     if (fmt === "pdf") {
-      const params = new URLSearchParams({ trim: "6x9", bleed: "false", classic: "false" });
-      const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/pdf?${params.toString()}`;
-      window.open(url, "_blank", "noopener"); return;
+      const url = `${base}/pdf?trim=6x9&bleed=false&classic=false`;
+      window.open(url, "_blank", "noopener");
+      return;
     }
     if (fmt === "kdp") {
-      const params = new URLSearchParams({ trim:"6x9", bleed:"false", classic:"false", cache_to_disk:"true" });
-      const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/pdf?${params.toString()}`;
-      window.open(url, "_blank", "noopener"); return;
+      const url = `${base}/pdf?trim=6x9&bleed=false&classic=false&cache_to_disk=true`;
+      window.open(url, "_blank", "noopener");
+      return;
     }
-    const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/export/${fmt}`;
+
+    const url = `${base}/${fmt}`;
     window.open(url, "_blank", "noopener");
   });
 }
