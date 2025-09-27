@@ -607,13 +607,13 @@ async function exportBook(bookId, anchorBtn){
         return;
       }
       if (fmt === "kdp") {
-        const size = "a5"; // cambia in "6x9" se vuoi
-        const res = await fetch(`${base}/kdp?size=${size}`, { method: "POST" });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.detail || "Errore export KDP");
-        window.open(`${API_BASE_URL}${json.url}`, "_blank", "noopener");
-        return;
-      }
+  const size = (prompt('Formato KDP? scrivi "a5" o "6x9"', 'a5') || 'a5').toLowerCase();
+  const res = await fetch(`${base}/kdp?size=${encodeURIComponent(size)}`, { method: "POST" });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.detail || "Errore export KDP");
+  window.open(`${API_BASE_URL}${json.url}`, "_blank", "noopener");
+  return;
+}
       // Markdown / TXT (se implementati)
       window.open(`${base}/${fmt}`, "_blank", "noopener");
     } catch (e) {
