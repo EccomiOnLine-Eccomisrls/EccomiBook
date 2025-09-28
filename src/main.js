@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend
- * src/main.js — v4.1.1 (fix duplicati, API base robusta)
+ * src/main.js — v4.2.2 (fix 405 crea libro + export paths)
  * ========================================================= */
 
 import "./styles.css";
@@ -77,7 +77,6 @@ function renderStatus({mode,title,sub}){
 async function pingBackend(){
   renderStatus({mode:"warn", title:"EccomiBook Live", sub:"Verifica in corso..."});
   try{
-    // prova /ping, poi /health
     const tryFetch = async (path) => {
       const res = await fetch(`${API_BASE_URL}${path}`, { mode:"cors", cache:"no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -586,7 +585,7 @@ const EXPORT_FORMATS = [
 function chooseFormat(anchorBtn, cb){
   showMenuForButton(anchorBtn || document.body, EXPORT_FORMATS, (fmt)=>{
     if(!fmt) return;
-    cb(fmt); // fmt è "pdf" | "kdp" | "md" | "txt"
+    cb(fmt);
   });
 }
 
@@ -600,21 +599,22 @@ function downloadChapter(bookId, chapterId, anchorBtn){
 
 async function exportBook(bookId, anchorBtn){
   chooseFormat(anchorBtn, async (fmt)=>{
-    const base = `${API_BASE_URL.replace(/\/$/, "")}/api/v1/export/books/${encodeURIComponent(bookId)}/export`;
+    // NOTE: API_BASE_URL già contiene /api/v1 → non aggiungere di nuovo /api/v1
+    const base = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/export`;
     try {
       if (fmt === "pdf") {
         window.open(`${base}/pdf`, "_blank", "noopener");
         return;
       }
       if (fmt === "kdp") {
-  const size = (prompt('Formato KDP? scrivi "a5" o "6x9"', 'a5') || 'a5').toLowerCase();
-  const res = await fetch(`${base}/kdp?size=${encodeURIComponent(size)}`, { method: "POST" });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.detail || "Errore export KDP");
-  window.open(`${API_BASE_URL}${json.url}`, "_blank", "noopener");
-  return;
-}
-      // Markdown / TXT (se implementati)
+        const size = (prompt('Formato KDP? scrivi "a5" o "6x9"', 'a5') || 'a5').toLowerCase();
+        const res = await fetch(`${base}/kdp?size=${encodeURIComponent(size)}`, { method: "POST" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.detail || "Errore export KDP");
+        // json.url è relativo al backend (es. /static/books/...)
+        window.open(`${API_BASE_URL}${json.url}`, "_blank", "noopener");
+        return;
+      }
       window.open(`${base}/${fmt}`, "_blank", "noopener");
     } catch (e) {
       alert("Errore export: " + e.message);
@@ -741,8 +741,11 @@ async function createBookSimple(){
   rememberLastLang(language);
 
   try{
-    const res=await fetch(`${API_BASE_URL}/books/create`,{
-      method:"POST", headers:{ "Content-Type":"application/json" }, cache:"no-store",
+    // 🔧 FIX: endpoint corretto POST /books (niente /create)
+    const res=await fetch(`${API_BASE_URL}/books`,{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      cache:"no-store",
       body:JSON.stringify({ title:(title.trim()||"Senza titolo"), author, language, chapters:[] }),
     });
     if(!res.ok){ const txt=await res.text().catch(()=> ""); throw new Error(`HTTP ${res.status}${txt?`: ${txt}`:""}`); }
