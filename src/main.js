@@ -741,27 +741,64 @@ function wireButtons(){
     });
   });
 
-  $("#btn-ch-new")?.addEventListener("click", async ()=>{
+    // --- Nuovo capitolo via MODAL ---
+  const newChModal = $("#new-chapter-modal");
+  const newChForm  = $("#new-chapter-form");
+
+  const openNewChModal = ()=>{
+    const bookId = uiState.currentBookId || $("#bookIdInput").value.trim();
+    if (!bookId) { toast("Apri prima un libro."); return; }
+    newChForm?.reset();
+    newChModal?.removeAttribute("hidden");
+    newChForm?.querySelector('[name="title"]')?.focus();
+  };
+  const closeNewChModal = ()=> newChModal?.setAttribute("hidden","true");
+
+  // apre la modal con la “+”
+  $("#btn-ch-new")?.addEventListener("click",(e)=>{
+    e.preventDefault();
+    openNewChModal();
+  });
+
+  // chiusure (X, Annulla, backdrop)
+  $("#btn-newch-cancel")?.addEventListener("click", closeNewChModal);
+  $("#btn-newch-cancel-2")?.addEventListener("click", closeNewChModal);
+  newChModal?.querySelector(".modal__backdrop")?.addEventListener("click", closeNewChModal);
+
+  // submit: crea capitolo e opzionalmente genera con AI
+  newChForm?.addEventListener("submit", async (ev)=>{
+    ev.preventDefault();
+
     const bookId = uiState.currentBookId || $("#bookIdInput").value.trim();
     if (!bookId) { toast("Apri prima un libro."); return; }
 
+    const title  = newChForm.title.value.trim();
+    const topic  = newChForm.topic.value.trim();
+    const autoAI = newChForm.autoAI.checked;
+
     try {
-      const res = await apiCreateChapter(bookId, { title: "Nuovo capitolo", content: "" });
-      const ch = res?.chapter;
+      const res = await apiCreateChapter(bookId, { title, content:"", language: uiState.currentLanguage });
+      const ch  = res?.chapter;
       if (!ch?.id) throw new Error("ID capitolo mancante nella risposta");
 
+      // punta l’editor al nuovo capitolo
       $("#chapterIdInput").value = ch.id;
-      uiState.currentChapterId = ch.id;
-      $("#chapterText").value = ch.content || "";
-      uiState.lastSavedSnapshot = $("#chapterText").value || "";
+      uiState.currentChapterId   = ch.id;
+      $("#chapterText").value    = "";
+      uiState.lastSavedSnapshot  = "";
 
       await refreshChaptersList(bookId);
       await fetchBooks();
 
+      closeNewChModal();
       $("#chapterText").focus();
-      const pill = $("#nextChHint");
-      if (pill) pill.textContent = ch.id;
 
+      if (autoAI) {
+        $("#topicInput").value = topic;
+        await generateWithAI();
+      }
+
+      const pill = $("#nextChHint"); if (pill) pill.textContent = ch.id;
       toast(`🆕 Creato ${ch.id}`);
     } catch (e) {
       toast("Errore creazione capitolo: " + (e?.message || e));
