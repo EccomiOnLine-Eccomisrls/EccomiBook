@@ -8,9 +8,8 @@ services:
     plan: starter
     autoDeploy: true
 
-  - type: web
+  - type: static
     name: eccomibook-frontend
-    env: static
     rootDir: .
     buildCommand: npm install && npm run build
     staticPublishPath: dist
