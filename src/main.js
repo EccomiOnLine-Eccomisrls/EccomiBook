@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend
- * src/main.js — v4.2.2 (fix 405 crea libro + export paths)
+ * src/main.js — v4.2.3 (fix KDP: download ZIP via blob)
  * ========================================================= */
 
 import "./styles.css";
@@ -599,27 +599,50 @@ function downloadChapter(bookId, chapterId, anchorBtn){
 
 async function exportBook(bookId, anchorBtn){
   chooseFormat(anchorBtn, async (fmt)=>{
-    // NOTE: API_BASE_URL già contiene /api/v1 → non aggiungere di nuovo /api/v1
     const base = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/export`;
     try {
-      if (fmt === "pdf") {
-        window.open(`${base}/pdf`, "_blank", "noopener");
+      if (fmt === "pdf" || fmt === "txt" || fmt === "md") {
+        window.open(`${base}/${fmt}`, "_blank", "noopener");
         return;
       }
+
+      // ✅ KDP: scarico binario ZIP (niente JSON!)
       if (fmt === "kdp") {
         const size = (prompt('Formato KDP? scrivi "a5" o "6x9"', 'a5') || 'a5').toLowerCase();
-        const res = await fetch(`${base}/kdp?size=${encodeURIComponent(size)}`, { method: "POST" });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.detail || "Errore export KDP");
-        // json.url è relativo al backend (es. /static/books/...)
-        window.open(`${API_BASE_URL}${json.url}`, "_blank", "noopener");
+        // Il backend accetta GET/POST. Usiamo GET, eventuale ?size è ignorato se non supportato.
+        const res = await fetch(`${base}/kdp?size=${encodeURIComponent(size)}`, { method: "GET" });
+        if (!res.ok) {
+          const txt = await res.text().catch(()=> "");
+          throw new Error(`HTTP ${res.status}${txt ? `: ${txt.slice(0,120)}` : ""}`);
+        }
+        const blob = await res.blob(); // <- ZIP
+        const name = getFilenameFromDisposition(res.headers.get("Content-Disposition")) || `book_${bookId}_kdp.zip`;
+        triggerDownload(blob, name);
         return;
       }
-      window.open(`${base}/${fmt}`, "_blank", "noopener");
     } catch (e) {
-      alert("Errore export: " + e.message);
+      alert("Errore export: " + (e?.message || e));
     }
   });
+}
+
+// Helpers per download
+function getFilenameFromDisposition(dispo) {
+  if (!dispo) return null;
+  const m = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"/i.exec(dispo);
+  try {
+    const raw = decodeURIComponent((m && (m[1] || m[2])) || "");
+    return raw || null;
+  } catch { return (m && (m[1] || m[2])) || null; }
+}
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
 }
 
 /* ===== Toggle Libreria ===== */
@@ -741,7 +764,6 @@ async function createBookSimple(){
   rememberLastLang(language);
 
   try{
-    // 🔧 FIX: endpoint corretto POST /books (niente /create)
     const res=await fetch(`${API_BASE_URL}/books`,{
       method:"POST",
       headers:{ "Content-Type":"application/json" },
