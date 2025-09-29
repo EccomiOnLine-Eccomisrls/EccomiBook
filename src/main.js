@@ -1,6 +1,6 @@
 /* =========================================================
  * EccomiBook — Frontend
- * src/main.js — v4.2.3 (fix KDP: download ZIP via blob)
+ * src/main.js — v4.2.4 (KDP fix: download ZIP via blob, no JSON)
  * ========================================================= */
 
 import "./styles.css";
@@ -84,7 +84,6 @@ async function pingBackend(){
     };
     let data = await tryFetch("/ping").catch(()=>null);
     if (!(data && (data.pong || data.ok))) data = await tryFetch("/health");
-
     renderStatus({mode:"ok", title:"EccomiBook Live", sub:`Ultimo aggiornamento: ${fmtHHMM()}`});
     console.log("✅ Backend online", data);
   }catch(e){
@@ -106,7 +105,6 @@ function onDocClick(e){
 }
 function showMenuForButton(btn, items, onPick){
   closeMenu();
-
   const rect = btn.getBoundingClientRect();
   const host = document.createElement("div");
   host.className = "menu-pop";
@@ -115,15 +113,13 @@ function showMenuForButton(btn, items, onPick){
   host.style.left = "0px";
   host.style.top  = "0px";
 
-  if(!items.length){
-    host.innerHTML = `<div class="muted" style="padding:6px 8px">Nessun elemento</div>`;
-  }else{
-    host.innerHTML = items.map(x =>
-      `<button type="button" data-val="${escapeAttr(x.value)}">
-         ${escapeHtml(x.label)}${x.sublabel?`<div class="muted">${escapeHtml(x.sublabel)}</div>`:""}
-       </button>`
-    ).join("");
-  }
+  host.innerHTML = items.length
+    ? items.map(x =>
+        `<button type="button" data-val="${escapeAttr(x.value)}">
+           ${escapeHtml(x.label)}${x.sublabel?`<div class="muted">${escapeHtml(x.sublabel)}</div>`:""}
+         </button>`
+      ).join("")
+    : `<div class="muted" style="padding:6px 8px">Nessun elemento</div>`;
 
   document.body.appendChild(host);
 
@@ -606,18 +602,15 @@ async function exportBook(bookId, anchorBtn){
         return;
       }
 
-      // ✅ KDP: scarico binario ZIP (niente JSON!)
+      // ✅ KDP: scarico lo ZIP via blob (niente JSON, niente prompt size)
       if (fmt === "kdp") {
-        const size = (prompt('Formato KDP? scrivi "a5" o "6x9"', 'a5') || 'a5').toLowerCase();
-        // Il backend accetta GET/POST. Usiamo GET, eventuale ?size è ignorato se non supportato.
-        const res = await fetch(`${base}/kdp?size=${encodeURIComponent(size)}`, { method: "GET" });
+        const res = await fetch(`${base}/kdp`, { method: "GET" });
         if (!res.ok) {
           const txt = await res.text().catch(()=> "");
           throw new Error(`HTTP ${res.status}${txt ? `: ${txt.slice(0,120)}` : ""}`);
         }
-        const blob = await res.blob(); // <- ZIP
-        const name = getFilenameFromDisposition(res.headers.get("Content-Disposition")) || `book_${bookId}_kdp.zip`;
-        triggerDownload(blob, name);
+        const blob = await res.blob(); // ZIP
+        triggerDownload(blob, `book_${bookId}_kdp.zip`);
         return;
       }
     } catch (e) {
@@ -627,14 +620,6 @@ async function exportBook(bookId, anchorBtn){
 }
 
 // Helpers per download
-function getFilenameFromDisposition(dispo) {
-  if (!dispo) return null;
-  const m = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"/i.exec(dispo);
-  try {
-    const raw = decodeURIComponent((m && (m[1] || m[2])) || "");
-    return raw || null;
-  } catch { return (m && (m[1] || m[2])) || null; }
-}
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
