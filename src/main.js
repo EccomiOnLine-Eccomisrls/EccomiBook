@@ -742,32 +742,32 @@ function wireButtons(){
   });
 
   $("#btn-ch-new")?.addEventListener("click", async ()=>{
-  const bookId = uiState.currentBookId || $("#bookIdInput").value.trim();
-  if (!bookId) { toast("Apri prima un libro."); return; }
+    const bookId = uiState.currentBookId || $("#bookIdInput").value.trim();
+    if (!bookId) { toast("Apri prima un libro."); return; }
 
-  try {
-    const res = await apiCreateChapter(bookId, { title: "Nuovo capitolo", content: "" });
-    const ch = res?.chapter;
-    if (!ch?.id) throw new Error("ID capitolo mancante nella risposta");
+    try {
+      const res = await apiCreateChapter(bookId, { title: "Nuovo capitolo", content: "" });
+      const ch = res?.chapter;
+      if (!ch?.id) throw new Error("ID capitolo mancante nella risposta");
 
-    $("#chapterIdInput").value = ch.id;
-    uiState.currentChapterId = ch.id;
-    $("#chapterText").value = ch.content || "";
-    uiState.lastSavedSnapshot = $("#chapterText").value || "";
+      $("#chapterIdInput").value = ch.id;
+      uiState.currentChapterId = ch.id;
+      $("#chapterText").value = ch.content || "";
+      uiState.lastSavedSnapshot = $("#chapterText").value || "";
 
-    await refreshChaptersList(bookId);
-    await fetchBooks();
+      await refreshChaptersList(bookId);
+      await fetchBooks();
 
-    $("#chapterText").focus();
-    const pill = $("#nextChHint");
-    if (pill) pill.textContent = ch.id;
+      $("#chapterText").focus();
+      const pill = $("#nextChHint");
+      if (pill) pill.textContent = ch.id;
 
-    toast(`🆕 Creato ${ch.id}`);
-  } catch (e) {
-    toast("Errore creazione capitolo: " + (e?.message || e));
-  }
-});
-} //
+      toast(`🆕 Creato ${ch.id}`);
+    } catch (e) {
+      toast("Errore creazione capitolo: " + (e?.message || e));
+    }
+  });
+} // ⟵ chiusura wireButtons
 
 /* ===== Create/Rename/Delete book ===== */
 async function createBookSimple(){
