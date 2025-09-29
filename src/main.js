@@ -237,6 +237,24 @@ function renderLibrary(books){
   });
 }
 
+// === API helper: crea capitolo sul backend (POST) ===
+async function apiCreateChapter(
+  bookId,
+  { title = "Nuovo capitolo", content = "", language } = {}
+) {
+  const r = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, content, language })
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`HTTP ${r.status}${t ? `: ${t}` : ""}`);
+  }
+  // Risposta attesa: { ok:true, chapter:{ id,title,content,language }, count }
+  return r.json();
+}
+
 /* ===== Capitoli / Editor ===== */
 function nextChapterId(existing=[]) {
   const nums = existing
@@ -399,7 +417,7 @@ function renderChaptersList(bookId, chapters){
   enableChapterDragAndDrop(ul, async (newOrder)=>{
     try{
       await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/reorder`,{
-        method:"PUT",
+        method:"POST",
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ order: newOrder })
       });
@@ -723,15 +741,32 @@ function wireButtons(){
     });
   });
 
-  $("#btn-ch-new")?.addEventListener("click",()=>{
-    const nid = nextChapterId(uiState.chapters);
-    $("#chapterIdInput").value = nid;
-    uiState.currentChapterId = nid;
+  $("#btn-ch-new")?.addEventListener("click", async ()=>{
+  const bookId = uiState.currentBookId || $("#bookIdInput").value.trim();
+  if (!bookId) { toast("Apri prima un libro."); return; }
+
+  try {
+    const res = await apiCreateChapter(bookId, { title: "Nuovo capitolo", content: "" });
+    const ch = res?.chapter;
+    if (!ch?.id) throw new Error("ID capitolo mancante nella risposta");
+
+    $("#chapterIdInput").value = ch.id;
+    uiState.currentChapterId = ch.id;
+    $("#chapterText").value = ch.content || "";
+    uiState.lastSavedSnapshot = $("#chapterText").value || "";
+
+    await refreshChaptersList(bookId);
+    await fetchBooks();
+
     $("#chapterText").focus();
     const pill = $("#nextChHint");
-    if(pill) pill.textContent = nid;
-  });
-}
+    if (pill) pill.textContent = ch.id;
+
+    toast(`🆕 Creato ${ch.id}`);
+  } catch (e) {
+    toast("Errore creazione capitolo: " + (e?.message || e));
+  }
+});
 
 /* ===== Create/Rename/Delete book ===== */
 async function createBookSimple(){
