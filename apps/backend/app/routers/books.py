@@ -137,6 +137,15 @@ def get_chapter(book_id: str, chapter_id: str):
     ci = _find_chapter_index(b, chapter_id)
     return b["chapters"][ci]
 
+# --- aggiungi questo endpoint vicino agli altri dei capitoli ---
+
+@router.get("/books/{book_id}/chapters", summary="List Chapters")
+def list_chapters(book_id: str):
+    b = storage.find_book(book_id)
+    if not b:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    return {"items": b.get("chapters", [])}
+
 @router.put("/books/{book_id}/chapters/{chapter_id}")
 def update_chapter(book_id: str, chapter_id: str, payload: ChapterUpdateIn = Body(...)):
     b = storage.find_book(book_id)
