@@ -767,7 +767,7 @@ function wireButtons(){
     toast("Errore creazione capitolo: " + (e?.message || e));
   }
 });
-+} //
+} //
 
 /* ===== Create/Rename/Delete book ===== */
 async function createBookSimple(){
