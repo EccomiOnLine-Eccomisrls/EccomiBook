@@ -14,7 +14,7 @@ services:
     rootDir: .
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
-    plan: starter
+    plan: free
     envVars:
       - key: VITE_API_BASE_URL
         value: https://eccomibook-backend.onrender.com/api/v1
