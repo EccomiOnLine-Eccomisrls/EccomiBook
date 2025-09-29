@@ -25,14 +25,9 @@ def _get_book_or_404(book_id: str) -> dict:
     return b
 
 def _read_chapter_text(content_path: str | None) -> str:
-    """
-    Legge il contenuto del capitolo da file testo/markdown (UTF-8).
-    Se il file non esiste o è vuoto, ritorna stringa vuota.
-    """
     if not content_path:
         return ""
     p = Path(content_path)
-    # Se il path non è assoluto, assumiamo sia relativo a CHAPTERS_DIR
     if not p.is_absolute():
         p = storage.CHAPTERS_DIR / content_path
     if not p.exists():
@@ -43,9 +38,6 @@ def _read_chapter_text(content_path: str | None) -> str:
         return ""
 
 def _collect_book_texts(book: dict) -> List[Tuple[str, str]]:
-    """
-    Ritorna lista [(titolo_capitolo, testo_capitolo), ...] nell'ordine dei capitoli.
-    """
     out: List[Tuple[str, str]] = []
     for ch in (book.get("chapters") or []):
         title = str(ch.get("title") or "Senza titolo")
@@ -54,17 +46,13 @@ def _collect_book_texts(book: dict) -> List[Tuple[str, str]]:
     return out
 
 def _render_pdf(book_title: str, author: str | None, items: List[Tuple[str, str]]) -> bytes:
-    """
-    Genera un PDF semplice A4: titolo, autore (se c'è) e capitoli sequenziali.
-    Wrapping base manuale (no stili avanzati).
-    """
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
     margin = 2 * cm
-    line_h = 14  # px
+    line_h = 14
 
-    # Cover semplice
+    # Cover
     c.setTitle(book_title)
     c.setFont("Helvetica-Bold", 20)
     c.drawCentredString(width / 2, height - 5*cm, book_title)
@@ -78,12 +66,10 @@ def _render_pdf(book_title: str, author: str | None, items: List[Tuple[str, str]
     # Capitoli
     for title, text in items:
         y = height - margin
-        # Titolo capitolo
         c.setFont("Helvetica-Bold", 14)
         c.drawString(margin, y, title)
         y -= 20
 
-        # Testo capitolo (wrap manuale su larghezza pagina)
         c.setFont("Helvetica", 11)
         max_width = width - 2*margin
         for line in _wrap_text(text, c, max_width):
@@ -100,9 +86,6 @@ def _render_pdf(book_title: str, author: str | None, items: List[Tuple[str, str]
     return buf.read()
 
 def _wrap_text(text: str, canv: canvas.Canvas, max_w: float) -> List[str]:
-    """
-    Wrap molto semplice: spezza per parola mantenendo la larghezza in punti.
-    """
     out: List[str] = []
     for raw_line in (text or "").splitlines():
         words = raw_line.split(" ")
@@ -125,8 +108,7 @@ def export_book_pdf(book_id: str):
     items = _collect_book_texts(book)
     pdf_bytes = _render_pdf(book.get("title") or "Senza titolo", book.get("author"), items)
     filename = f"{book.get('id','book')}.pdf"
-    return StreamingResponse(
-        BytesIO(pdf_bytes),
+    return StreamingResponse(BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{filename}"'}
     )
@@ -137,8 +119,7 @@ def export_book_txt(book_id: str):
     items = _collect_book_texts(book)
     lines: List[str] = []
     lines.append((book.get("title") or "Senza titolo"))
-    if book.get("author"):
-        lines.append(f"di {book['author']}")
+    if book.get("author"): lines.append(f"di {book['author']}")
     lines.append("")
     for i, (title, text) in enumerate(items, start=1):
         lines.append(f"Capitolo {i}: {title}")
@@ -156,8 +137,7 @@ def export_book_md(book_id: str):
     book = _get_book_or_404(book_id)
     items = _collect_book_texts(book)
     parts: List[str] = [f"# {book.get('title') or 'Senza titolo'}"]
-    if book.get("author"):
-        parts.append(f"_di {book['author']}_")
+    if book.get("author"): parts.append(f"_di {book['author']}_")
     parts.append("")
     for i, (title, text) in enumerate(items, start=1):
         parts.append(f"## Capitolo {i}: {title}")
@@ -171,13 +151,13 @@ def export_book_md(book_id: str):
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
-@router.get("/export/books/{book_id}/export/kdp")
+# ✅ accetta sia GET che POST (evita 405 su chiamate legacy)
+@router.api_route("/export/books/{book_id}/export/kdp", methods=["GET", "POST"])
 def export_book_kdp(book_id: str):
     """
-    Fornisce un .zip con:
-      - interior.pdf (contenuto A4 semplice come sopra)
-      - metadata.txt (titolo/autore/data)
-    Nota: KDP accetta vari formati; questo è un pacchetto “pronto” base.
+    Restituisce un .zip con:
+      - interior.pdf
+      - metadata.txt
     """
     book = _get_book_or_404(book_id)
     items = _collect_book_texts(book)
