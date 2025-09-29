@@ -8,9 +8,9 @@ services:
     plan: free
     autoDeploy: true
 
-  - type: web   # frontend statico su Render è sempre "web"
+  - type: web
     name: eccomibook-frontend
-    env: node
+    env: static
     rootDir: .
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
