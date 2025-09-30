@@ -933,29 +933,45 @@ async function renameBook(bookId, oldTitle){
 
 /* ===== AI (bozza) ===== */
 async function generateWithAI(){
-  const bookId   = $("#bookIdInput").value.trim()||uiState.currentBookId;
-  const chapterId= $("#chapterIdInput").value.trim();
-  const topic    = $("#topicInput")?.value?.trim()||"";
-  const language = ($("#languageInput")?.value?.trim().toLowerCase()||uiState.currentLanguage||"it");
+  const bookId    = $("#bookIdInput").value.trim() || uiState.currentBookId;
+  const chapterId = $("#chapterIdInput").value.trim();
+  const topic     = $("#topicInput")?.value?.trim() || "";
+  const language  = ($("#languageInput")?.value?.trim().toLowerCase() || uiState.currentLanguage || "it");
   if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
 
   uiState.currentLanguage = language;
 
+  // prova backend -> se 404 (endpoint assente) usa fallback locale
   try{
-    const r=await fetch(`${API_BASE_URL}/generate/chapter`,{
-      method:"POST", headers:{ "Content-Type":"application/json" },
-      body:JSON.stringify({ book_id:bookId, chapter_id:chapterId, topic, language })
+    const payload = { book_id: bookId, chapter_id: chapterId, topic, language };
+    const r = await fetch(`${API_BASE_URL}/generate/chapter`,{
+      method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
     });
-    if(!r.ok){ const t=await r.text().catch(()=> ""); throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`); }
-    const data=await r.json();
-    $("#chapterText").value=data?.content||data?.text||"";
-    toast(`✨ Testo generato (bozza) — lingua: ${language.toUpperCase()}`);
+
+    if (r.ok) {
+      const data = await r.json();
+      $("#chapterText").value = data?.content || data?.text || "";
+      toast(`✨ Testo generato — lingua: ${language.toUpperCase()}`);
+    } else if (r.status === 404) {
+      // Fallback locale
+      $("#chapterText").value = localDraftFromTopic(topic, language, chapterId);
+      toast("📝 Endpoint AI non trovato (404): generata bozza locale.");
+    } else {
+      const t = await r.text().catch(()=> "");
+      throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`);
+    }
+
     await saveCurrentChapter(false);
     await refreshChaptersList(bookId);
     await fetchBooks();
     tweakChapterEditorUI();
   }catch(e){
-    toast("⚠️ AI di test: "+(e?.message||e));
+    // Qualsiasi altro errore -> fallback locale, così non resti bloccato
+    if (!$("#chapterText").value) {
+      $("#chapterText").value = localDraftFromTopic(topic, language, chapterId);
+      await saveCurrentChapter(false);
+    }
+    toast("⚠️ AI: " + (e?.message || e));
   }
 }
 
