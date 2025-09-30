@@ -1,27 +1,64 @@
-/* =========================================================
- * EccomiBook — Frontend
- * src/main.js — v4.2.4 (KDP fix: download ZIP via blob, no JSON)
- * ========================================================= */
+   /* =========================================================
+    * EccomiBook — Frontend
+    * src/main.js — v4.2.4 (KDP fix: download ZIP via blob, no JSON)
+    * ========================================================= */
+   
+   import "./styles.css";
+   
+   /* ===== Config: API base =====
+      Precedenze:
+      1) window.VITE_API_BASE_URL (impostata in index.html)
+      2) import.meta.env.VITE_API_BASE_URL (env di Vite)
+      3) fallback production
+   */
+   const API_BASE_URL =
+     (typeof window !== "undefined" && window.VITE_API_BASE_URL) ||
+     (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) ||
+     "https://eccomibook-backend.onrender.com/api/v1";
+   
+   /* ===== Helpers ===== */
+   const $  = (s, r=document)=>r.querySelector(s);
+   const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
+   const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g, m => ({
+     "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+   }[m]));
+   
+   // ——— Browser helpers ———
+   function supportsFetchStreaming(){
+     try {
+       return !!(window.ReadableStream &&
+                 new Response(new ReadableStream()).body &&
+                 'getReader' in Response.prototype);
+     } catch { return false; }
+   }
+   
+   function isSafariLike(){
+     const ua = navigator.userAgent || "";
+     const vendor = navigator.vendor || "";
+     const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+                   (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+     const isSafari = /Safari/.test(ua) && !/Chrome|CriOS|FxiOS|Edg/.test(ua) && vendor === "Apple Computer, Inc.";
+     return isIOS || isSafari;
+   }
+   
+   /* ===== Funzioni AI ===== */
+async function generateWithAI(){
+  // usa fetch streaming verso /generate/chapter/stream
+  ...
+}
 
-import "./styles.css";
+async function generateWithAI_SSE(){
+  // usa EventSource verso /generate/chapter/sse
+  ...
+}
 
-/* ===== Config: API base =====
-   Precedenze:
-   1) window.VITE_API_BASE_URL (impostata in index.html)
-   2) import.meta.env.VITE_API_BASE_URL (env di Vite)
-   3) fallback production
-*/
-const API_BASE_URL =
-  (typeof window !== "undefined" && window.VITE_API_BASE_URL) ||
-  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) ||
-  "https://eccomibook-backend.onrender.com/api/v1";
-
-/* ===== Helpers ===== */
-const $  = (s, r=document)=>r.querySelector(s);
-const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
-const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
-const escapeAttr = (s)=>escapeHtml(s).replace(/"/g,"&quot;");
-const toast = (m)=>alert(m);
+async function generateWithAI_auto(){
+  // decide se usare streaming o SSE
+  if (!isSafariLike() && supportsFetchStreaming()) {
+    return generateWithAI();
+  }
+  return generateWithAI_SSE();
+}
 
 // ===== Local AI-like fallback (outline generator) =====
 function localDraftFromTopic(topic="", language="it", chapterId="") {
