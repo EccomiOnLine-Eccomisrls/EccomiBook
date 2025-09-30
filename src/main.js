@@ -849,6 +849,22 @@ const closeNewChModal = ()=>{
       toast("Errore creazione capitolo: " + (e?.message || e));
     }
   });
+
+// --- Scorciatoie modale: ESC chiude, Invio su "Titolo" invia ---
+// Chiudi con ESC
+document.addEventListener("keydown", (e)=>{
+  if (e.key === "Escape" && newChModal?.classList.contains("is-open")) {
+    closeNewChModal();
+  }
+});
+
+// Invio dentro l’input titolo = submit
+newChForm?.querySelector('[name="title"]')?.addEventListener("keydown",(e)=>{
+  if (e.key === "Enter") {
+    e.preventDefault();
+    newChForm?.requestSubmit?.(); // equivale a clic su "Crea"
+  }
+});
 } // ⟵ chiusura wireButtons
 
 /* ===== Create/Rename/Delete book ===== */
