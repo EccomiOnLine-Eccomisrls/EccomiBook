@@ -22,7 +22,27 @@
    const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g, m => ({
      "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
    }[m]));
-   
+
+   const escapeAttr = (s)=>escapeHtml(s).replace(/"/g,"&quot;");
+
+// Toast minimale non-bloccante (niente alert)
+const toastHostId = "__toast_host";
+function toast(msg){
+  try{
+    let host = document.getElementById(toastHostId);
+    if(!host){
+      host = document.createElement("div");
+      host.id = toastHostId;
+      host.style.cssText = "position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:center";
+      document.body.appendChild(host);
+    }
+    const box = document.createElement("div");
+    box.textContent = String(msg||"");
+    box.style.cssText = "background:#222;color:#fff;padding:8px 12px;border-radius:8px;font:14px/1.3 system-ui;box-shadow:0 4px 14px rgba(0,0,0,.2)";
+    host.appendChild(box);
+    setTimeout(()=>box.remove(), 2500);
+  }catch{ alert(msg); }
+}
    // ——— Browser helpers ———
    function supportsFetchStreaming(){
      try {
@@ -42,22 +62,94 @@
    }
    
    /* ===== Funzioni AI ===== */
+/** STREAM via fetch -> /generate/chapter/stream (Chrome/Edge/Firefox) */
 async function generateWithAI(){
-  // usa fetch streaming verso /generate/chapter/stream
-  ...
-}
+  const bookId    = $("#bookIdInput").value.trim() || uiState.currentBookId;
+  const chapterId = $("#chapterIdInput").value.trim();
+  const topic     = $("#topicInput")?.value?.trim() || "";
+  const language  = ($("#languageInput")?.value?.trim().toLowerCase() || uiState.currentLanguage || "it");
+  const ta        = $("#chapterText");
 
-async function generateWithAI_SSE(){
-  // usa EventSource verso /generate/chapter/sse
-  ...
-}
+  if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
+  ta.value = "✍️ Sto scrivendo con l’AI (stream)…\n\n";
+  ta.disabled = true;
 
-async function generateWithAI_auto(){
-  // decide se usare streaming o SSE
-  if (!isSafariLike() && supportsFetchStreaming()) {
-    return generateWithAI();
+  try{
+    const payload = { book_id: bookId, chapter_id: chapterId, topic, language };
+    const r = await fetch(`${API_BASE_URL}/generate/chapter/stream`,{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+
+    const reader = r.body.getReader();
+    ta.value = "";
+    const dec = new TextDecoder("utf-8");
+    while(true){
+      const {done, value} = await reader.read();
+      if(done) break;
+      ta.value += dec.decode(value, {stream:true});
+      ta.scrollTop = ta.scrollHeight; // autoscroll
+    }
+    toast("✨ Generazione completata (stream)");
+  }catch(e){
+    toast("⚠️ Errore stream: " + (e?.message||e));
+  }finally{
+    ta.disabled = false;
   }
-  return generateWithAI_SSE();
+}
+
+/** SSE via EventSource -> /generate/chapter/sse (Safari/iPad consigliato) */
+async function generateWithAI_SSE(){
+  const bookId    = $("#bookIdInput").value.trim() || uiState.currentBookId;
+  const chapterId = $("#chapterIdInput").value.trim();
+  const topic     = $("#topicInput")?.value?.trim() || "";
+  const language  = ($("#languageInput")?.value?.trim().toLowerCase() || uiState.currentLanguage || "it");
+  const ta        = $("#chapterText");
+
+  if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
+  ta.value = "✍️ Sto scrivendo con l’AI (SSE)…\n\n";
+  ta.disabled = true;
+
+  const url = `${API_BASE_URL}/generate/chapter/sse`
+    + `?book_id=${encodeURIComponent(bookId)}`
+    + `&chapter_id=${encodeURIComponent(chapterId)}`
+    + `&topic=${encodeURIComponent(topic)}`
+    + `&language=${encodeURIComponent(language)}`;
+
+  return new Promise((resolve,reject)=>{
+    const es = new EventSource(url);
+    ta.value = "";
+
+    es.onmessage = (ev)=>{
+      ta.value += ev.data + " ";
+      ta.scrollTop = ta.scrollHeight;
+    };
+
+    es.addEventListener("done", ()=>{
+      es.close();
+      ta.disabled = false;
+      toast("✨ Generazione completata (SSE)");
+      resolve();
+    });
+
+    es.addEventListener("error", (e)=>{
+      es.close();
+      ta.disabled = false;
+      toast("⚠️ Errore SSE");
+      reject(e);
+    });
+  });
+}
+
+/** Autoswitch: sceglie automaticamente tra stream fetch e SSE */
+async function generateWithAI_auto(){
+  if (!isSafariLike() && supportsFetchStreaming()) {
+    return generateWithAI();     // preferisci fetch streaming
+  }
+  return generateWithAI_SSE();   // fallback SSE per Safari/iOS
 }
 
 // ===== Local AI-like fallback (outline generator) =====
