@@ -168,83 +168,75 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
 .menu-pop *{ pointer-events: auto; }
 .book-card, .actions button, .cta{ position: relative; z-index: 1; }
 
-/* ===== Modal v2 (polish) ===== */
+/* ===== MODAL RESTYLING ===== */
 .modal{
-  position: fixed; inset: 0;
-  display: none; align-items: center; justify-content: center;
-  background: rgba(5,12,22,.55);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-  z-index: 1000;
+  position:fixed; inset:0;
+  display:none; align-items:center; justify-content:center;
+  background:rgba(5,10,20,.65);      /* backdrop più scuro */
+  -webkit-backdrop-filter:blur(6px);
+  backdrop-filter:blur(6px);
+  z-index:1000;
 }
-.modal.is-open{ display:flex; }
+.modal.is-open{ display:flex }
 
 .modal__dialog{
-  width: min(560px, 94vw);
-  background: radial-gradient(120% 100% at 0% 0%, #111a28 0%, #0d1726 60%);
-  color: #e9eef8;
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 14px;
-  box-shadow:
-    0 30px 80px rgba(0,0,0,.55),
-    0 0 0 1px rgba(20,40,70,.25) inset;
-  transform: translateY(8px) scale(.985);
-  opacity: .0;
-  animation: modalIn .18s ease-out forwards;
+  width:min(560px, 94vw);
+  background:linear-gradient(180deg,#161f2f,#101623);
+  color:#f0f4fa;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;
+  box-shadow:0 20px 60px rgba(0,0,0,.7);
+  animation:modalIn .18s ease-out forwards;
+  transform:translateY(10px) scale(.98);
+  opacity:0;
 }
-@keyframes modalIn{
-  to { transform: translateY(0) scale(1); opacity: 1; }
+@keyframes modalIn{ to{ transform:none; opacity:1 } }
+
+.modal__head,
+.modal__foot{
+  padding:14px 18px;
+  border:0;
 }
-.modal__head,.modal__foot{ padding:14px 16px; border:0; }
 .modal__head{
-  display:flex; align-items:center; justify-content:space-between; gap:10px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
+  display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid rgba(255,255,255,.08);
 }
 .modal__foot{
-  display:flex; gap:10px; justify-content:flex-end;
-  border-top: 1px solid rgba(255,255,255,.06);
-  padding-top: 12px;
+  display:flex; gap:12px; justify-content:flex-end;
+  border-top:1px solid rgba(255,255,255,.08);
+  padding-top:14px;
 }
-.modal__body{ padding:16px; display:grid; gap:12px; }
+.modal__body{ padding:16px 18px; display:grid; gap:14px }
+
+.modal__title{ font-weight:700; font-size:17px; letter-spacing:.3px }
 .modal__close{
-  background: transparent; border: 0; cursor: pointer;
-  color: #aeb9cc; font-size: 20px; line-height: 1;
+  background:transparent; border:0; color:#9ca3af; font-size:22px;
+  cursor:pointer; line-height:1;
 }
-.modal__close:hover{ color:#fff; }
-.field{ display:grid; gap:6px; }
-.field label{ font-size:13px; color:#aab7cc; }
-.field input, .field textarea{
-  width:100%;
-  padding:10px 12px;
-  border-radius: 10px;
-  border:1px solid #273753;
+.modal__close:hover{ color:#fff }
+
+.field label{ font-size:13px; color:#aab7cc }
+.field input,
+.field textarea{
+  width:100%; padding:11px 13px;
+  border-radius:10px;
+  border:1px solid #2b3a53;
   background:#0c1522;
-  color:#e8eef7;
-  transition: border-color .15s ease, box-shadow .15s ease;
+  color:#f1f5fb;
+  transition:border-color .15s, box-shadow .15s;
 }
-.field input:focus, .field textarea:focus{
+.field input:focus,
+.field textarea:focus{
   outline:none;
-  border-color: rgba(45,126,247,.7);
-  box-shadow: 0 0 0 2px rgba(45,126,247,.25);
+  border-color:var(--primary);
+  box-shadow:0 0 0 2px rgba(45,126,247,.35);
 }
-.modal .btn{
-  min-height:40px; padding:8px 14px; border-radius:10px; font-weight:600;
+
+/* Pulsanti modale */
+.modal__foot .btn{
+  min-height:40px; font-weight:600;
+  border-radius:8px;
 }
-.modal .btn-primary{ background:var(--primary); color:#fff; border-color:transparent; }
-.modal .btn-primary:disabled{ opacity:.6; }
-.modal .btn-ghost{ background:transparent; color:#cfd9eb; border:1px solid #2b3a53; }
-.modal .btn-ghost:hover{ background:rgba(255,255,255,.06); }
-.modal__backdrop{
-  position: fixed; inset: 0;
-  background: rgba(5,12,22,.55);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-}
-@media (max-width: 480px){
-  .modal__dialog{ width: min(92vw, 600px); border-radius:12px; }
-  .modal__body{ gap:10px; }
-}
-body.modal-open { overflow: hidden; height: 100%; }
 
 /* Layout Editor capitolo: Topic largo + Lingua compatta */
 #editor-card .fields{
