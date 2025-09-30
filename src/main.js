@@ -856,7 +856,8 @@ function wireButtons(){
         await generateWithAI();
       }
 
-      $("#nextChHint")?.textContent = ch.id;
+      const pill = $("#nextChHint");
+      if (pill) pill.textContent = ch.id;
       toast(`🆕 Creato ${ch.id}`);
     } catch (e) {
       toast("Errore creazione capitolo: " + (e?.message || e));
