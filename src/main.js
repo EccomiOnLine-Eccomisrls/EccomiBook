@@ -790,18 +790,38 @@ function wireButtons(){
 const newChModal = $("#new-chapter-modal");
 const newChForm  = $("#new-chapter-form");
 
+// Tiene traccia dell'elemento che ha aperto la modale (per ripristinare il focus)
+let _lastActiveEl = null;
+
 const openNewChModal = ()=>{
   const bookId = uiState.currentBookId || $("#bookIdInput").value.trim();
   if (!bookId) { toast("Apri prima un libro."); return; }
+
+  _lastActiveEl = document.activeElement;     // memorizza chi ha aperto
   newChForm?.reset();
-  newChModal?.removeAttribute("hidden"); // per la regola .modal[hidden]{display:none}
-  newChModal?.classList.add("is-open");  // <-- necessario per renderla visibile
+
+  // mostra la modale
+  newChModal?.removeAttribute("hidden");      // usa la regola .modal[hidden]{display:none}
+  newChModal?.classList.add("is-open");
+
+  // blocca lo scroll della pagina
+  document.body.classList.add("modal-open");
+
+  // focus al primo campo utile
   newChForm?.querySelector('[name="title"]')?.focus();
 };
 
 const closeNewChModal = ()=>{
+  // nasconde la modale
   newChModal?.classList.remove("is-open");
   newChModal?.setAttribute("hidden","true");
+
+  // riattiva lo scroll
+  document.body.classList.remove("modal-open");
+
+  // ripristina il focus al trigger se esiste ancora
+  _lastActiveEl?.focus?.();
+  _lastActiveEl = null;
 };
   // apre la modal con la “+”
   $("#btn-ch-new")?.addEventListener("click",(e)=>{
