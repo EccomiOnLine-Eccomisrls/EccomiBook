@@ -157,7 +157,14 @@ def generate_chapter_stream(payload: GenIn = Body(...)):
                 f"- topic: {payload.topic or '—'}\n"
             )
             yield txt.encode("utf-8")
-        return StreamingResponse(fb(), media_type="text/plain; charset=utf-8")
+        return StreamingResponse(
+    fb(),
+    media_type="text/plain; charset=utf-8",
+    headers={
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    },
+)
 
     if client is None:
         raise HTTPException(status_code=500, detail="SDK OpenAI non disponibile nel runtime")
