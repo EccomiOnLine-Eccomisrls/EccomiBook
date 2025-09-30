@@ -699,10 +699,14 @@ async function toggleLibrary(force){
 
 /* ===== Wiring ===== */
 function wireButtons(){
-  $("#btn-create-book")?.addEventListener("click",createBookSimple);
-  $("#btn-library")?.addEventListener("click",()=>toggleLibrary());
-  $("#btn-editor")?.addEventListener("click",()=>showEditor(loadLastBook()));
+  // evita doppio binding se la funzione viene richiamata due volte
+  if (wireButtons._bound) return;
+  wireButtons._bound = true;
 
+  $("#btn-create-book")?.addEventListener("click", createBookSimple);
+  $("#btn-library")?.addEventListener("click", ()=>toggleLibrary());
+  $("#btn-editor")?.addEventListener("click", ()=>showEditor(loadLastBook()));
+   
   $("#btn-ed-close")?.addEventListener("click",closeEditor);
   $("#btn-ed-save")?.addEventListener("click",()=>saveCurrentChapter(true));
   $("#btn-ai-generate")?.addEventListener("click",generateWithAI);
