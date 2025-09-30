@@ -792,8 +792,7 @@ function wireButtons(){
       uiState.currentChapterId = val;
       await openChapter(uiState.currentBookId, val);
     });
-  });
-}
+     
       // --- Nuovo capitolo via MODAL ---
   const newChModal = $("#new-chapter-modal");
   const newChForm  = $("#new-chapter-form");
