@@ -5,11 +5,9 @@ import os
 from datetime import datetime
 from typing import Iterator
 
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-
-from fastapi import Query
 from time import sleep
 
 # SDK OpenAI (>= 1.0)
@@ -19,7 +17,6 @@ except Exception:  # libreria non presente o non importabile
     OpenAI = None
 
 router = APIRouter()
-
 
 # ─────────────────────────────────────────────────────────
 # Modello input
@@ -32,7 +29,6 @@ class GenIn(BaseModel):
     style: str | None = "manuale/guida chiara"
     words: int | None = 700
 
-
 # ─────────────────────────────────────────────────────────
 # Util env
 # ─────────────────────────────────────────────────────────
@@ -42,13 +38,11 @@ def _env_float(name: str, default: float) -> float:
     except Exception:
         return default
 
-
 def _env_int(name: str, default: int) -> int:
     try:
         return int(os.getenv(name, "").strip() or default)
     except Exception:
         return default
-
 
 def _client():
     """
@@ -64,20 +58,13 @@ def _client():
         return None, api_key, model, temperature, max_tokens
     return OpenAI(api_key=api_key), api_key, model, temperature, max_tokens
 
-
 # ─────────────────────────────────────────────────────────
 # Endpoint NON-STREAM (compatibilità)
 # ─────────────────────────────────────────────────────────
 @router.post("/generate/chapter", tags=["generate"])
 def generate_chapter(payload: GenIn = Body(...)):
-    """
-    Genera il contenuto di un capitolo con OpenAI **senza** salvarlo su disco.
-    Il frontend, dopo aver ricevuto `content`, effettua il PUT su:
-      /books/{book_id}/chapters/{chapter_id}
-    """
     client, key, model, temperature, max_tokens = _client()
 
-    # Fallback se chiave mancante o SDK indisponibile
     if not key:
         content = (
             "# Bozza automatica\n\n"
@@ -95,7 +82,6 @@ def generate_chapter(payload: GenIn = Body(...)):
     if client is None:
         raise HTTPException(status_code=500, detail="SDK OpenAI non disponibile nel runtime")
 
-    # Prompt
     topic = (payload.topic or "Introduzione").strip()
     language = (payload.language or "it").strip().lower()
     words = payload.words or 700
@@ -119,11 +105,9 @@ def generate_chapter(payload: GenIn = Body(...)):
                 {"role": "user", "content": user_msg},
             ],
             temperature=temperature,
-            max_tokens=max_tokens,  # limite di uscita
-            timeout=60,             # evita call appese
+            max_tokens=max_tokens,
+            timeout=60,
         )
-
-        # Estrai contenuto
         content = (resp.choices[0].message.content or "").strip()
         if not content:
             raise RuntimeError("Risposta vuota dal modello")
@@ -134,26 +118,19 @@ def generate_chapter(payload: GenIn = Body(...)):
             "content": content,
             "created_at": datetime.utcnow().isoformat() + "Z",
         }
-
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Errore AI: {e}")
 
-
 # ─────────────────────────────────────────────────────────
-# Endpoint STREAMING (effetto “ChatGPT”)
+# Endpoint STREAMING (text/plain)
 # ─────────────────────────────────────────────────────────
 @router.post("/generate/chapter/stream", tags=["generate"])
 def generate_chapter_stream(payload: GenIn = Body(...)):
-    """
-    Restituisce il capitolo in streaming testuale (text/plain), chunk per chunk.
-    """
     client, key, model, temperature, max_tokens = _client()
 
-    # Fallback streaming se manca la chiave (manteniamo la UX coerente)
     if not key:
         def fb() -> Iterator[bytes]:
-            # micro-chunk iniziale: sblocca proxy/mobile
-            yield b""
+            yield b""  # micro-chunk per sbloccare proxy/mobile
             txt = (
                 "# Bozza automatica\n\n"
                 "⚠️ OPENAI_API_KEY non configurata. Questo è un testo di esempio.\n\n"
@@ -165,20 +142,16 @@ def generate_chapter_stream(payload: GenIn = Body(...)):
         return StreamingResponse(
             fb(),
             media_type="text/plain; charset=utf-8",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",
-            },
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
     if client is None:
         raise HTTPException(status_code=500, detail="SDK OpenAI non disponibile nel runtime")
 
-    # Prompt
-    topic     = (payload.topic or "Introduzione").strip()
-    language  = (payload.language or "it").strip().lower()
-    words     = payload.words or 700
-    style     = (payload.style or "manuale/guida chiara").strip()
+    topic = (payload.topic or "Introduzione").strip()
+    language = (payload.language or "it").strip().lower()
+    words = payload.words or 700
+    style = (payload.style or "manuale/guida chiara").strip()
 
     system_msg = (
         f"Sei un assistente editoriale che scrive capitoli in {language}. "
@@ -192,9 +165,7 @@ def generate_chapter_stream(payload: GenIn = Body(...)):
 
     def gen() -> Iterator[bytes]:
         try:
-            # micro-chunk subito: forza lo start dello stream su Safari/iPad & proxy
-            yield b""
-
+            yield b""  # micro-chunk iniziale
             stream = client.chat.completions.create(
                 model=model,
                 messages=[
@@ -203,7 +174,7 @@ def generate_chapter_stream(payload: GenIn = Body(...)):
                 ],
                 temperature=temperature,
                 max_tokens=max_tokens,
-                stream=True,   # <— streaming OpenAI
+                stream=True,
                 timeout=60,
             )
             for chunk in stream:
@@ -211,19 +182,18 @@ def generate_chapter_stream(payload: GenIn = Body(...)):
                 if part:
                     yield part.encode("utf-8")
         except Exception as e:
-            # Mostra l’errore direttamente nel textarea del client
             yield f"\n\n**[Errore AI: {e}]**".encode("utf-8")
 
     return StreamingResponse(
         gen(),
         media_type="text/plain; charset=utf-8",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
-    @router.get("/generate/chapter/sse", tags=["generate"])
+# ─────────────────────────────────────────────────────────
+# Endpoint SSE (Server-Sent Events) — stabile su Safari/iPad
+# ─────────────────────────────────────────────────────────
+@router.get("/generate/chapter/sse", tags=["generate"])
 def generate_chapter_sse(
     book_id: str = Query(...),
     chapter_id: str = Query(...),
@@ -232,10 +202,6 @@ def generate_chapter_sse(
     style: str = Query("manuale/guida chiara"),
     words: int = Query(700),
 ):
-    """
-    Streaming in formato SSE (text/event-stream).
-    Safari/iPad lo gestisce molto meglio rispetto a fetch+ReadableStream.
-    """
     client, key, model, temperature, max_tokens = _client()
 
     system_msg = (
@@ -249,11 +215,10 @@ def generate_chapter_sse(
     )
 
     def sse() -> Iterator[bytes]:
-        # Padding iniziale per “sbloccare” proxy/buffer (2KB)
+        # padding per sbloccare buffering (≈2KB)
         yield (":" + " " * 2048 + "\n").encode("utf-8")
-        yield b":ok\n\n"  # commento SSE
+        yield b":ok\n\n"
 
-        # Se manca la chiave: stream di fallback, ma sempre SSE
         if not key:
             demo = (
                 "# Bozza automatica\n\n"
@@ -274,7 +239,7 @@ def generate_chapter_sse(
             return
 
         try:
-            stream = client.chat.completions.create(
+            stream = client.chat_completions.create(  # se usi openai>=1.40: client.chat.completions.create
                 model=model,
                 messages=[
                     {"role": "system", "content": system_msg},
@@ -285,15 +250,11 @@ def generate_chapter_sse(
                 stream=True,
                 timeout=60,
             )
-            # micro-chunk immediato
-            yield b"data: \n\n"
-
+            yield b"data: \n\n"  # micro-chunk iniziale
             for chunk in stream:
                 part = chunk.choices[0].delta.content or ""
                 if part:
-                    # linea SSE: termina con \n\n
                     yield ("data: " + part.replace("\r", "") + "\n\n").encode("utf-8")
-
             yield b"event: done\ndata: 1\n\n"
         except Exception as e:
             yield ("event: error\ndata: " + str(e) + "\n\n").encode("utf-8")
@@ -305,7 +266,6 @@ def generate_chapter_sse(
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
-            # Importantissimo: niente compressione sui proxy
             "Content-Encoding": "identity",
         },
     )
