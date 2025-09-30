@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+from typing import Iterator
+
 from fastapi import APIRouter, HTTPException, Body
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 # SDK OpenAI (>= 1.0)
@@ -60,13 +63,13 @@ def _client():
 
 
 # ─────────────────────────────────────────────────────────
-# Endpoint
+# Endpoint NON-STREAM (compatibilità)
 # ─────────────────────────────────────────────────────────
 @router.post("/generate/chapter", tags=["generate"])
 def generate_chapter(payload: GenIn = Body(...)):
     """
     Genera il contenuto di un capitolo con OpenAI **senza** salvarlo su disco.
-    Il frontend, dopo aver ricevuto `content`, effettua il PUT:
+    Il frontend, dopo aver ricevuto `content`, effettua il PUT su:
       /books/{book_id}/chapters/{chapter_id}
     """
     client, key, model, temperature, max_tokens = _client()
@@ -129,7 +132,71 @@ def generate_chapter(payload: GenIn = Body(...)):
             "created_at": datetime.utcnow().isoformat() + "Z",
         }
 
-    # Errori noti dall'API (mostra il messaggio al client)
     except Exception as e:
-        # Non logghiamo la chiave, solo l'errore
         raise HTTPException(status_code=502, detail=f"Errore AI: {e}")
+
+
+# ─────────────────────────────────────────────────────────
+# Endpoint STREAMING (effetto “ChatGPT”)
+# ─────────────────────────────────────────────────────────
+@router.post("/generate/chapter/stream", tags=["generate"])
+def generate_chapter_stream(payload: GenIn = Body(...)):
+    """
+    Restituisce il capitolo in streaming testuale (text/plain), chunk per chunk.
+    """
+    client, key, model, temperature, max_tokens = _client()
+
+    # Fallback streaming se manca la chiave (manteniamo la UX coerente)
+    if not key:
+        def fb() -> Iterator[bytes]:
+            txt = (
+                "# Bozza automatica\n\n"
+                "⚠️ OPENAI_API_KEY non configurata. Questo è un testo di esempio.\n\n"
+                f"- book_id: {payload.book_id}\n"
+                f"- chapter_id: {payload.chapter_id}\n"
+                f"- topic: {payload.topic or '—'}\n"
+            )
+            yield txt.encode("utf-8")
+        return StreamingResponse(fb(), media_type="text/plain; charset=utf-8")
+
+    if client is None:
+        raise HTTPException(status_code=500, detail="SDK OpenAI non disponibile nel runtime")
+
+    # Prompt
+    topic = (payload.topic or "Introduzione").strip()
+    language = (payload.language or "it").strip().lower()
+    words = payload.words or 700
+    style = (payload.style or "manuale/guida chiara").strip()
+
+    system_msg = (
+        f"Sei un assistente editoriale che scrive capitoli in {language}. "
+        f"Stile: {style}. Sii chiaro, strutturato, usa markdown (titoli, liste, paragrafi). "
+        f"Evita preamboli inutili. Output **solo** testo Markdown."
+    )
+    user_msg = (
+        f"Scrivi un capitolo sul tema: '{topic}'. "
+        f"Lunghezza circa {words} parole. Includi un titolo H1 e 3–6 sottosezioni con esempi pratici."
+    )
+
+    def gen() -> Iterator[bytes]:
+        try:
+            stream = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,   # ⬅️ attiva streaming OpenAI
+                timeout=60,
+            )
+            for chunk in stream:
+                part = chunk.choices[0].delta.content or ""
+                if part:
+                    yield part.encode("utf-8")
+        except Exception as e:
+            # scrivo l’errore dentro lo stream per mostrarlo in textarea
+            yield f"\n\n**[Errore AI: {e}]**".encode("utf-8")
+
+    return StreamingResponse(gen(), media_type="text/plain; charset=utf-8")
