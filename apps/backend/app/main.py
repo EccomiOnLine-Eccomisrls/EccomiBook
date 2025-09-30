@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from . import storage
 from .routers import books as books_router
 from .routers import books_export as books_export_router
-# from .routers import generate as generate_router  # opzionale
+from .routers import generate as generate_router  
 
 app = FastAPI(
     title="EccomiBook Backend",
@@ -34,7 +34,7 @@ app.add_middleware(
 # Routers
 app.include_router(books_router.router,       prefix="/api/v1", tags=["books"])
 app.include_router(books_export_router.router, prefix="/api/v1", tags=["export"])
-# app.include_router(generate_router.router,   prefix="/api/v1", tags=["ai"])
+app.include_router(generate_router.router,   prefix="/api/v1", tags=["ai"])
 
 # Health endpoints (sia root che /api/v1 per compatibilità con la status page)
 @app.get("/health")
