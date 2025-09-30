@@ -151,7 +151,7 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
 
 /* Popup menu */
 .menu-pop{
-  position:absolute; z-index:50; min-width:260px; max-width:min(560px, 92vw);
+  position:absolute; z-index:9999; min-width:260px; max-width:min(560px, 92vw);
   max-height:280px; overflow:auto; padding:6px;
   border-radius:10px; border:1px solid #2b3a53; background:#0e1726;
   box-shadow:0 10px 30px rgba(0,0,0,.35);
@@ -163,23 +163,34 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
 .menu-pop button:hover{ background:rgba(255,255,255,.06) }
 .menu-pop .muted{ color:var(--muted); font-size:12px }
 
-/* Fix overlay export menu che copre i bottoni */
-.menu-pop{ z-index: 9999; pointer-events: auto; }
+/* teniamo cliccabili i bottoni sotto i menu */
 .menu-pop *{ pointer-events: auto; }
 .book-card, .actions button, .cta{ position: relative; z-index: 1; }
 
-/* ===== MODAL RESTYLING (definitivo) ===== */
+/* ===== MODAL RESTYLING ===== */
 .modal{
   position:fixed; inset:0;
   display:none; align-items:center; justify-content:center;
-  background:rgba(5,10,20,.65);   /* backdrop più scuro */
+  background:rgba(5,10,20,.65);
   -webkit-backdrop-filter:blur(6px);
   backdrop-filter:blur(6px);
-  z-index:1000;
+  z-index:10050; /* sopra al menu-pop */
 }
 .modal.is-open{ display:flex }
 
-/* dialog in primo piano */
+/* backdrop: layer cliccabile dietro al dialog */
+.modal__backdrop{
+  position:absolute;
+  inset:0;
+  z-index:0;
+  background:transparent; /* lo scurimento è già su .modal */
+}
+
+/* blocca lo scroll quando la modale è aperta */
+body.modal-open{ overflow:hidden; }
+/* opzionale: nascondi popup menu con modale aperta */
+body.modal-open .menu-pop{ display:none !important; }
+
 .modal__dialog{
   position:relative; z-index:1;
   width:min(560px, 94vw);
@@ -194,8 +205,10 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
 }
 @keyframes modalIn{ to{ transform:none; opacity:1 } }
 
-.modal__head, .modal__foot{
-  padding:14px 18px; border:0;
+.modal__head,
+.modal__foot{
+  padding:14px 18px;
+  border:0;
 }
 .modal__head{
   display:flex; align-items:center; justify-content:space-between;
@@ -207,31 +220,57 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
   padding-top:14px;
 }
 .modal__body{ padding:16px 18px; display:grid; gap:14px }
+
 .modal__title{ font-weight:700; font-size:17px; letter-spacing:.3px }
-.modal__close{ background:transparent; border:0; color:#9ca3af; font-size:22px; cursor:pointer; line-height:1 }
+.modal__close{
+  background:transparent; border:0; color:#9ca3af; font-size:22px;
+  cursor:pointer; line-height:1;
+}
 .modal__close:hover{ color:#fff }
 
-/* backdrop cliccabile dietro al dialog (trasparente, solo per il click) */
-.modal__backdrop{
-  position:absolute; inset:0; z-index:0;
-  background:transparent;
-}
-
-/* campi input della modale */
 .field label{ font-size:13px; color:#aab7cc }
-.field input, .field textarea{
+.field input,
+.field textarea{
   width:100%; padding:11px 13px;
-  border-radius:10px; border:1px solid #2b3a53;
-  background:#0c1522; color:#f1f5fb;
+  border-radius:10px;
+  border:1px solid #2b3a53;
+  background:#0c1522;
+  color:#f1f5fb;
   transition:border-color .15s, box-shadow .15s;
 }
-.field input:focus, .field textarea:focus{
-  outline:none; border-color:var(--primary);
+.field input:focus,
+.field textarea:focus{
+  outline:none;
+  border-color:var(--primary);
   box-shadow:0 0 0 2px rgba(45,126,247,.35);
 }
 
-/* pulsanti nel footer della modale */
-.modal__foot .btn{ min-height:40px; font-weight:600; border-radius:8px }
+/* Pulsanti modale */
+.modal__foot .btn{
+  min-height:40px; font-weight:600;
+  border-radius:8px;
+}
 
-/* blocca lo scroll della pagina quando la modale è aperta */
-body.modal-open{ overflow:hidden }
+/* ===== Layout Editor capitolo: Topic largo + Lingua compatta ===== */
+#editor-card .fields{
+  display:grid;
+  grid-template-columns: 1fr 200px;
+  gap:12px 16px;
+  align-items:start;
+}
+#editor-card #topicInput{width:100%;grid-column:1/2}
+#editor-card #languageInput{width:100%;max-width:200px;grid-column:2/3}
+
+/* ===== Drag & Drop capitoli ===== */
+.dnd-row{cursor:grab; transition:transform .06s ease}
+.dnd-row.dragging{opacity:.75; transform:scale(.995)}
+.drag-handle{
+  appearance:none; border:1px solid #2b3a53; background:#0c1522; color:#cfd9eb;
+  border-radius:8px; padding:6px 10px; cursor:grab; margin-right:8px;
+}
+.dnd-head{display:flex; align-items:center; gap:8px; margin-bottom:6px}
+.drop-hint{
+  height:10px; border-radius:6px;
+  border:1px dashed #2b3a53; background:rgba(255,255,255,.05);
+  margin:6px 0;
+}
