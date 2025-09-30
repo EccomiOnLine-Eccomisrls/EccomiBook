@@ -783,18 +783,22 @@ function wireButtons(){
   });
 
     // --- Nuovo capitolo via MODAL ---
-  const newChModal = $("#new-chapter-modal");
-  const newChForm  = $("#new-chapter-form");
+const newChModal = $("#new-chapter-modal");
+const newChForm  = $("#new-chapter-form");
 
-  const openNewChModal = ()=>{
-    const bookId = uiState.currentBookId || $("#bookIdInput").value.trim();
-    if (!bookId) { toast("Apri prima un libro."); return; }
-    newChForm?.reset();
-    newChModal?.removeAttribute("hidden");
-    newChForm?.querySelector('[name="title"]')?.focus();
-  };
-  const closeNewChModal = ()=> newChModal?.setAttribute("hidden","true");
+const openNewChModal = ()=>{
+  const bookId = uiState.currentBookId || $("#bookIdInput").value.trim();
+  if (!bookId) { toast("Apri prima un libro."); return; }
+  newChForm?.reset();
+  newChModal?.removeAttribute("hidden"); // per la regola .modal[hidden]{display:none}
+  newChModal?.classList.add("is-open");  // <-- necessario per renderla visibile
+  newChForm?.querySelector('[name="title"]')?.focus();
+};
 
+const closeNewChModal = ()=>{
+  newChModal?.classList.remove("is-open");
+  newChModal?.setAttribute("hidden","true");
+};
   // apre la modal con la “+”
   $("#btn-ch-new")?.addEventListener("click",(e)=>{
     e.preventDefault();
