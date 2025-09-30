@@ -193,6 +193,10 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
   background:#0b1020;
   color:#e5e7eb;
 }
+/* Blocca scroll quando modale è aperta */
+body.modal-open { 
+  overflow: hidden; 
+}
 /* Supporto per la modal nuova: attributo hidden + backdrop */
 .modal[hidden]{display:none}
 .modal__backdrop{
