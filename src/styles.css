@@ -193,7 +193,14 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
   background:#0b1020;
   color:#e5e7eb;
 }
-
+/* Supporto per la modal nuova: attributo hidden + backdrop */
+.modal[hidden]{display:none}
+.modal__backdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.35);
+  backdrop-filter:blur(2px);
+}
 /* Layout Editor capitolo: Topic largo + Lingua compatta */
 #editor-card .fields{
   display:grid;
