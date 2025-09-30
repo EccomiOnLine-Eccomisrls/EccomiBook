@@ -838,7 +838,7 @@ function wireButtons(){
 
   $("#btn-ed-close")?.addEventListener("click", closeEditor);
   $("#btn-ed-save")?.addEventListener("click", ()=>saveCurrentChapter(true));
-  $("#btn-ai-generate")?.addEventListener("click", generateWithAI); // 👈 definitivo
+  $("#btn-ai-generate")?.addEventListener("click", generateWithAI_auto); // ✅ autoswitch
 
   $("#btn-ed-delete")?.addEventListener("click", async ()=>{
     const bookId = $("#bookIdInput").value.trim();
