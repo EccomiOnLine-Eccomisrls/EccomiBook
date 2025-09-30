@@ -23,6 +23,47 @@ const escapeHtml = (x)=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&
 const escapeAttr = (s)=>escapeHtml(s).replace(/"/g,"&quot;");
 const toast = (m)=>alert(m);
 
+// ===== Local AI-like fallback (outline generator) =====
+function localDraftFromTopic(topic="", language="it", chapterId="") {
+  const L = (lang=>{
+    lang = (lang||"it").toLowerCase();
+    if (lang.startsWith("en")) return {
+      chapter:"Chapter", untitled:"Untitled",
+      goal:"## Goal\nDescribe the purpose and the learning outcome.",
+      why:"## Why it matters\nContext, benefits, expected impact.",
+      steps:"## Practical steps\n1) …\n2) …\n3) …",
+      tips:"## Tips & best practices\n- …\n- …",
+      pitfalls:"## Common pitfalls\n- …",
+      summary:"## Key takeaways\n- …\n- …",
+      exercise:"## Exercise\nWrite a short example applying the above points."
+    };
+    if (lang.startsWith("es")) return {
+      chapter:"Capítulo", untitled:"Sin título",
+      goal:"## Objetivo\nDescribe el propósito y lo que aprenderá el lector.",
+      why:"## Por qué importa\nContexto, beneficios e impacto esperado.",
+      steps:"## Pasos prácticos\n1) …\n2) …\n3) …",
+      tips:"## Consejos y buenas prácticas\n- …\n- …",
+      pitfalls:"## Errores comunes\n- …",
+      summary:"## Ideas clave\n- …\n- …",
+      exercise:"## Ejercicio\nEscribe un ejemplo aplicando los puntos anteriores."
+    };
+    return {
+      chapter:"Capitolo", untitled:"Senza titolo",
+      goal:"## Obiettivo\nDescrivi scopo e risultato di apprendimento.",
+      why:"## Perché è importante\nContesto, benefici, impatto atteso.",
+      steps:"## Passi pratici\n1) …\n2) …\n3) …",
+      tips:"## Consigli & best practice\n- …\n- …",
+      pitfalls:"## Errori comuni\n- …",
+      summary:"## Takeaway\n- …\n- …",
+      exercise:"## Esercizio\nScrivi un esempio applicando i punti sopra."
+    };
+  })(language);
+
+  const t = (topic||"").replace(/\s+\.$/,"");
+  const title = t ? `${L.chapter}: ${t}` : `${L.chapter}: ${L.untitled}`;
+  return `# ${title}${chapterId?` (${chapterId})`:""}\n\n${L.goal}\n\n${L.why}\n\n${L.steps}\n\n${L.tips}\n\n${L.pitfalls}\n\n${L.summary}\n\n${L.exercise}\n`;
+}
+
 /* ===== Local storage ===== */
 const rememberLastBook   = (id)=>{ try{ localStorage.setItem("last_book_id", id||""); }catch{} };
 const loadLastBook       = ()=>{ try{ return localStorage.getItem("last_book_id")||""; }catch{ return ""; } };
