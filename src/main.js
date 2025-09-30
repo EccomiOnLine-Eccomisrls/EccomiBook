@@ -794,61 +794,43 @@ function wireButtons(){
     });
   });
 }
-    // --- Nuovo capitolo via MODAL ---
-const newChModal = $("#new-chapter-modal");
-const newChForm  = $("#new-chapter-form");
+      // --- Nuovo capitolo via MODAL ---
+  const newChModal = $("#new-chapter-modal");
+  const newChForm  = $("#new-chapter-form");
+  let _lastActiveEl = null;
 
-// Tiene traccia dell'elemento che ha aperto la modale (per ripristinare il focus)
-let _lastActiveEl = null;
+  const openNewChModal = ()=>{
+    const bookId = uiState.currentBookId || $("#bookIdInput").value.trim();
+    if (!bookId) { toast("Apri prima un libro."); return; }
+    _lastActiveEl = document.activeElement;
+    newChForm?.reset();
+    newChModal?.removeAttribute("hidden");
+    newChModal?.classList.add("is-open");
+    document.body.classList.add("modal-open");
+    newChForm?.querySelector('[name="title"]')?.focus();
+  };
 
-const openNewChModal = ()=>{
-  const bookId = uiState.currentBookId || $("#bookIdInput").value.trim();
-  if (!bookId) { toast("Apri prima un libro."); return; }
+  const closeNewChModal = ()=>{
+    newChModal?.classList.remove("is-open");
+    newChModal?.setAttribute("hidden","true");
+    document.body.classList.remove("modal-open");
+    _lastActiveEl?.focus?.();
+    _lastActiveEl = null;
+  };
 
-  _lastActiveEl = document.activeElement;     // memorizza chi ha aperto
-  newChForm?.reset();
-
-  // mostra la modale
-  newChModal?.removeAttribute("hidden");      // usa la regola .modal[hidden]{display:none}
-  newChModal?.classList.add("is-open");
-
-  // blocca lo scroll della pagina
-  document.body.classList.add("modal-open");
-
-  // focus al primo campo utile
-  newChForm?.querySelector('[name="title"]')?.focus();
-};
-
-const closeNewChModal = ()=>{
-  // nasconde la modale
-  newChModal?.classList.remove("is-open");
-  newChModal?.setAttribute("hidden","true");
-
-  // riattiva lo scroll
-  document.body.classList.remove("modal-open");
-
-  // ripristina il focus al trigger se esiste ancora
-  _lastActiveEl?.focus?.();
-  _lastActiveEl = null;
-};
-  // apre la modal con la “+”
   $("#btn-ch-new")?.addEventListener("click",(e)=>{
     e.preventDefault();
     openNewChModal();
   });
 
-  // chiusure (X, Annulla, backdrop)
   $("#btn-newch-cancel")?.addEventListener("click", closeNewChModal);
   $("#btn-newch-cancel-2")?.addEventListener("click", closeNewChModal);
   newChModal?.querySelector(".modal__backdrop")?.addEventListener("click", closeNewChModal);
 
-  // submit: crea capitolo e opzionalmente genera con AI
   newChForm?.addEventListener("submit", async (ev)=>{
     ev.preventDefault();
-
     const bookId = uiState.currentBookId || $("#bookIdInput").value.trim();
     if (!bookId) { toast("Apri prima un libro."); return; }
-
     const title  = newChForm.title.value.trim();
     const topic  = newChForm.topic.value.trim();
     const autoAI = newChForm.autoAI.checked;
@@ -858,7 +840,6 @@ const closeNewChModal = ()=>{
       const ch  = res?.chapter;
       if (!ch?.id) throw new Error("ID capitolo mancante nella risposta");
 
-      // punta l’editor al nuovo capitolo
       $("#chapterIdInput").value = ch.id;
       uiState.currentChapterId   = ch.id;
       $("#chapterText").value    = "";
@@ -875,28 +856,22 @@ const closeNewChModal = ()=>{
         await generateWithAI();
       }
 
-      const pill = $("#nextChHint"); if (pill) pill.textContent = ch.id;
+      $("#nextChHint")?.textContent = ch.id;
       toast(`🆕 Creato ${ch.id}`);
     } catch (e) {
       toast("Errore creazione capitolo: " + (e?.message || e));
     }
   });
 
-// --- Scorciatoie modale: ESC chiude, Invio su "Titolo" invia ---
-// Chiudi con ESC
-document.addEventListener("keydown", (e)=>{
-  if (e.key === "Escape" && newChModal?.classList.contains("is-open")) {
-    closeNewChModal();
-  }
-});
-
-// Invio dentro l’input titolo = submit
-newChForm?.querySelector('[name="title"]')?.addEventListener("keydown",(e)=>{
-  if (e.key === "Enter") {
-    e.preventDefault();
-    newChForm?.requestSubmit?.(); // equivale a clic su "Crea"
-  }
-});
+  // Scorciatoie modale: ESC chiude, Invio su "Titolo" invia
+  document.addEventListener("keydown", (e)=>{
+    if (e.key === "Escape" && newChModal?.classList.contains("is-open")) {
+      closeNewChModal();
+    }
+  });
+  newChForm?.querySelector('[name="title"]')?.addEventListener("keydown",(e)=>{
+    if (e.key === "Enter") { e.preventDefault(); newChForm?.requestSubmit?.(); }
+  });
 } // ⟵ chiusura wireButtons
 
 /* ===== Create/Rename/Delete book ===== */
