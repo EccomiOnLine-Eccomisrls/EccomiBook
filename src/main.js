@@ -146,12 +146,10 @@ async function generateWithAI_SSE(){
 
 /** Autoswitch: sceglie automaticamente tra stream fetch e SSE */
 async function generateWithAI_auto(){
-  if (!isSafariLike() && supportsFetchStreaming()) {
-    return generateWithAI();     // preferisci fetch streaming
-  }
-  return generateWithAI_SSE();   // fallback SSE per Safari/iOS
+  const mode = (!isSafariLike() && supportsFetchStreaming()) ? "fetch-stream" : "sse";
+  console.log("AI mode:", mode);
+  return mode === "fetch-stream" ? generateWithAI() : generateWithAI_SSE();
 }
-
 // ===== Local AI-like fallback (outline generator) =====
 function localDraftFromTopic(topic="", language="it", chapterId="") {
   const L = (lang=>{
