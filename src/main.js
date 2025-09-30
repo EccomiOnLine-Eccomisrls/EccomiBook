@@ -709,7 +709,12 @@ function wireButtons(){
    
   $("#btn-ed-close")?.addEventListener("click",closeEditor);
   $("#btn-ed-save")?.addEventListener("click",()=>saveCurrentChapter(true));
-  $("#btn-ai-generate")?.addEventListener("click",generateWithAI);
+  $("#btn-ai-generate")?.addEventListener("click", generateWithAI);
+
+// --- TEST: verifica wiring ---
+$("#btn-ai-generate")?.addEventListener("click", () => {
+  console.log("[TEST] Click su Scrivi con AI");
+});
   $("#btn-ed-delete")?.addEventListener("click",async()=>{
     const bookId=$("#bookIdInput").value.trim(), chapterId=$("#chapterIdInput").value.trim();
     if(!bookId||!chapterId) return toast("Inserisci Book ID e Chapter ID.");
