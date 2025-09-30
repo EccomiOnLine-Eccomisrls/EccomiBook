@@ -1028,6 +1028,8 @@ function tweakChapterEditorUI() {
 
   const chIdEl    = root.querySelector('#chapterIdInput');
   const chIdBlock = chIdEl?.closest('.field, .form-row, .card, label, div') || null;
+
+  // Nasconde eventuale duplicato dell'ID capitolo
   const dupNode = Array.from(root.querySelectorAll('*')).find(el=>{
     if (!el || el === chIdEl) return false;
     if (chIdBlock && (el === chIdBlock || chIdBlock.contains(el))) return false;
@@ -1043,9 +1045,9 @@ function tweakChapterEditorUI() {
   let topicEl = root.querySelector('#topicInput');
   const langEl = root.querySelector('#languageInput');
   const chBlock = chIdEl?.closest('.field, .form-row, .card, label, div');
-
   if (!topicEl || !langEl || !chBlock) return;
 
+  // Trasforma input in textarea se serve
   if (topicEl.tagName.toLowerCase() === 'input') {
     const ta = document.createElement('textarea');
     Array.from(topicEl.attributes).forEach(a => ta.setAttribute(a.name, a.value));
@@ -1054,12 +1056,26 @@ function tweakChapterEditorUI() {
     topicEl.replaceWith(ta);
     topicEl = ta;
   }
-  topicEl.rows = Math.max(4, Number(topicEl.rows || 0) || 4);
-  topicEl.placeholder ||= 'Istruzioni per l’AI: tono, target, stile, obiettivi, riferimenti…';
 
+  // Placeholder con esempi utili
+  topicEl.rows = Math.max(4, Number(topicEl.rows || 0) || 4);
+  const ex = [
+    'Tono amichevole, target principianti; includi esempi pratici',
+    'Stile narrativo: trasforma questi bullet in una storia coinvolgente',
+    'Scrivi in 800-1000 parole; 4 sezioni con titoli H2 e checklist finale',
+    'Inserisci 3 esempi reali e 2 errori comuni con soluzioni',
+    'Adotta un tono accademico leggero; definizioni + riferimenti (senza link)'
+  ].map(s => `• ${s}`).join('\n');
+
+  topicEl.placeholder ||= 
+    'Istruzioni per l’AI (tono, target, stile, obiettivi, riferimenti…)\n\n' +
+    'Esempi:\n' + ex;
+
+  // Blocchi contenitori
   const topicBlock = topicEl.closest('.field, .form-row, .card, label, div') || topicEl.parentElement;
   const langBlock  = langEl.closest('.field, .form-row, .card, label, div') || langEl.parentElement;
 
+  // Griglia “Topic largo + Lingua compatta”
   let fields = chBlock.nextElementSibling;
   if (!(fields && fields.classList?.contains('fields'))) {
     fields = document.createElement('div');
@@ -1072,7 +1088,18 @@ function tweakChapterEditorUI() {
   topicBlock.style.gridColumn = '1 / 2';
   topicBlock.style.width = '100%';
   langBlock.style.maxWidth = '220px';
-}
+
+  // Piccolo aiuto testuale sotto al topic
+  if (!topicBlock.querySelector('[data-ai-help]')) {
+    const help = document.createElement('div');
+    help.setAttribute('data-ai-help','');
+    help.className = 'muted';
+    help.style.fontSize = '12px';
+    help.style.marginTop = '4px';
+    help.textContent = 'Suggerimento: più dettagli metti qui, più il capitolo sarà vicino a ciò che vuoi.';
+    topicBlock.appendChild(help);
+  }
+} // ⟵ chiusura corretta della funzione
 
 /* ===== Init ===== */
 document.addEventListener("DOMContentLoaded", async ()=>{
