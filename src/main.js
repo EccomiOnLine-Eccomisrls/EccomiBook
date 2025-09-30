@@ -980,7 +980,7 @@ function wireButtons(){
 
       if (autoAI) {
         $("#topicInput").value = topic;
-        await generateWithAI();
+        await generateWithAI_auto();
       }
 
       const pill = $("#nextChHint");
