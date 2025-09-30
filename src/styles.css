@@ -164,46 +164,110 @@ input[type="search"]::-webkit-search-results-decoration{ display:none }
 .menu-pop .muted{ color:var(--muted); font-size:12px }
 
 /* Fix overlay export menu che copre i bottoni */
-.menu-pop{
-  z-index: 9999;           /* più alto di tutto */
-  pointer-events: auto;    /* il menu resta cliccabile */
-}
+.menu-pop{ z-index: 9999; pointer-events: auto; }
 .menu-pop *{ pointer-events: auto; }
+.book-card, .actions button, .cta{ position: relative; z-index: 1; }
 
-.book-card,
-.actions button,
-.cta{
-  position: relative;
-  z-index: 1;              /* bottoni restano cliccabili */
+/* ===== Modal v2 (polish) ===== */
+.modal{
+  position: fixed; inset: 0;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(5,12,22,.55);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
 }
+.modal.is-open{ display:flex; }
 
-/* Modal */
-.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
-.modal.is-open{display:flex}
-.modal__dialog{width:min(520px,92vw);background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:10px;box-shadow:0 20px 50px rgba(0,0,0,.5)}
-.modal__head,.modal__foot{padding:12px 16px;border-bottom:1px solid #374151}
-.modal__foot{border-top:1px solid #374151;border-bottom:none;display:flex;gap:8px;justify-content:flex-end}
-.modal__body{padding:14px 16px;display:grid;gap:10px}
-.modal__close{background:transparent;border:0;color:#9ca3af;font-size:22px;cursor:pointer}
-.field{display:grid;gap:6px}
-.field input{
+.modal__dialog{
+  width: min(560px, 94vw);
+  background: radial-gradient(120% 100% at 0% 0%, #111a28 0%, #0d1726 60%);
+  color: #e9eef8;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  box-shadow:
+    0 30px 80px rgba(0,0,0,.55),
+    0 0 0 1px rgba(20,40,70,.25) inset;
+  transform: translateY(8px) scale(.985);
+  opacity: .0;
+  animation: modalIn .18s ease-out forwards;
+}
+@keyframes modalIn{
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+.modal__head,.modal__foot{ padding:14px 16px; border:0; }
+.modal__head{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.modal__foot{
+  display:flex; gap:10px; justify-content:flex-end;
+  border-top: 1px solid rgba(255,255,255,.06);
+  padding-top: 12px;
+}
+.modal__body{ padding:16px; display:grid; gap:12px; }
+.modal__close{
+  background: transparent; border: 0; cursor: pointer;
+  color: #aeb9cc; font-size: 20px; line-height: 1;
+}
+.modal__close:hover{ color:#fff; }
+.field{ display:grid; gap:6px; }
+.field label{ font-size:13px; color:#aab7cc; }
+.field input, .field textarea{
+  width:100%;
   padding:10px 12px;
-  border-radius:8px;
-  border:1px solid #374151;
-  background:#0b1020;
-  color:#e5e7eb;
+  border-radius: 10px;
+  border:1px solid #273753;
+  background:#0c1522;
+  color:#e8eef7;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
-/* Blocca scroll quando modale è aperta */
-body.modal-open { 
-  overflow: hidden; 
+.field input:focus, .field textarea:focus{
+  outline:none;
+  border-color: rgba(45,126,247,.7);
+  box-shadow: 0 0 0 2px rgba(45,126,247,.25);
 }
-/* Supporto per la modal nuova: attributo hidden + backdrop */
-.modal[hidden]{display:none}
+.modal .btn{
+  min-height:40px; padding:8px 14px; border-radius:10px; font-weight:600;
+}
+.modal .btn-primary{ background:var(--primary); color:#fff; border-color:transparent; }
+.modal .btn-primary:disabled{ opacity:.6; }
+.modal .btn-ghost{ background:transparent; color:#cfd9eb; border:1px solid #2b3a53; }
+.modal .btn-ghost:hover{ background:rgba(255,255,255,.06); }
 .modal__backdrop{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.35);
-  backdrop-filter:blur(2px);
+  position: fixed; inset: 0;
+  background: rgba(5,12,22,.55);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+@media (max-width: 480px){
+  .modal__dialog{ width: min(92vw, 600px); border-radius:12px; }
+  .modal__body{ gap:10px; }
+}
+body.modal-open { overflow: hidden; height: 100%; }
+
+/* Layout Editor capitolo: Topic largo + Lingua compatta */
+#editor-card .fields{
+  display:grid;
+  grid-template-columns: 1fr 200px;
+  gap:12px 16px;
+  align-items:start;
+}
+#editor-card #topicInput{width:100%;grid-column:1/2}
+#editor-card #languageInput{width:100%;max-width:200px;grid-column:2/3}
+
+/* ====== Drag & Drop capitoli ====== */
+.dnd-row{cursor:grab; transition:transform .06s ease}
+.dnd-row.dragging{opacity:.75; transform:scale(.995)}
+.drag-handle{
+  appearance:none; border:1px solid #2b3a53; background:#0c1522; color:#cfd9eb;
+  border-radius:8px; padding:6px 10px; cursor:grab; margin-right:8px;
+}
+.dnd-head{display:flex; align-items:center; gap:8px; margin-bottom:6px}
+.drop-hint{
+  height:10px; border-radius:6px;
+  border:1px dashed #2b3a53; background:rgba(255,255,255,.05);
+  margin:6px 0;
 }
 /* Layout Editor capitolo: Topic largo + Lingua compatta */
 #editor-card .fields{
