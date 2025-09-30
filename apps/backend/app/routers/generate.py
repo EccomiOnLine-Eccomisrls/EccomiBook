@@ -9,6 +9,9 @@ from fastapi import APIRouter, HTTPException, Body
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from fastapi import Query
+from time import sleep
+
 # SDK OpenAI (>= 1.0)
 try:
     from openai import OpenAI
@@ -217,5 +220,92 @@ def generate_chapter_stream(payload: GenIn = Body(...)):
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
+        },
+    )
+
+    @router.get("/generate/chapter/sse", tags=["generate"])
+def generate_chapter_sse(
+    book_id: str = Query(...),
+    chapter_id: str = Query(...),
+    topic: str = Query("Introduzione"),
+    language: str = Query("it"),
+    style: str = Query("manuale/guida chiara"),
+    words: int = Query(700),
+):
+    """
+    Streaming in formato SSE (text/event-stream).
+    Safari/iPad lo gestisce molto meglio rispetto a fetch+ReadableStream.
+    """
+    client, key, model, temperature, max_tokens = _client()
+
+    system_msg = (
+        f"Sei un assistente editoriale che scrive capitoli in {language.strip().lower()}. "
+        f"Stile: {style}. Sii chiaro, strutturato, usa markdown (titoli, liste, paragrafi). "
+        f"Evita preamboli inutili. Output **solo** testo Markdown."
+    )
+    user_msg = (
+        f"Scrivi un capitolo sul tema: '{(topic or 'Introduzione').strip()}'. "
+        f"Lunghezza circa {words} parole. Includi un titolo H1 e 3–6 sottosezioni con esempi pratici."
+    )
+
+    def sse() -> Iterator[bytes]:
+        # Padding iniziale per “sbloccare” proxy/buffer (2KB)
+        yield (":" + " " * 2048 + "\n").encode("utf-8")
+        yield b":ok\n\n"  # commento SSE
+
+        # Se manca la chiave: stream di fallback, ma sempre SSE
+        if not key:
+            demo = (
+                "# Bozza automatica\n\n"
+                "⚠️ OPENAI_API_KEY non configurata. Questo è un testo di esempio.\n\n"
+                f"- book_id: {book_id}\n"
+                f"- chapter_id: {chapter_id}\n"
+                f"- topic: {topic or '—'}\n"
+            )
+            for chunk in demo.split():
+                yield f"data: {chunk} ".encode("utf-8") + b"\n\n"
+                sleep(0.01)
+            yield b"event: done\ndata: 1\n\n"
+            return
+
+        if client is None:
+            yield b"event: error\ndata: SDK OpenAI non disponibile\n\n"
+            yield b"event: done\ndata: 1\n\n"
+            return
+
+        try:
+            stream = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,
+                timeout=60,
+            )
+            # micro-chunk immediato
+            yield b"data: \n\n"
+
+            for chunk in stream:
+                part = chunk.choices[0].delta.content or ""
+                if part:
+                    # linea SSE: termina con \n\n
+                    yield ("data: " + part.replace("\r", "") + "\n\n").encode("utf-8")
+
+            yield b"event: done\ndata: 1\n\n"
+        except Exception as e:
+            yield ("event: error\ndata: " + str(e) + "\n\n").encode("utf-8")
+            yield b"event: done\ndata: 1\n\n"
+
+    return StreamingResponse(
+        sse(),
+        media_type="text/event-stream; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            # Importantissimo: niente compressione sui proxy
+            "Content-Encoding": "identity",
         },
     )
