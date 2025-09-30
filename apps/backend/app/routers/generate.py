@@ -149,6 +149,8 @@ def generate_chapter_stream(payload: GenIn = Body(...)):
     # Fallback streaming se manca la chiave (manteniamo la UX coerente)
     if not key:
         def fb() -> Iterator[bytes]:
+            # micro-chunk iniziale: sblocca proxy/mobile
+            yield b""
             txt = (
                 "# Bozza automatica\n\n"
                 "⚠️ OPENAI_API_KEY non configurata. Questo è un testo di esempio.\n\n"
@@ -158,22 +160,22 @@ def generate_chapter_stream(payload: GenIn = Body(...)):
             )
             yield txt.encode("utf-8")
         return StreamingResponse(
-    fb(),
-    media_type="text/plain; charset=utf-8",
-    headers={
-        "Cache-Control": "no-cache",
-        "X-Accel-Buffering": "no",
-    },
-)
+            fb(),
+            media_type="text/plain; charset=utf-8",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     if client is None:
         raise HTTPException(status_code=500, detail="SDK OpenAI non disponibile nel runtime")
 
     # Prompt
-    topic = (payload.topic or "Introduzione").strip()
-    language = (payload.language or "it").strip().lower()
-    words = payload.words or 700
-    style = (payload.style or "manuale/guida chiara").strip()
+    topic     = (payload.topic or "Introduzione").strip()
+    language  = (payload.language or "it").strip().lower()
+    words     = payload.words or 700
+    style     = (payload.style or "manuale/guida chiara").strip()
 
     system_msg = (
         f"Sei un assistente editoriale che scrive capitoli in {language}. "
@@ -187,6 +189,9 @@ def generate_chapter_stream(payload: GenIn = Body(...)):
 
     def gen() -> Iterator[bytes]:
         try:
+            # micro-chunk subito: forza lo start dello stream su Safari/iPad & proxy
+            yield b""
+
             stream = client.chat.completions.create(
                 model=model,
                 messages=[
@@ -195,7 +200,7 @@ def generate_chapter_stream(payload: GenIn = Body(...)):
                 ],
                 temperature=temperature,
                 max_tokens=max_tokens,
-                stream=True,   # ⬅️ attiva streaming OpenAI
+                stream=True,   # <— streaming OpenAI
                 timeout=60,
             )
             for chunk in stream:
@@ -203,7 +208,14 @@ def generate_chapter_stream(payload: GenIn = Body(...)):
                 if part:
                     yield part.encode("utf-8")
         except Exception as e:
-            # scrivo l’errore dentro lo stream per mostrarlo in textarea
+            # Mostra l’errore direttamente nel textarea del client
             yield f"\n\n**[Errore AI: {e}]**".encode("utf-8")
 
-    return StreamingResponse(gen(), media_type="text/plain; charset=utf-8")
+    return StreamingResponse(
+        gen(),
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
