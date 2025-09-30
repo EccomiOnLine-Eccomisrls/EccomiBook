@@ -1003,6 +1003,49 @@ async function generateWithAI(){
   }
 }
 
+async function generateWithAI_SSE(){
+  const bookId    = $("#bookIdInput").value.trim() || uiState.currentBookId;
+  const chapterId = $("#chapterIdInput").value.trim();
+  const topic     = $("#topicInput")?.value?.trim() || "";
+  const language  = ($("#languageInput")?.value?.trim().toLowerCase() || uiState.currentLanguage || "it");
+  const ta        = $("#chapterText");
+
+  if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
+
+  ta.value = "✍️ Sto scrivendo con l’AI (SSE)…\n\n";
+  ta.disabled = true;
+
+  const url = `${API_BASE_URL}/generate/chapter/sse`
+    + `?book_id=${encodeURIComponent(bookId)}`
+    + `&chapter_id=${encodeURIComponent(chapterId)}`
+    + `&topic=${encodeURIComponent(topic)}`
+    + `&language=${encodeURIComponent(language)}`;
+
+  return new Promise((resolve,reject)=>{
+    const es = new EventSource(url);
+    ta.value = "";
+
+    es.onmessage = (ev)=>{
+      ta.value += ev.data + " ";
+      ta.scrollTop = ta.scrollHeight; // autoscroll
+    };
+
+    es.addEventListener("done", ()=>{
+      es.close();
+      ta.disabled = false;
+      toast("✨ Generazione completata (SSE)");
+      resolve();
+    });
+
+    es.addEventListener("error", (e)=>{
+      es.close();
+      ta.disabled = false;
+      toast("⚠️ Errore SSE");
+      reject(e);
+    });
+  });
+}
+
 /* ===== UI Tweaks Editor ===== */
 function tweakChapterEditorUI() {
   const root =
