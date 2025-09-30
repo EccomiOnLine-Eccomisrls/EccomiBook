@@ -707,66 +707,69 @@ function wireButtons(){
   $("#btn-library")?.addEventListener("click", ()=>toggleLibrary());
   $("#btn-editor")?.addEventListener("click", ()=>showEditor(loadLastBook()));
    
-  $("#btn-ed-close")?.addEventListener("click",closeEditor);
-  $("#btn-ed-save")?.addEventListener("click",()=>saveCurrentChapter(true));
-  $("#btn-ai-generate")?.addEventListener("click", generateWithAI);
+  $("#btn-ed-close")?.addEventListener("click", closeEditor);
+  $("#btn-ed-save")?.addEventListener("click", ()=>saveCurrentChapter(true));
+  $("#btn-ai-generate")?.addEventListener("click", generateWithAI); // 👈 definitivo
 
-// --- TEST: verifica wiring ---
-$("#btn-ai-generate")?.addEventListener("click", () => {
-  console.log("[TEST] Click su Scrivi con AI");
-});
-  $("#btn-ed-delete")?.addEventListener("click",async()=>{
-    const bookId=$("#bookIdInput").value.trim(), chapterId=$("#chapterIdInput").value.trim();
-    if(!bookId||!chapterId) return toast("Inserisci Book ID e Chapter ID.");
-    await deleteChapter(bookId,chapterId);
+  $("#btn-ed-delete")?.addEventListener("click", async ()=>{
+    const bookId = $("#bookIdInput").value.trim();
+    const chapterId = $("#chapterIdInput").value.trim();
+    if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
+    await deleteChapter(bookId, chapterId);
   });
 
-  $("#chapterText")?.addEventListener("input",()=>{
-    if(uiState.saveSoon) clearTimeout(uiState.saveSoon);
-    uiState.saveSoon=setTimeout(maybeAutosaveNow,1500);
+  $("#chapterText")?.addEventListener("input", ()=>{
+    if (uiState.saveSoon) clearTimeout(uiState.saveSoon);
+    uiState.saveSoon = setTimeout(maybeAutosaveNow, 1500);
   });
-  $("#chapterIdInput")?.addEventListener("change",async()=>{
+
+  $("#chapterIdInput")?.addEventListener("change", async ()=>{
     await maybeAutosaveNow();
-    uiState.currentChapterId=$("#chapterIdInput").value.trim();
-    uiState.lastSavedSnapshot=$("#chapterText").value;
-  });
-  $("#languageInput")?.addEventListener("change",()=>{
-    const v=$("#languageInput").value.trim().toLowerCase()||"it";
-    uiState.currentLanguage=v; rememberLastLang(v);
+    uiState.currentChapterId = $("#chapterIdInput").value.trim();
+    uiState.lastSavedSnapshot = $("#chapterText").value;
   });
 
-  $("#library-list")?.addEventListener("click",async(ev)=>{
-    const btn=ev.target.closest("button[data-action]"); if(!btn) return;
-    const action=btn.getAttribute("data-action");
-    const bookId=btn.getAttribute("data-bookid")||"";
+  $("#languageInput")?.addEventListener("change", ()=>{
+    const v = $("#languageInput").value.trim().toLowerCase() || "it";
+    uiState.currentLanguage = v; 
+    rememberLastLang(v);
+  });
+
+  $("#library-list")?.addEventListener("click", async (ev)=>{
+    const btn = ev.target.closest("button[data-action]"); 
+    if(!btn) return;
+    const action = btn.getAttribute("data-action");
+    const bookId = btn.getAttribute("data-bookid") || "";
     if(!bookId) return;
-    if(action==="open"){ rememberLastBook(bookId); showEditor(bookId); }
-    else if(action==="delete"){ await deleteBook(bookId); }
-    else if(action==="rename"){
+    if (action==="open"){ rememberLastBook(bookId); showEditor(bookId); }
+    else if (action==="delete"){ await deleteBook(bookId); }
+    else if (action==="rename"){
       if (USE_MODAL_RENAME) openEditBookModal(bookId);
       else await renameBook(bookId, btn.getAttribute("data-oldtitle")||"");
     }
-    else if(action==="export"){ await exportBook(bookId, btn); }
+    else if (action==="export"){ await exportBook(bookId, btn); }
   });
 
-  $("#chapters-list")?.addEventListener("click",async(ev)=>{
-    const openBtn=ev.target.closest("[data-ch-open]"),
-          editBtn=ev.target.closest("[data-ch-edit]"),
-          delBtn =ev.target.closest("[data-ch-del]"),
-          dlBtn  =ev.target.closest("[data-ch-dl]");
+  $("#chapters-list")?.addEventListener("click", async (ev)=>{
+    const openBtn = ev.target.closest("[data-ch-open]"),
+          editBtn = ev.target.closest("[data-ch-edit]"),
+          delBtn  = ev.target.closest("[data-ch-del]"),
+          dlBtn   = ev.target.closest("[data-ch-dl]");
     if(!openBtn && !delBtn && !editBtn && !dlBtn) return;
-    const cid=(openBtn||delBtn||editBtn||dlBtn).getAttribute(
-      openBtn?"data-ch-open":delBtn?"data-ch-del":editBtn?"data-ch-edit":"data-ch-dl"
+
+    const cid = (openBtn||delBtn||editBtn||dlBtn).getAttribute(
+      openBtn ? "data-ch-open" : delBtn ? "data-ch-del" : editBtn ? "data-ch-edit" : "data-ch-dl"
     );
-    const bid=uiState.currentBookId || $("#bookIdInput").value.trim();
-    if(!cid||!bid) return;
-    if(openBtn)      await openChapter(bid,cid);
-    else if(delBtn)  await deleteChapter(bid,cid);
-    else if(editBtn) editChapter(cid);
-    else if(dlBtn)   downloadChapter(bid,cid, dlBtn);
+    const bid = uiState.currentBookId || $("#bookIdInput").value.trim();
+    if(!cid || !bid) return;
+
+    if (openBtn)       await openChapter(bid, cid);
+    else if (delBtn)   await deleteChapter(bid, cid);
+    else if (editBtn)  editChapter(cid);
+    else if (dlBtn)    downloadChapter(bid, cid, dlBtn);
   });
 
-  $("#btn-book-menu")?.addEventListener("click",(ev)=>{
+  $("#btn-book-menu")?.addEventListener("click", (ev)=>{
     if(!uiState.books.length){ toast("Nessun libro caricato."); return; }
     const items = uiState.books.map(b=>{
       const id=b?.id||b?.book_id||"";
@@ -779,7 +782,7 @@ $("#btn-ai-generate")?.addEventListener("click", () => {
     });
   });
 
-  $("#btn-ch-menu")?.addEventListener("click",(ev)=>{
+  $("#btn-ch-menu")?.addEventListener("click", (ev)=>{
     if(!uiState.chapters.length){ toast("Nessun capitolo nel libro."); return; }
     const items = uiState.chapters.map(c=>({
       value:c.id, label:(c.title||c.id), sublabel:c.id
@@ -790,7 +793,7 @@ $("#btn-ai-generate")?.addEventListener("click", () => {
       await openChapter(uiState.currentBookId, val);
     });
   });
-
+}
     // --- Nuovo capitolo via MODAL ---
 const newChModal = $("#new-chapter-modal");
 const newChForm  = $("#new-chapter-form");
