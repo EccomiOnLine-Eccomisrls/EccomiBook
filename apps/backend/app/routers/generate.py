@@ -239,17 +239,17 @@ def generate_chapter_sse(
             return
 
         try:
-            stream = client.chat_completions.create(  # se usi openai>=1.40: client.chat.completions.create
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_msg},
-                    {"role": "user", "content": user_msg},
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True,
-                timeout=60,
-            )
+            stream = client.chat.completions.create(
+    model=model,
+    messages=[
+        {"role": "system", "content": system_msg},
+        {"role": "user",  "content": user_msg},
+    ],
+    temperature=temperature,
+    max_tokens=max_tokens,
+    stream=True,
+    timeout=60,
+)
             yield b"data: \n\n"  # micro-chunk iniziale
             for chunk in stream:
                 part = chunk.choices[0].delta.content or ""
