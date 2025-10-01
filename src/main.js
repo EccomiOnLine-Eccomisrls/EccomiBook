@@ -735,6 +735,13 @@ function editChapter(cid){
 }
 
 /* ===== Save capitolo ===== */
+// Snapshot editor = content + title (stringa serializzata)
+function getEditorSnapshot(){
+  const content = $("#chapterText")?.value ?? "";
+  const title   = $("#chapterTitleInput")?.value?.trim() ?? "";
+  return JSON.stringify({ content, title });
+}
+
 async function saveCurrentChapter(showToast=true){
   const bookId=$("#bookIdInput").value.trim();
   const chapterId=$("#chapterIdInput").value.trim();
