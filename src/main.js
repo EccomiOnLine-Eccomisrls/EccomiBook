@@ -124,7 +124,7 @@ async function generateWithAI_SSE(){
     ta.value = "";
 
     es.onmessage = (ev)=>{
-      ta.value += ev.data + " ";
+      ta.value += ev.data;
       ta.scrollTop = ta.scrollHeight;
     };
 
