@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Body
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import re
@@ -20,7 +20,7 @@ class BookIn(BaseModel):
     genre: Optional[str] = None
     language: str = "it"
     plan: Optional[str] = None
-    chapters: List[Dict[str, Any]] = []
+    chapters: List[Dict[str, Any]] = Field(default_factory=list)
 
 class BookUpdateIn(BaseModel):
     title: Optional[str] = None
