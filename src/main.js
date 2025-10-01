@@ -773,11 +773,10 @@ async function saveCurrentChapter(showToast=true){
 }
 
 /* ===== Autosave ===== */
-function startAutosave(){ stopAutosave(); uiState.autosaveTimer=setInterval(maybeAutosaveNow,30_000); }
-function stopAutosave(){ if(uiState.autosaveTimer) clearInterval(uiState.autosaveTimer); uiState.autosaveTimer=null; }
 async function maybeAutosaveNow(){
-  const txt=$("#chapterText")?.value ?? "";
-  if(txt!==uiState.lastSavedSnapshot && uiState.currentBookId && uiState.currentChapterId){
+  const snapshot = getEditorSnapshot();
+  if (snapshot !== uiState.lastSavedSnapshot &&
+      uiState.currentBookId && uiState.currentChapterId) {
     await saveCurrentChapter(false);
   }
 }
@@ -885,7 +884,7 @@ function wireButtons(){
   $("#chapterIdInput")?.addEventListener("change", async ()=>{
     await maybeAutosaveNow();
     uiState.currentChapterId = $("#chapterIdInput").value.trim();
-    uiState.lastSavedSnapshot = $("#chapterText").value;
+    uiState.lastSavedSnapshot = getEditorSnapshot();
   });
 
   $("#languageInput")?.addEventListener("change", ()=>{
