@@ -214,6 +214,21 @@ const uiState = {
   openMenuEl: null,
 };
 
+// Reset editor quando si apre un nuovo libro
+function resetEditorForBook(bookId){
+  uiState.currentBookId    = bookId || "";
+  uiState.currentChapterId = "";
+  uiState.currentBookTitle = "";
+  uiState.lastSavedSnapshot = "";
+  const ch = $("#chapterIdInput");
+  const ta = $("#chapterText");
+  if (ch) ch.value = "";              // niente ID capitolo selezionato
+  if (ta) {                           // editor pulito
+    ta.value = "";
+    ta.placeholder = "Scrivi qui il contenuto del capitolo…";
+  }
+}
+
 /* ===== Date utils ===== */
 const fmtLast = (iso)=>{
   if(!iso) return "";
@@ -438,23 +453,16 @@ function nextChapterId(existing=[]) {
 async function showEditor(bookId){
   if (!uiState.books.length) { await fetchBooks(); }
 
-  uiState.currentBookId = bookId || loadLastBook() || "";
-  if(!uiState.currentBookId) return;
-  rememberLastBook(uiState.currentBookId);
+  const idToOpen = bookId || loadLastBook() || "";
+  if(!idToOpen) return;
+
+  rememberLastBook(idToOpen);
   $("#editor-card").style.display="block";
-  $("#bookIdInput").value=uiState.currentBookId;
+  resetEditorForBook(idToOpen);          // 👈 pulizia qui
+  $("#bookIdInput").value = idToOpen;
 
-  const ch=$("#chapterIdInput"); if(!ch.value) ch.value="";
-  const ta = $("#chapterText");
-  if (ta) {
-    ta.placeholder = "Scrivi qui il contenuto del capitolo…";
-    if (!ta.value) ta.value = "";
-  }
-  uiState.currentChapterId = ch.value.trim();
-  uiState.lastSavedSnapshot = ta?.value || "";
-
-  await loadBookMeta(uiState.currentBookId);
-  await refreshChaptersList(uiState.currentBookId);
+  await loadBookMeta(idToOpen);
+  await refreshChaptersList(idToOpen);
   tweakChapterEditorUI();
 
   if(!(uiState.chapters?.length)){
@@ -467,6 +475,7 @@ async function showEditor(bookId){
   startAutosave();
   syncEditorButtonState();
 }
+
 function closeEditor(){ stopAutosave(); $("#editor-card").style.display="none"; }
 
 /* HERO helpers */
