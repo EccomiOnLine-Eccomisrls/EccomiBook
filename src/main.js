@@ -743,17 +743,27 @@ function getEditorSnapshot(){
 }
 
 async function saveCurrentChapter(showToast=true){
-  const bookId=$("#bookIdInput").value.trim();
-  const chapterId=$("#chapterIdInput").value.trim();
-  let content=$("#chapterText").value;
+  const bookId    = $("#bookIdInput").value.trim();
+  const chapterId = $("#chapterIdInput").value.trim();
+  let content     = $("#chapterText").value;
+  const title     = ($("#chapterTitleInput")?.value || "").trim();
+
   if (content === "Scrivi qui il contenuto del capitolo…") content = "";
   if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
+
   try{
-    const r=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,{
-      method:"PUT", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ content })
+    const payload = { content, title };
+    const r = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,{
+      method:"PUT",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(payload)
     });
-    if(!r.ok){ const t=await r.text().catch(()=> ""); throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`); }
-    uiState.lastSavedSnapshot=content;
+    if(!r.ok){
+      const t=await r.text().catch(()=> "");
+      throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`);
+    }
+
+    uiState.lastSavedSnapshot = getEditorSnapshot(); // <-- ora include anche il titolo
     if(showToast) toast("✅ Capitolo salvato.");
     await refreshChaptersList(bookId);
     await fetchBooks();
