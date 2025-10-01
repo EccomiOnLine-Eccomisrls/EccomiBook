@@ -214,19 +214,22 @@ const uiState = {
   openMenuEl: null,
 };
 
-// Reset editor quando si apre un nuovo libro
 function resetEditorForBook(bookId){
   uiState.currentBookId    = bookId || "";
   uiState.currentChapterId = "";
   uiState.currentBookTitle = "";
   uiState.lastSavedSnapshot = "";
-  const ch = $("#chapterIdInput");
-  const ta = $("#chapterText");
-  if (ch) ch.value = "";              // niente ID capitolo selezionato
-  if (ta) {                           // editor pulito
+
+  const ch  = $("#chapterIdInput");
+  const ta  = $("#chapterText");
+  const ttl = $("#chapterTitleInput");      // 👈 aggiungi
+
+  if (ch)  ch.value = "";
+  if (ta) {
     ta.value = "";
     ta.placeholder = "Scrivi qui il contenuto del capitolo…";
   }
+  if (ttl) ttl.value = "";                  // 👈 aggiungi
 }
 
 /* ===== Date utils ===== */
@@ -689,9 +692,9 @@ function stepChapter(delta){
 /* ===== Apri capitolo ===== */
 async function openChapter(bookId, chapterId){
   try{
-    const r=await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?ts=${Date.now()}`,{cache:"no-store"});
+    const r = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?ts=${Date.now()}`, { cache:"no-store" });
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    const data=await r.json();
+    const data = await r.json();
 
     $("#bookIdInput").value    = bookId;
     $("#chapterIdInput").value = chapterId;
@@ -699,9 +702,12 @@ async function openChapter(bookId, chapterId){
     $("#chapterText").value       = data?.content || "";
     $("#chapterText").placeholder = "Scrivi qui il contenuto del capitolo…";
 
+    const titleEl = $("#chapterTitleInput");        // 👈 aggiungi
+    if (titleEl) titleEl.value = data?.title || ""; // 👈 aggiungi
+
     uiState.currentBookId     = bookId;
     uiState.currentChapterId  = chapterId;
-    uiState.lastSavedSnapshot = getEditorSnapshot(); // 👈 vedi punto D
+    uiState.lastSavedSnapshot = getEditorSnapshot();
 
     toast(`📖 Aperto ${chapterId}`);
     tweakChapterEditorUI();
@@ -1000,8 +1006,12 @@ function wireButtons(){
 
       $("#chapterIdInput").value = ch.id;
       uiState.currentChapterId   = ch.id;
+
       $("#chapterText").value    = "";
-      uiState.lastSavedSnapshot  = "";
+      const titleInput = $("#chapterTitleInput");        // 👈 nuovo
+      if (titleInput) titleInput.value = title;          // 👈 nuovo
+
+      uiState.lastSavedSnapshot  = getEditorSnapshot();  // 👈 usa snapshot
 
       await refreshChaptersList(bookId);
       await fetchBooks();
