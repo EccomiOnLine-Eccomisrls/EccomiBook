@@ -701,7 +701,7 @@ async function openChapter(bookId, chapterId){
 
     uiState.currentBookId     = bookId;
     uiState.currentChapterId  = chapterId;
-    uiState.lastSavedSnapshot = $("#chapterText").value || "";
+    uiState.lastSavedSnapshot = getEditorSnapshot(); // 👈 vedi punto D
 
     toast(`📖 Aperto ${chapterId}`);
     tweakChapterEditorUI();
@@ -1183,7 +1183,28 @@ function tweakChapterEditorUI() {
     help.textContent = 'Suggerimento: più dettagli metti qui, più il capitolo sarà vicino a ciò che vuoi.';
     topicBlock.appendChild(help);
   }
+ensureChapterTitleField();
 } // ⟵ chiusura corretta della funzione
+
+function ensureChapterTitleField(){
+  const root =
+    document.querySelector('[data-component="chapter-editor"]') ||
+    document.querySelector('#editor-card') || document;
+
+  if (!root) return;
+  let titleEl = root.querySelector('#chapterTitleInput');
+  if (titleEl) return; // già presente
+
+  // crea il blocco titolo sopra al testo
+  const ta = root.querySelector('#chapterText');
+  const block = document.createElement('div');
+  block.className = 'field';
+  block.innerHTML = `
+    <label for="chapterTitleInput" style="display:block;font-weight:600;margin-bottom:4px">Titolo capitolo</label>
+    <input id="chapterTitleInput" type="text" placeholder="Es. Prefazione, Introduzione, Il viaggio inizia…" />
+  `;
+  if (ta?.parentNode) ta.parentNode.insertBefore(block, ta);
+}
 
 /* ===== Init ===== */
 document.addEventListener("DOMContentLoaded", async ()=>{
