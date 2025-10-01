@@ -93,7 +93,7 @@ def create_book(payload: BookIn):
     new_id = f"book_{int(datetime.utcnow().timestamp())}"
     book = payload.dict()
     book.update({"id": new_id, "created_at": now, "updated_at": now})
-    _ensure_first_chapter(book)  # sempre almeno un capitolo iniziale
+    _ensure_chapters(book)  # solo array vuoto, nessun capitolo
     storage.persist_book(book)
     return book
 
@@ -152,11 +152,10 @@ def update_chapter(book_id: str, chapter_id: str, payload: ChapterUpdateIn = Bod
     if not b:
         raise HTTPException(status_code=404, detail="Libro non trovato")
 
-    if not b.get("chapters") and chapter_id == "ch_0001":
-        _ensure_first_chapter(b)
-
+    _ensure_chapters(b)
     ci = _find_chapter_index(b, chapter_id)
     ch = b["chapters"][ci]
+
     data = payload.dict(exclude_unset=True)
     if data.get("title") is not None:
         ch["title"] = data["title"]
@@ -180,8 +179,7 @@ def delete_chapter(book_id: str, chapter_id: str):
     ci = _find_chapter_index(b, chapter_id)
     removed = b["chapters"].pop(ci)
 
-    if not b["chapters"]:  # mai senza capitoli
-        _ensure_first_chapter(b)
+    # ❌ rimosso: non ricreiamo più un capitolo se array vuoto
 
     b["updated_at"] = datetime.utcnow().isoformat()
     storage.persist_book(b)
