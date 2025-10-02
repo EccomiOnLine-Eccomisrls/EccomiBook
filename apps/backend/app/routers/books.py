@@ -1,7 +1,7 @@
 # apps/backend/app/routers/books.py
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Response
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -108,6 +108,39 @@ def update_book(book_id: str, payload: BookUpdateIn):
     b["updated_at"] = datetime.utcnow().isoformat()
     storage.persist_book(b)
     return b
+
+@router.delete("/books/{book_id}", status_code=204, summary="Delete Book")
+def delete_book(book_id: str):
+    """
+    Elimina il libro con ID book_id. Ritorna 204 se ok, 404 se non trovato.
+    """
+    # Se il modulo storage ha una funzione dedicata, usala:
+    if hasattr(storage, "delete_book"):
+        ok = storage.delete_book(book_id)  # deve restituire True/False
+        if not ok:
+            raise HTTPException(status_code=404, detail="Libro non trovato")
+        return Response(status_code=204)
+
+    # Fallback generico: carica tutti i libri, rimuovi quello richiesto, salva
+    books = storage.load_books()
+    # NB: supporto sia "id" sia "book_id"
+    new_books = [
+        b for b in books
+        if (b.get("id") or b.get("book_id")) != book_id
+    ]
+    if len(new_books) == len(books):
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+
+    # Salva la lista aggiornata (adatta al tuo storage)
+    if hasattr(storage, "save_books"):
+        storage.save_books(new_books)
+    elif hasattr(storage, "persist_books"):
+        storage.persist_books(new_books)  # se esiste equivalente
+    else:
+        # Se non hai una funzione per salvare l'intera lista, creane una in storage.py
+        raise RuntimeError("Aggiungi save_books(new_books) nel modulo storage.")
+
+    return Response(status_code=204)
 
 # --------- Endpoints capitoli ---------
 @router.post("/books/{book_id}/chapters", status_code=201)
