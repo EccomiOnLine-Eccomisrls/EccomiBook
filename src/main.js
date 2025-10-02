@@ -908,7 +908,7 @@ function wireButtons(){
   $("#btn-editor")?.addEventListener("click", ()=>showEditor(loadLastBook()));
 
   // nel wireButtons()
-$("#btn-ed-close")?.addEventListener("click", async (e)=>{
+  $("#btn-ed-close")?.addEventListener("click", async (e)=>{
   e.preventDefault();
   e.stopPropagation();
   try { await maybeAutosaveNow(); } catch(err){
