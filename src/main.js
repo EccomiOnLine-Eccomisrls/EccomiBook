@@ -783,7 +783,11 @@ async function maybeAutosaveNow(){
   const snapshot = getEditorSnapshot();
   if (snapshot !== uiState.lastSavedSnapshot &&
       uiState.currentBookId && uiState.currentChapterId) {
-    await saveCurrentChapter(false);
+    try {
+      await saveCurrentChapter(false);
+    } catch(e) {
+      console.warn("Autosave skipped:", e?.message||e);
+    }
   }
 }
 
