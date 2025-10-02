@@ -755,9 +755,29 @@ async function saveCurrentChapter(showToast=true){
   const title     = ($("#chapterTitleInput")?.value || "").trim();
 
   if (content === "Scrivi qui il contenuto del capitolo…") content = "";
-  if(!bookId || !chapterId) return toast("Inserisci Book ID e Chapter ID.");
+  if(!bookId) return toast("Inserisci Book ID.");
+  if(!chapterId) return toast("Inserisci Chapter ID.");
 
+  // 👇 Se il capitolo NON esiste ancora, prima lo CREO
+  const exists = uiState.chapters.some(c => c.id === chapterId);
   try{
+    if (!exists) {
+      const res = await apiCreateChapter(bookId, { title, content, language: uiState.currentLanguage });
+      const ch  = res?.chapter;
+      if (!ch?.id) throw new Error("Creazione capitolo fallita (ID mancante).");
+
+      // aggiorno UI con l'ID restituito dal backend
+      $("#chapterIdInput").value = ch.id;
+      uiState.currentChapterId   = ch.id;
+
+      uiState.lastSavedSnapshot  = getEditorSnapshot();
+      if (showToast) toast("✅ Capitolo creato.");
+      await refreshChaptersList(bookId);
+      await fetchBooks();
+      return; // niente PUT: abbiamo già salvato contenuto+titolo via POST
+    }
+
+    // 👇 Se esiste già, aggiorno (PUT)
     const payload = { content, title };
     const r = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`,{
       method:"PUT",
@@ -769,7 +789,7 @@ async function saveCurrentChapter(showToast=true){
       throw new Error(`HTTP ${r.status}${t?`: ${t}`:""}`);
     }
 
-    uiState.lastSavedSnapshot = getEditorSnapshot(); // <-- ora include anche il titolo
+    uiState.lastSavedSnapshot = getEditorSnapshot();
     if(showToast) toast("✅ Capitolo salvato.");
     await refreshChaptersList(bookId);
     await fetchBooks();
