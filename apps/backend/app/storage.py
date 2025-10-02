@@ -50,6 +50,14 @@ def save_books(books: List[Dict[str, Any]]) -> None:
         encoding="utf-8",
     )
 
+def delete_book(book_id: str) -> bool:
+    """Rimuove un libro per id. Ritorna True se ha eliminato, False se non trovato."""
+    books = load_books()
+    new_books = [b for b in books if (b.get("id") or b.get("book_id")) != book_id]
+    if len(new_books) == len(books):
+        return False
+    save_books(new_books)
+    return True
 
 # ====== SHIM di compatibilità per vecchi router (safe) ======
 def load_books_from_disk() -> List[Dict[str, Any]]:
