@@ -479,7 +479,25 @@ async function showEditor(bookId){
   syncEditorButtonState();
 }
 
-function closeEditor(){ stopAutosave(); $("#editor-card").style.display="none"; }
+function closeEditor(){
+  try{ stopAutosave(); }catch{}
+  const card = $("#editor-card");
+  if (card){
+    card.style.display = "none";
+    card.setAttribute("hidden","true");
+    card.setAttribute("aria-hidden","true");
+  }
+
+  // reset stato editor per evitare autosave fantasma
+  uiState.currentChapterId  = "";
+  uiState.lastSavedSnapshot = "";
+  const ch  = $("#chapterIdInput");
+  const ta  = $("#chapterText");
+  const ttl = $("#chapterTitleInput");
+  if (ch)  ch.value = "";
+  if (ttl) ttl.value = "";
+  if (ta)  ta.value = "";
+}
 
 /* HERO helpers */
 function syncEditorButtonState(){
@@ -889,14 +907,16 @@ function wireButtons(){
   $("#btn-library")?.addEventListener("click", ()=>toggleLibrary());
   $("#btn-editor")?.addEventListener("click", ()=>showEditor(loadLastBook()));
 
-  // riga 868 — chiudi editor in modo robusto
+  // nel wireButtons()
 $("#btn-ed-close")?.addEventListener("click", async (e)=>{
   e.preventDefault();
-  await maybeAutosaveNow();         // salva se ci sono modifiche (titolo o testo)
-  closeEditor();                    // nasconde #editor-card
-  await toggleLibrary(true);        // mostra la libreria
-  document.getElementById("library-section")
-    ?.scrollIntoView({behavior:"smooth", block:"start"});
+  e.stopPropagation();
+  try { await maybeAutosaveNow(); } catch(err){
+    console.warn("Autosave skipped on close:", err?.message||err);
+  }
+  closeEditor();
+  document.getElementById("library-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  await toggleLibrary(true);
 });
   $("#btn-ed-save")?.addEventListener("click", ()=>saveCurrentChapter(true));
   $("#btn-ai-generate")?.addEventListener("click", async ()=>{
