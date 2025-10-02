@@ -865,7 +865,15 @@ function wireButtons(){
   $("#btn-library")?.addEventListener("click", ()=>toggleLibrary());
   $("#btn-editor")?.addEventListener("click", ()=>showEditor(loadLastBook()));
 
-  $("#btn-ed-close")?.addEventListener("click", closeEditor);
+  // riga 868 — chiudi editor in modo robusto
+$("#btn-ed-close")?.addEventListener("click", async (e)=>{
+  e.preventDefault();
+  await maybeAutosaveNow();         // salva se ci sono modifiche (titolo o testo)
+  closeEditor();                    // nasconde #editor-card
+  await toggleLibrary(true);        // mostra la libreria
+  document.getElementById("library-section")
+    ?.scrollIntoView({behavior:"smooth", block:"start"});
+});
   $("#btn-ed-save")?.addEventListener("click", ()=>saveCurrentChapter(true));
   $("#btn-ai-generate")?.addEventListener("click", async ()=>{
   const mode = (!isSafariLike() && supportsFetchStreaming()) ? "fetch-stream" : "sse";
