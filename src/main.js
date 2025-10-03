@@ -245,7 +245,7 @@ const fmtHHMM = (d=new Date())=>{
 };
 
 /* ===== Feature flags ===== */
-const USE_MODAL_RENAME = true;
+else await renameBook(bookId, btn.getAttribute("data-oldtitle") || "");
 
 /* ======== Status LED ======== */
 function renderStatus({mode,title,sub}){
