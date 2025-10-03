@@ -710,8 +710,7 @@ function stepChapter(delta){
 /* ===== Apri capitolo ===== */
 async function openChapter(bookId, chapterId){
   try{
-    const r = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?ts=${Date.now()}`, { cache:"no-store" });
-    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const r = await fetch(...);
     const data = await r.json();
 
     $("#bookIdInput").value    = bookId;
@@ -720,15 +719,21 @@ async function openChapter(bookId, chapterId){
     $("#chapterText").value       = data?.content || "";
     $("#chapterText").placeholder = "Scrivi qui il contenuto del capitolo…";
 
-    const titleEl = $("#chapterTitleInput");        // 👈 aggiungi
-    if (titleEl) titleEl.value = data?.title || ""; // 👈 aggiungi
+    const titleEl = $("#chapterTitleInput");
+    if (titleEl) titleEl.value = data?.title || "";
 
     uiState.currentBookId     = bookId;
-    uiState.currentChapterId  = chapterId;
-    uiState.lastSavedSnapshot = getEditorSnapshot();
+uiState.currentChapterId  = chapterId;
+uiState.lastSavedSnapshot = getEditorSnapshot();
 
-    toast(`📖 Aperto ${chapterId}`);
-    tweakChapterEditorUI();
+// 🔄 reset debounce autosave
+if (uiState.saveSoon) {
+  clearTimeout(uiState.saveSoon);
+  uiState.saveSoon = null;
+}
+
+toast(`📖 Aperto ${chapterId}`);
+tweakChapterEditorUI();
   }catch(e){
     toast("Impossibile aprire il capitolo: "+(e?.message||e));
   }
