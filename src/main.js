@@ -959,7 +959,7 @@ function wireButtons(){
 
   $("#chapterText")?.addEventListener("input", ()=>{
     if (uiState.saveSoon) clearTimeout(uiState.saveSoon);
-    uiState.saveSoon = setTimeout(maybeAutosaveNow, 1500);
+    uiState.saveSoon = setTimeout(maybeAutosaveNow, 300000);
   });
 
   $("#chapterIdInput")?.addEventListener("change", async ()=>{
