@@ -829,7 +829,7 @@ async function maybeAutosaveNow(){
   }
 }
 
-/* ===== Export ===== */
+/* ===== Export (LIBRI interi) ===== */
 const EXPORT_FORMATS = [
   { label: "📄 PDF", value: "pdf" },
   { label: "📘 KDP", value: "kdp" },
@@ -837,6 +837,14 @@ const EXPORT_FORMATS = [
   { label: "📃 TXT", value: "txt" }
 ];
 
+/* ===== Export (CAPITOLI singoli) ===== */
+const CHAPTER_EXPORT_FORMATS = [
+  // { label: "📄 PDF", value: "pdf" }, // ← sblocca solo se hai attivato l'endpoint PDF
+  { label: "📝 Markdown", value: "md" },
+  { label: "📃 TXT", value: "txt" }
+];
+
+/* ===== Funzioni ===== */
 function chooseFormat(anchorBtn, cb){
   showMenuForButton(anchorBtn || document.body, EXPORT_FORMATS, (fmt)=>{
     if(!fmt) return;
@@ -845,8 +853,7 @@ function chooseFormat(anchorBtn, cb){
 }
 
 function downloadChapter(bookId, chapterId, anchorBtn){
-  const items = EXPORT_FORMATS.filter(x=>x.value!=="kdp");
-  showMenuForButton(anchorBtn || document.body, items, (fmt)=>{
+  showMenuForButton(anchorBtn || document.body, CHAPTER_EXPORT_FORMATS, (fmt)=>{
     const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}.${fmt}`;
     window.open(url, "_blank", "noopener");
   });
