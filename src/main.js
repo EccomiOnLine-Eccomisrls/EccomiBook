@@ -1194,7 +1194,7 @@ async function renameBook(bookId, oldTitle){
 
   try{
     const r = await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}`,{
-      method:"PUT",
+      method:"PATCH",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ title:newTitle, author:newAuthor, language:newLang })
     });
