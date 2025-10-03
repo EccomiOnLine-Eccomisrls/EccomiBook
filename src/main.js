@@ -976,15 +976,6 @@ function wireButtons(){
     await deleteChapter(bookId, chapterId);
   });
 
-  const AUTOSAVE_IDLE_MS = 180000; // 3 minuti
-
-function bumpAutosaveTimer(){
-  if (uiState.saveSoon) clearTimeout(uiState.saveSoon);
-  uiState.saveSoon = setTimeout(maybeAutosaveNow, AUTOSAVE_IDLE_MS);
-}
-
-$("#chapterText")?.addEventListener("input", bumpAutosaveTimer);
-$("#chapterTitleInput")?.addEventListener("input", bumpAutosaveTimer);
   $("#chapterIdInput")?.addEventListener("change", async ()=>{
     await maybeAutosaveNow();
     uiState.currentChapterId = $("#chapterIdInput").value.trim();
@@ -997,6 +988,16 @@ $("#chapterTitleInput")?.addEventListener("input", bumpAutosaveTimer);
     rememberLastLang(v);
   });
 
+   // listener debounce 3 minuti
+$("#chapterText")?.addEventListener("input", bumpAutosaveTimer);
+
+// il titolo viene creato dopo: uso delega
+document.addEventListener("input", (e)=>{
+  if (e.target && e.target.id === "chapterTitleInput") {
+    bumpAutosaveTimer();
+  }
+});
+   
   $("#library-list")?.addEventListener("click", async (ev)=>{
   const btn = ev.target.closest("button[data-action]");
   if(!btn) return;
