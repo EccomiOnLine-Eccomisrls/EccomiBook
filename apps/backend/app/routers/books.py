@@ -171,37 +171,46 @@ def get_chapter(book_id: str, chapter_id: str):
     ci = _find_chapter_index(b, chapter_id)
     return b["chapters"][ci]
 
+# ==== EXPORT CAPITOLO: Markdown ====
+@router.get("/books/{book_id}/chapters/{chapter_id}.md", summary="Export Chapter MD")
+def export_chapter_md(book_id: str, chapter_id: str):
+    b = storage.find_book(book_id)
+    if not b:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+
+    ch = next((c for c in b.get("chapters", []) if str(c.get("id")) == chapter_id), None)
+    if not ch:
+        raise HTTPException(status_code=404, detail="Capitolo non trovato")
+
+    title = (ch.get("title") or chapter_id).strip()
+    body  = str(ch.get("content") or "")
+    md    = f"# {title}\n\n{body}"
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{book_id}_{chapter_id}.md"'
+    }
+    return Response(content=md, media_type="text/markdown; charset=utf-8", headers=headers)
+
+
+# ==== EXPORT CAPITOLO: TXT ====
 @router.get("/books/{book_id}/chapters/{chapter_id}.txt", summary="Export Chapter TXT")
 def export_chapter_txt(book_id: str, chapter_id: str):
     b = storage.find_book(book_id)
     if not b:
         raise HTTPException(status_code=404, detail="Libro non trovato")
-    # trova capitolo
-    for ch in b.get("chapters", []):
-        if ch.get("id") == chapter_id:
-            title = (ch.get("title") or "").strip() or chapter_id
-            content = ch.get("content") or ""
-            text = f"{title}\n\n{content}"
-            filename = f"{book_id}_{chapter_id}.txt"
-            headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-            return Response(text, media_type="text/plain; charset=utf-8", headers=headers)
-    raise HTTPException(status_code=404, detail="Capitolo non trovato")
 
-@router.get("/books/{book_id}/chapters/{chapter_id}.md", summary="Export Chapter Markdown")
-def export_chapter_md(book_id: str, chapter_id: str):
-    b = storage.find_book(book_id)
-    if not b:
-        raise HTTPException(status_code=404, detail="Libro non trovato")
-    # trova capitolo
-    for ch in b.get("chapters", []):
-        if ch.get("id") == chapter_id:
-            title = (ch.get("title") or "").strip() or chapter_id
-            content = ch.get("content") or ""
-            md = f"# {title}\n\n{content}"
-            filename = f"{book_id}_{chapter_id}.md"
-            headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-            return Response(md, media_type="text/markdown; charset=utf-8", headers=headers)
-    raise HTTPException(status_code=404, detail="Capitolo non trovato")
+    ch = next((c for c in b.get("chapters", []) if str(c.get("id")) == chapter_id), None)
+    if not ch:
+        raise HTTPException(status_code=404, detail="Capitolo non trovato")
+
+    title = (ch.get("title") or chapter_id).strip()
+    body  = str(ch.get("content") or "")
+    txt   = f"{title}\n\n{body}"
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{book_id}_{chapter_id}.txt"'
+    }
+    return Response(content=txt, media_type="text/plain; charset=utf-8", headers=headers)
 
 @router.get("/books/{book_id}/chapters", summary="List Chapters")
 def list_chapters(book_id: str):
