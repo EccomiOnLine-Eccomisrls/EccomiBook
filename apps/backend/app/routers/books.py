@@ -209,6 +209,39 @@ def list_chapters(book_id: str):
         raise HTTPException(status_code=404, detail="Libro non trovato")
     return {"items": b.get("chapters", [])}
 
+@router.get("/books/{book_id}/chapters/{chapter_id}.pdf", summary="Export Chapter (PDF)")
+def export_chapter_pdf(book_id: str, chapter_id: str):
+    try:
+        from fpdf import FPDF
+    except Exception:
+        raise HTTPException(status_code=501, detail="PDF non abilitato (installare fpdf2)")
+
+    b = storage.find_book(book_id)
+    if not b:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+
+    for ch in b.get("chapters", []):
+        if ch.get("id") == chapter_id:
+            title = (ch.get("title") or chapter_id).strip()
+            content = (ch.get("content") or "").replace("\r\n", "\n")
+
+            pdf = FPDF()
+            pdf.set_auto_page_break(auto=True, margin=15)
+            pdf.add_page()
+            pdf.set_font("Helvetica", "B", 16)
+            pdf.multi_cell(0, 10, txt=title)
+            pdf.ln(4)
+            pdf.set_font("Helvetica", size=12)
+            for line in content.split("\n"):
+                pdf.multi_cell(0, 7, txt=line)
+
+            pdf_bytes = pdf.output(dest="S").encode("latin1", "ignore")
+            filename = f"{book_id}.{chapter_id}.pdf"
+            headers = { "Content-Disposition": f'attachment; filename="{filename}"' }
+            return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+    raise HTTPException(status_code=404, detail="Capitolo non trovato")
+    
 @router.put("/books/{book_id}/chapters/{chapter_id}")
 def update_chapter(book_id: str, chapter_id: str, payload: ChapterUpdateIn = Body(...)):
     b = storage.find_book(book_id)
