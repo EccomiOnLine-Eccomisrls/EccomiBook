@@ -79,16 +79,21 @@ def save_books_to_disk(books: List[Dict[str, Any]]) -> None:
 
 
 def find_book(book_id: str) -> Optional[Dict[str, Any]]:
+    """Trova un libro accettando sia 'id' sia 'book_id' (string match, trim)."""
+    bid = str(book_id).strip()
     for b in load_books():
-        if b.get("id") == book_id:
+        cur = str(b.get("id") or b.get("book_id") or "").strip()
+        if cur == bid:
             return b
     return None
 
 
 def persist_book(book: Dict[str, Any]) -> None:
     books = load_books()
+    target = str(book.get("id") or book.get("book_id") or "").strip()
     for i, b in enumerate(books):
-        if b.get("id") == book.get("id"):
+        cur = str(b.get("id") or b.get("book_id") or "").strip()
+        if cur == target and cur:
             books[i] = book
             save_books(books)
             return
