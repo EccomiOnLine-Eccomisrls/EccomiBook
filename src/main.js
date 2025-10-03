@@ -844,10 +844,37 @@ const CHAPTER_EXPORT_FORMATS = [
   { label: "📃 TXT", value: "txt" }
 ];
 
-/* ===== Funzioni ===== */
-function downloadChapter(bookId, chapterId, anchorBtn){
+// Scarica capitolo con check preventivo + menu formati
+async function downloadChapter(bookId, chapterId, anchorBtn){
+  const bid = bookId || uiState.currentBookId || $("#bookIdInput")?.value?.trim();
+  const cid = chapterId || uiState.currentChapterId || $("#chapterIdInput")?.value?.trim();
+
+  if (!bid) return toast("Manca il Book ID");
+  if (!cid) return toast("Manca il Chapter ID");
+
+  // Log utili
+  console.log("[downloadChapter] bookId:", bid, "chapterId:", cid);
+
+  // 1) Verifica che il capitolo esista davvero sul backend
+  try {
+    const chk = await fetch(
+      `${API_BASE_URL}/books/${encodeURIComponent(bid)}/chapters/${encodeURIComponent(cid)}?ts=${Date.now()}`,
+      { cache:"no-store" }
+    );
+    if (!chk.ok) {
+      const t = await chk.text().catch(()=> "");
+      toast(`Capitolo non trovato (${chk.status}). ${t?.slice(0,120) || ""}`);
+      return;
+    }
+  } catch (e) {
+    toast("Errore di rete nel check capitolo: " + (e?.message || e));
+    return;
+  }
+
+  // 2) Menu formati + apertura URL corretta
   showMenuForButton(anchorBtn || document.body, CHAPTER_EXPORT_FORMATS, (fmt)=>{
-    const url = `${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}.${fmt}`;
+    const url = `${API_BASE_URL}/books/${encodeURIComponent(bid)}/chapters/${encodeURIComponent(cid)}.${fmt}`;
+    console.log("[downloadChapter] URL:", url);
     window.open(url, "_blank", "noopener");
   });
 }
