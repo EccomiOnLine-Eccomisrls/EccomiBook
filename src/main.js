@@ -878,6 +878,7 @@ async function exportBook(bookId, anchorBtn){
   chooseFormat(anchorBtn, async (fmt)=>{
     const base = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/export`;
     try {
+      // esporti subito con una nuova scheda se è md/txt/pdf (quando disponibile)
       if (fmt === "pdf" || fmt === "txt" || fmt === "md") {
         window.open(`${base}/${fmt}`, "_blank", "noopener");
         return;
