@@ -874,33 +874,6 @@ function exportBook(bookId, anchorBtn){
   });
 }
 
-async function exportBook(bookId, anchorBtn){
-  chooseFormat(anchorBtn, async (fmt)=>{
-    const base = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/export`;
-    try {
-      // esporti subito con una nuova scheda se è md/txt/pdf (quando disponibile)
-      if (fmt === "pdf" || fmt === "txt" || fmt === "md") {
-        window.open(`${base}/${fmt}`, "_blank", "noopener");
-        return;
-      }
-
-      // ✅ KDP: scarico lo ZIP via blob (niente JSON, niente prompt size)
-      if (fmt === "kdp") {
-        const res = await fetch(`${base}/kdp`, { method: "GET" });
-        if (!res.ok) {
-          const txt = await res.text().catch(()=> "");
-          throw new Error(`HTTP ${res.status}${txt ? `: ${txt.slice(0,120)}` : ""}`);
-        }
-        const blob = await res.blob(); // ZIP
-        triggerDownload(blob, `book_${bookId}_kdp.zip`);
-        return;
-      }
-    } catch (e) {
-      alert("Errore export: " + (e?.message || e));
-    }
-  });
-}
-
 // Helpers per download
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
