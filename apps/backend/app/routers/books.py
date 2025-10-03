@@ -298,3 +298,42 @@ def reorder_chapters(book_id: str, payload: ReorderIn = Body(...)):
         return {"ok": True, "book": updated, "count": len(updated.get("chapters", []))}
     except ValueError:
         raise HTTPException(status_code=404, detail="Libro non trovato")
+
+# ==== EXPORT LIBRO: Markdown ====
+@router.get("/export/books/{book_id}/export/md", summary="Export Book MD")
+def export_book_md(book_id: str):
+    b = storage.find_book(book_id)
+    if not b:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+
+    title = (b.get("title") or f"book_{book_id}").strip()
+    parts = []
+    for ch in b.get("chapters", []):
+        t = (ch.get("title") or ch.get("id") or "Senza titolo").strip()
+        c = str(ch.get("content") or "")
+        parts.append(f"# {t}\n\n{c}\n")
+
+    # se non ci sono capitoli metto una pagina vuota con titolo libro
+    md = "\n\n---\n\n".join(parts) if parts else f"# {title}\n\n*(Nessun capitolo)*"
+
+    headers = { "Content-Disposition": f'attachment; filename="{book_id}.md"' }
+    return Response(content=md, media_type="text/markdown; charset=utf-8", headers=headers)
+
+
+# ==== EXPORT LIBRO: TXT ====
+@router.get("/export/books/{book_id}/export/txt", summary="Export Book TXT")
+def export_book_txt(book_id: str):
+    b = storage.find_book(book_id)
+    if not b:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+
+    title = (b.get("title") or f"book_{book_id}").strip()
+    parts = []
+    for ch in b.get("chapters", []):
+        t = (ch.get("title") or ch.get("id") or "Senza titolo").strip()
+        c = str(ch.get("content") or "")
+        parts.append(f"{t}\n\n{c}\n")
+
+    txt = "\n\n--------------------\n\n".join(parts) if parts else f"{title}\n\n(Nessun capitolo)"
+    headers = { "Content-Disposition": f'attachment; filename="{book_id}.txt"' }
+    return Response(content=txt, media_type="text/plain; charset=utf-8", headers=headers)
