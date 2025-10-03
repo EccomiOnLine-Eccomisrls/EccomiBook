@@ -244,8 +244,8 @@ const fmtHHMM = (d=new Date())=>{
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-/* ===== Feature flags ===== */
-else await renameBook(bookId, btn.getAttribute("data-oldtitle") || "");
+// ===== Feature flags =====
+const USE_MODAL_RENAME = false;
 
 /* ======== Status LED ======== */
 function renderStatus({mode,title,sub}){
