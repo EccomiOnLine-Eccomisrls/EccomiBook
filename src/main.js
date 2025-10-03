@@ -975,19 +975,32 @@ function wireButtons(){
   });
 
   $("#library-list")?.addEventListener("click", async (ev)=>{
-    const btn = ev.target.closest("button[data-action]");
-    if(!btn) return;
-    const action = btn.getAttribute("data-action");
-    const bookId = btn.getAttribute("data-bookid") || "";
-    if(!bookId) return;
-    if (action==="open"){ rememberLastBook(bookId); showEditor(bookId); }
-    else if (action==="delete"){ await deleteBook(bookId); }
-    else if (action==="rename"){
-      if (USE_MODAL_RENAME) openEditBookModal(bookId);
-      else await renameBook(bookId, btn.getAttribute("data-oldtitle")||"");
+  const btn = ev.target.closest("button[data-action]");
+  if(!btn) return;
+
+  const action = btn.getAttribute("data-action");
+  const bookId = btn.getAttribute("data-bookid") || "";
+  if(!bookId) return;
+
+  if (action === "open") {
+    rememberLastBook(bookId);
+    showEditor(bookId);
+  }
+  else if (action === "delete") {
+    await deleteBook(bookId);
+  }
+  else if (action === "rename") {
+    if (USE_MODAL_RENAME && typeof openEditBookModal === "function") {
+      openEditBookModal(bookId);
+    } else {
+      // fallback: prompt
+      await renameBook(bookId, btn.getAttribute("data-oldtitle") || "");
     }
-    else if (action==="export"){ await exportBook(bookId, btn); }
-  });
+  }
+  else if (action === "export") {
+    await exportBook(bookId, btn);
+  }
+});
 
   $("#chapters-list")?.addEventListener("click", async (ev)=>{
     const openBtn = ev.target.closest("[data-ch-open]"),
