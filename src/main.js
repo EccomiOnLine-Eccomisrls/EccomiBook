@@ -829,6 +829,25 @@ async function maybeAutosaveNow(){
   }
 }
 
+// ===== Autosave timing (debounce + safety interval) =====
+const AUTOSAVE_DEBOUNCE_MS = 180000; // 3 minuti di inattività
+
+function bumpAutosaveTimer(){
+  if (uiState.saveSoon) clearTimeout(uiState.saveSoon);
+  uiState.saveSoon = setTimeout(maybeAutosaveNow, AUTOSAVE_DEBOUNCE_MS);
+}
+
+let _autoInterval = null;
+function startAutosave(){
+  if (_autoInterval) return;
+  // Salvataggio di sicurezza ogni 5 minuti anche se l'utente scrive di continuo
+  _autoInterval = setInterval(maybeAutosaveNow, 300000);
+}
+function stopAutosave(){
+  if (_autoInterval){ clearInterval(_autoInterval); _autoInterval = null; }
+  if (uiState.saveSoon){ clearTimeout(uiState.saveSoon); uiState.saveSoon = null; }
+}
+
 /* ===== Export (LIBRI interi) ===== */
 const EXPORT_FORMATS = [
   { label: "📄 PDF", value: "pdf" },
@@ -957,11 +976,15 @@ function wireButtons(){
     await deleteChapter(bookId, chapterId);
   });
 
-  $("#chapterText")?.addEventListener("input", ()=>{
-    if (uiState.saveSoon) clearTimeout(uiState.saveSoon);
-    uiState.saveSoon = setTimeout(maybeAutosaveNow, 300000);
-  });
+  const AUTOSAVE_IDLE_MS = 180000; // 3 minuti
 
+function bumpAutosaveTimer(){
+  if (uiState.saveSoon) clearTimeout(uiState.saveSoon);
+  uiState.saveSoon = setTimeout(maybeAutosaveNow, AUTOSAVE_IDLE_MS);
+}
+
+$("#chapterText")?.addEventListener("input", bumpAutosaveTimer);
+$("#chapterTitleInput")?.addEventListener("input", bumpAutosaveTimer);
   $("#chapterIdInput")?.addEventListener("change", async ()=>{
     await maybeAutosaveNow();
     uiState.currentChapterId = $("#chapterIdInput").value.trim();
