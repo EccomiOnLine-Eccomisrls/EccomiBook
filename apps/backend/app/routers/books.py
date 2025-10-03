@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Body, Response
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from fpdf import FPDF
 import re
 
 from app import storage
