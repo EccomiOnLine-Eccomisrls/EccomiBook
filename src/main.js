@@ -873,25 +873,24 @@ const CHAPTER_EXPORT_FORMATS = [
 ];
 
 // Scarica capitolo con check preventivo + menu formati
-async function downloadChapter(bookId, chapterId, anchorBtn){
+async function downloadChapter(bookId, chapterId, anchorBtn, {debug=false} = {}) {
   const bid = bookId || uiState.currentBookId || $("#bookIdInput")?.value?.trim();
   const cid = chapterId || uiState.currentChapterId || $("#chapterIdInput")?.value?.trim();
 
   if (!bid) return toast("Manca il Book ID");
   if (!cid) return toast("Manca il Chapter ID");
 
-  // Log utili
   console.log("[downloadChapter] bookId:", bid, "chapterId:", cid);
 
-  // 1) Verifica che il capitolo esista davvero sul backend
+  // 1️⃣ Verifica che il capitolo esista davvero sul backend
   try {
     const chk = await fetch(
       `${API_BASE_URL}/books/${encodeURIComponent(bid)}/chapters/${encodeURIComponent(cid)}?ts=${Date.now()}`,
-      { cache:"no-store" }
+      { cache: "no-store" }
     );
     if (!chk.ok) {
-      const t = await chk.text().catch(()=> "");
-      toast(`Capitolo non trovato (${chk.status}). ${t?.slice(0,120) || ""}`);
+      const t = await chk.text().catch(() => "");
+      toast(`Capitolo non trovato (${chk.status}). ${t?.slice(0, 120) || ""}`);
       return;
     }
   } catch (e) {
@@ -899,11 +898,16 @@ async function downloadChapter(bookId, chapterId, anchorBtn){
     return;
   }
 
-  // 2) Menu formati + apertura URL corretta
-  showMenuForButton(anchorBtn || document.body, CHAPTER_EXPORT_FORMATS, (fmt)=>{
+  // 2️⃣ Menu formati + apertura URL corretta
+  showMenuForButton(anchorBtn || document.body, CHAPTER_EXPORT_FORMATS, async (fmt) => {
     const url = `${API_BASE_URL}/books/${encodeURIComponent(bid)}/chapters/${encodeURIComponent(cid)}.${fmt}`;
     console.log("[downloadChapter] URL:", url);
-    window.open(url, "_blank", "noopener");
+
+    if (DEBUG_EXPORT && debug) {
+      await fetchAndInspect(url, `chapter_${cid}.${fmt}`);
+    } else {
+      window.open(url, "_blank", "noopener");
+    }
   });
 }
 
@@ -1094,7 +1098,7 @@ document.addEventListener("input", (e)=>{
     if (openBtn)       await openChapter(bid, cid);
     else if (delBtn)   await deleteChapter(bid, cid);
     else if (editBtn)  editChapter(cid);
-    else if (dlBtn)    downloadChapter(bid, cid, dlBtn);
+    else if (dlBtn)    downloadChapter(bid, cid, dlBtn, { debug: ev.altKey });
   });
 
   $("#btn-book-menu")?.addEventListener("click", (ev)=>{
