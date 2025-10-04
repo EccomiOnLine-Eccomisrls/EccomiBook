@@ -246,6 +246,7 @@ const fmtHHMM = (d=new Date())=>{
 
 // ===== Feature flags =====
 const USE_MODAL_RENAME = false;
+const ENABLE_CHAPTER_DOWNLOAD = false; // ⬅️ disattiva “Scarica” nei capitoli
 
 /* ======== Status LED ======== */
 function renderStatus({mode,title,sub}){
@@ -587,27 +588,26 @@ function renderChaptersList(bookId, chapters){
     row.draggable = true;
     row.dataset.cid = cid;
 
-    row.innerHTML=`
-      <div class="dnd-head">
-        <button class="drag-handle" title="Trascina per riordinare" aria-label="Trascina">⠿</button>
-        <div class="chapter-head">
-          <div>
-            <div style="font-weight:600">${escapeHtml(shown)}</div>
-            <div class="muted">
-              ID: ${escapeHtml(cid)}
-              ${bookTitle ? ` · Libro: ${escapeHtml(bookTitle)}` : ""}
-              ${updated ? ` · ${escapeHtml(fmtLast(updated))}` : ""}
-            </div>
-          </div>
+    row.innerHTML = `
+  <div class="dnd-head">
+    <button class="drag-handle" title="Trascina per riordinare" aria-label="Trascina">⠿</button>
+    <div class="chapter-head">
+      <div>
+        <div style="font-weight:600">${escapeHtml(shown)}</div>
+        <div class="muted">
+          ID: ${escapeHtml(cid)}
+          ${bookTitle ? ` · Libro: ${escapeHtml(bookTitle)}` : ""}
+          ${updated ? ` · ${escapeHtml(fmtLast(updated))}` : ""}
         </div>
       </div>
-      <div class="chapter-actions">
-        <button class="btn btn-secondary" data-ch-open="${escapeAttr(cid)}">Apri</button>
-        <button class="btn btn-ghost" data-ch-edit="${escapeAttr(cid)}">Modifica</button>
-        <button class="btn btn-ghost" data-ch-del="${escapeAttr(cid)}">Elimina</button>
-        <button class="btn btn-ghost" data-ch-dl="${escapeAttr(cid)}">Scarica</button>
-      </div>`;
-
+    </div>
+  </div>
+  <div class="chapter-actions">
+    <button class="btn btn-secondary" data-ch-open="${escapeAttr(cid)}">Apri</button>
+    <button class="btn btn-ghost" data-ch-edit="${escapeAttr(cid)}">Modifica</button>
+    <button class="btn btn-ghost" data-ch-del="${escapeAttr(cid)}">Elimina</button>
+    ${ENABLE_CHAPTER_DOWNLOAD ? `<button class="btn btn-ghost" data-ch-dl="${escapeAttr(cid)}">Scarica</button>` : ``}
+  </div>`;
     ul.appendChild(row);
   });
 
