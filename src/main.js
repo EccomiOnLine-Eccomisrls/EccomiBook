@@ -915,23 +915,29 @@ function exportBook(bookId, anchorBtn){
   showMenuForButton(anchorBtn || document.body, EXPORT_FORMATS, async (fmt)=>{
     const base = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/export`;
     try {
-      // 🟢 TXT / MD / PDF → apertura diretta in nuova scheda
-      if (fmt === "pdf" || fmt === "txt" || fmt === "md") {
-        window.open(`${base}/${fmt}`, "_blank", "noopener");
+      if (fmt === "kdp") {
+        // ZIP: sempre via fetch+blob per compatibilità Safari
+        await fetchAndDownload(`${base}/kdp`, `book_${bookId}_kdp.zip`);
         return;
       }
 
-      // 🟣 KDP → download ZIP via blob
-      if (fmt === "kdp") {
-        const res = await fetch(`${base}/kdp`, { method: "GET" });
-        if (!res.ok)
-          throw new Error(`HTTP ${res.status}: ${(await res.text().catch(()=> ""))?.slice(0,120)}`);
-        const blob = await res.blob();
-        triggerDownload(blob, `book_${bookId}_kdp.zip`);
-        return;
+      // pdf / md / txt
+      const url  = `${base}/${fmt}`;
+      const name = `book_${bookId}.${fmt}`;
+
+      if (isSafariLike()) {
+        // Safari/iPad: fetch+blob
+        await fetchAndDownload(url, name);
+      } else {
+        // Browser “liberi”: prova fast-path con window.open
+        const win = window.open(url, "_blank", "noopener");
+        // Se popup bloccato, fallback a fetch+blob
+        if (!win || win.closed || typeof win.closed === "undefined") {
+          await fetchAndDownload(url, name);
+        }
       }
     } catch (e) {
-      alert("Errore export: " + (e?.message || e));
+      toast("Errore export: " + (e?.message || e));
     }
   });
 }
@@ -987,6 +993,18 @@ async function fetchAndInspect(url, fallbackName="download.bin"){
   console.log("[EXPORT][TIME]", Math.round(performance.now()-t0)+"ms");
 
   // comunque forzo il download locale (mantengo il content-type)
+  triggerDownload(blob, name);
+}
+
+// === Helper download universale ===
+async function fetchAndDownload(url, fallbackName = "download.bin"){
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  let name = fallbackName;
+  const cd = res.headers.get("content-disposition") || "";
+  const m  = /filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i.exec(cd);
+  if (m) { try { name = decodeURIComponent(m[1] || m[2] || fallbackName); } catch {} }
+  const blob = await res.blob();
   triggerDownload(blob, name);
 }
 
