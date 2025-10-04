@@ -915,14 +915,17 @@ function exportBook(bookId, anchorBtn){
   showMenuForButton(anchorBtn || document.body, EXPORT_FORMATS, async (fmt)=>{
     const base = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/export`;
     try {
+      // 🟢 TXT / MD / PDF → apertura diretta in nuova scheda
       if (fmt === "pdf" || fmt === "txt" || fmt === "md") {
-        // ➜ LIBRO INTERO: endpoint /export/books/{book_id}/export/{fmt}
         window.open(`${base}/${fmt}`, "_blank", "noopener");
         return;
       }
+
+      // 🟣 KDP → download ZIP via blob
       if (fmt === "kdp") {
         const res = await fetch(`${base}/kdp`, { method: "GET" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text().catch(()=> ""))?.slice(0,120)}`);
+        if (!res.ok)
+          throw new Error(`HTTP ${res.status}: ${(await res.text().catch(()=> ""))?.slice(0,120)}`);
         const blob = await res.blob();
         triggerDownload(blob, `book_${bookId}_kdp.zip`);
         return;
