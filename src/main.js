@@ -940,6 +940,49 @@ function triggerDownload(blob, filename) {
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
 }
 
+// ===== DEBUG EXPORT =====
+const DEBUG_EXPORT = true;
+
+function _looksBinary(ct=""){
+  return /pdf|zip|octet-stream|application\/(?!json)/i.test(ct);
+}
+
+async function fetchAndInspect(url, fallbackName="download.bin"){
+  const t0 = performance.now();
+  const res = await fetch(url, { cache: "no-store" });
+  const ct  = res.headers.get("content-type") || "";
+  const cd  = res.headers.get("content-disposition") || "";
+  const ok  = res.ok;
+
+  // prova a ricavare il filename da Content-Disposition
+  let name = fallbackName;
+  const m = /filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i.exec(cd || "");
+  if (m) name = decodeURIComponent(m[1] || m[2] || fallbackName);
+
+  // scarico il blob
+  const blob = await res.blob();
+  const size = blob.size;
+
+  console.log("[EXPORT][HEADERS]", { ok, status: res.status, ct, cd, size, url });
+
+  // se testuale provo a leggere le prime righe
+  if (!_looksBinary(ct)) {
+    const txt = await blob.text();
+    console.log("[EXPORT][PREVIEW]", txt.slice(0, 500));
+  } else {
+    // preview esadecimale dei primi byte (PDF/ZIP ecc.)
+    const ab  = await blob.arrayBuffer();
+    const view = new Uint8Array(ab.slice(0, 64));
+    const hex  = Array.from(view).map(b=>b.toString(16).padStart(2,"0")).join(" ");
+    console.log("[EXPORT][BYTES]", hex);
+  }
+
+  console.log("[EXPORT][TIME]", Math.round(performance.now()-t0)+"ms");
+
+  // comunque forzo il download locale (mantengo il content-type)
+  triggerDownload(blob, name);
+}
+
 /* ===== Toggle Libreria ===== */
 async function toggleLibrary(force){
   const lib=$("#library-section"); if(!lib) return;
