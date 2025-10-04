@@ -200,3 +200,20 @@ def export_book_kdp(book_id: str):
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+@router.get("/export/books/{book_id}/chapters/{chapter_id}/export/pdf")
+def export_single_chapter_pdf(book_id: str, chapter_id: str):
+    book = _get_book_or_404(book_id)
+    ch = next((c for c in (book.get("chapters") or []) 
+               if str(c.get("id") or c.get("chapter_id") or c.get("cid")) == str(chapter_id)), None)
+    if not ch:
+        raise HTTPException(status_code=404, detail="Capitolo non trovato")
+
+    title = str(ch.get("title") or "Senza titolo")
+    body  = _chapter_body(book, ch)
+    # _render_pdf accetta una lista di tuple (titolo, testo)
+    pdf_bytes = _render_pdf(f"{book.get('title') or 'Libro'} — {title}", book.get("author"), [(title, body)])
+    filename = f"{book.get('id','book')}_{chapter_id}.pdf"
+    return StreamingResponse(BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename=\"{filename}\"'}
+    )
