@@ -25,12 +25,12 @@ def _get_book_or_404(book_id: str) -> dict:
     return b
 
 def _chapter_body(book: dict, ch: dict) -> str:
-    """
-    1) Se c'è content_path lo legge.
-    2) Se manca, prova /chapters/<book_id>/<chapter_id>.txt
-    3) Fallback: usa il testo dal JSON (content|text).
-    """
-    # 1) content_path esplicito
+    # 1) inline (più aggiornato)
+    txt = (ch.get("content") or ch.get("text") or "").strip()
+    if txt:
+        return txt
+
+    # 2) content_path (fallback su disco)
     content_path = ch.get("content_path")
     if content_path:
         p = Path(content_path)
@@ -42,27 +42,17 @@ def _chapter_body(book: dict, ch: dict) -> str:
             except Exception:
                 pass
 
-    # 2) convenzione su disco
-    book_id = book.get("id") or book.get("book_id")
-    ch_id   = ch.get("id") or ch.get("chapter_id") or ch.get("cid")
-    if book_id and ch_id:
-        p2 = storage.CHAPTERS_DIR / book_id / f"{ch_id}.txt"
+    # 3) convenzione /chapters/<book>/<chapter>.txt
+    bid = book.get("id") or book.get("book_id")
+    cid = ch.get("id") or ch.get("chapter_id") or ch.get("cid")
+    if bid and cid:
+        p2 = storage.CHAPTERS_DIR / bid / f"{cid}.txt"
         if p2.exists():
             try:
                 return p2.read_text(encoding="utf-8")
             except Exception:
                 pass
-
-    # 3) Fallback JSON
-    return ch.get("content") or ch.get("text") or ""
-
-def _collect_book_texts(book: dict) -> List[Tuple[str, str]]:
-    out: List[Tuple[str, str]] = []
-    for ch in (book.get("chapters") or []):
-        title = str(ch.get("title") or "Senza titolo")
-        text  = _chapter_body(book, ch)
-        out.append((title, text))
-    return out
+    return ""
 
 def _render_pdf(book_title: str, author: str | None, items: List[Tuple[str, str]]) -> bytes:
     buf = BytesIO()
@@ -216,4 +206,21 @@ def export_single_chapter_pdf(book_id: str, chapter_id: str):
     return StreamingResponse(BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename=\"{filename}\"'}
+    )
+from pydantic import BaseModel
+
+class ChapterPreviewIn(BaseModel):
+    book_title: str | None = None
+    author: str | None = None
+    chapter_title: str
+    text: str
+
+@router.post("/export/preview/chapter/pdf")
+def export_preview_chapter_pdf(body: ChapterPreviewIn):
+    items = [(body.chapter_title or "Senza titolo", body.text or "")]
+    pdf_bytes = _render_pdf(body.book_title or "Bozza libro", body.author, items)
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="preview_chapter.pdf"'}
     )
