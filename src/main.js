@@ -563,6 +563,31 @@ function renderChaptersList(bookId, chapters){
   }
   list.innerHTML="";
 
+   // --- Header sopra la lista capitoli (formato pagina) ---
+const header = document.createElement("div");
+header.className = "row-right";
+header.style.justifyContent = "flex-start";
+header.style.alignItems = "center";
+header.style.gap = "8px";
+header.style.marginBottom = "8px";
+
+const currentFmt = (typeof loadPageFormat === "function" ? loadPageFormat() : "6x9");
+header.innerHTML = `
+  <label for="formatSelect" style="font-weight:600;">Formato pagina:</label>
+  <select id="formatSelect" class="input" style="margin-left:6px;">
+    <option value="A4"  ${currentFmt==="A4"  ? "selected" : ""}>A4</option>
+    <option value="6x9" ${currentFmt==="6x9" ? "selected" : ""}>6x9 (KDP)</option>
+    <option value="5x8" ${currentFmt==="5x8" ? "selected" : ""}>5x8</option>
+  </select>
+`;
+list.appendChild(header);
+
+// salva/persisti quando cambia
+header.querySelector("#formatSelect")?.addEventListener("change",(e)=>{
+  const v = e.target.value || "6x9";
+  if (typeof rememberPageFormat === "function") rememberPageFormat(v);
+});
+   
   // Navigazione veloce
   const nav=document.createElement("div");
   nav.className="row-right";
