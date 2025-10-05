@@ -1002,10 +1002,9 @@ function exportBook(bookId, anchorBtn){
     const base = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/export`;
     try {
       if (fmt === "kdp") {
-  // === KDP export con parametri persistenti ===
-  const size = localStorage.getItem("chapter_pdf_format") || "6x9";
-  const coverMode = localStorage.getItem("book_cover_mode") || "front";  // "none" | "front" | "front_back"
-  const backText = localStorage.getItem("book_backcover_text") || "";
+  const size      = localStorage.getItem("chapter_pdf_format") || "6x9";
+  const coverMode = localStorage.getItem("book_cover_mode")     || "front";      // "none" | "front" | "front_back"
+  const backText  = localStorage.getItem("book_backcover_text") || "";
 
   const url = `${base}/kdp?size=${encodeURIComponent(size)}&cover_mode=${encodeURIComponent(coverMode)}${
     backText ? `&backcover_text=${encodeURIComponent(backText)}` : ""
