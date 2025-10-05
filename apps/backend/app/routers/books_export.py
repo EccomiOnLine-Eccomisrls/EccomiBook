@@ -54,23 +54,24 @@ def _chapter_body(book: dict, ch: dict) -> str:
                 pass
     return ""
 
-def _render_pdf(book_title: str, author: str | None, items: List[Tuple[str, str]]) -> bytes:
+def _render_pdf(book_title: str, author: str | None, items: List[Tuple[str, str]], show_cover: bool = True) -> bytes:
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
     margin = 2 * cm
     line_h = 14
 
-    # Cover
-    c.setTitle(book_title)
-    c.setFont("Helvetica-Bold", 20)
-    c.drawCentredString(width / 2, height - 5*cm, book_title)
-    if author:
-        c.setFont("Helvetica", 14)
-        c.drawCentredString(width / 2, height - 6*cm, f"di {author}")
-    c.setFont("Helvetica", 10)
-    c.drawCentredString(width / 2, 2*cm, f"Generato con EccomiBook — {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
-    c.showPage()
+    # Cover (opzionale)
+    if show_cover:
+        c.setTitle(book_title)
+        c.setFont("Helvetica-Bold", 20)
+        c.drawCentredString(width / 2, height - 5*cm, book_title)
+        if author:
+            c.setFont("Helvetica", 14)
+            c.drawCentredString(width / 2, height - 6*cm, f"di {author}")
+        c.setFont("Helvetica", 10)
+        c.drawCentredString(width / 2, 2*cm, f"Generato con EccomiBook — {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
+        c.showPage()
 
     # Capitoli
     for title, text in items:
@@ -202,20 +203,27 @@ def export_book_kdp(book_id: str):
 @router.get("/export/books/{book_id}/chapters/{chapter_id}/export/pdf")
 def export_single_chapter_pdf(book_id: str, chapter_id: str):
     book = _get_book_or_404(book_id)
-    ch = next((c for c in (book.get("chapters") or []) 
+    ch = next((c for c in (book.get("chapters") or [])
                if str(c.get("id") or c.get("chapter_id") or c.get("cid")) == str(chapter_id)), None)
     if not ch:
         raise HTTPException(status_code=404, detail="Capitolo non trovato")
 
     title = str(ch.get("title") or "Senza titolo")
     body  = _chapter_body(book, ch)
-    # _render_pdf accetta una lista di tuple (titolo, testo)
-    pdf_bytes = _render_pdf(f"{book.get('title') or 'Libro'} — {title}", book.get("author"), [(title, body)])
-    filename = f"{book.get('id','book')}_{chapter_id}.pdf"
-    return StreamingResponse(BytesIO(pdf_bytes),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename=\"{filename}\"'}
+
+    pdf_bytes = _render_pdf(
+        f"{book.get('title') or 'Libro'} — {title}",
+        book.get("author"),
+        [(title, body)],
+        show_cover=False,   # 👈 anteprima capitolo: SOLO testo (no cover)
     )
+    filename = f"{book.get('id','book')}_{chapter_id}.pdf"
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'}
+    )
+    
 from pydantic import BaseModel
 
 class ChapterPreviewIn(BaseModel):
@@ -227,7 +235,7 @@ class ChapterPreviewIn(BaseModel):
 @router.post("/export/preview/chapter/pdf")
 def export_preview_chapter_pdf(body: ChapterPreviewIn):
     items = [(body.chapter_title or "Senza titolo", body.text or "")]
-    pdf_bytes = _render_pdf(body.book_title or "Bozza libro", body.author, items)
+    pdf_bytes = _render_pdf(body.book_title or "Bozza libro", body.author, items, show_cover=False)
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
