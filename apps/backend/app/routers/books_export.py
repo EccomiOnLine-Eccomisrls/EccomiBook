@@ -154,7 +154,44 @@ def _draw_footer(c: canvas.Canvas, *, width: float, left: float, right: float, b
     # destra: numero pagina
     pr_w = c.stringWidth(footer_right, font, font_size)
     c.drawString(width - right - pr_w, y, footer_right)
+                     
+# --- KDP helpers (nuovi) ---
+def _kdp_margins_cm(has_bleed: bool = False) -> dict:
+    """
+    Margini "tipografici" (cm) per b/n senza bleed.
+    Modifica qui se vuoi più aria.
+    """
+    return dict(
+        top=2.0,       # cm
+        bottom=2.0,    # cm
+        inner=2.0,     # cm, lato dorso
+        outer=1.5      # cm, lato esterno
+    )
 
+def _draw_header_footer(c: canvas.Canvas, width: float, height: float,
+                        page_num: int, book_title: str, chapter_title: str,
+                        font_name: str):
+    # Pari = sinistra • Dispari = destra (fronte/retro)
+    is_even = (page_num % 2 == 0)
+    header_y = height - 1.2 * cm
+    footer_y = 1.2 * cm
+
+    c.setFont(font_name, 9)
+
+    # Header: titolo libro lato esterno, titolo capitolo lato interno
+    if is_even:
+        # pagina pari -> esterno a sinistra
+        c.drawString(1.5 * cm, header_y, (book_title or "")[:120])
+        c.drawRightString(width - 1.5 * cm, header_y, (chapter_title or "")[:120])
+        # numero pagina lato interno (destra su pari)
+        c.drawRightString(width - 2.0 * cm, footer_y, str(page_num))
+    else:
+        # pagina dispari -> esterno a destra
+        c.drawString(2.0 * cm, header_y, (chapter_title or "")[:120])
+        c.drawRightString(width - 1.5 * cm, header_y, (book_title or "")[:120])
+        # numero pagina lato interno (sinistra su dispari)
+        c.drawString(2.0 * cm, footer_y, str(page_num))
+        
 def _render_pdf(
     book_title: str,
     author: str | None,
@@ -162,7 +199,7 @@ def _render_pdf(
     *,
     show_cover: bool = True,
     page_size=A4,
-    margins_cm: Tuple[float, float, float, float] = (2.0, 2.0, 2.0, 2.0),  # L, R, T, B
+    margins_cm: Tuple[float, float, float, float] = (2.0, 2.0, 2.0, 2.0),  # L, R, T, B (ignorati per KDP speculare)
     body_font_size: int = 11,
     line_h: int = 15,
 ) -> bytes:
@@ -172,95 +209,89 @@ def _render_pdf(
     c = canvas.Canvas(buf, pagesize=page_size)
     width, height = page_size
 
-    # margini in punti
-    ml, mr, mt, mb = [v * cm for v in margins_cm]
-    max_width = width - ml - mr
+    # Margini KDP (cm)
+    km = _kdp_margins_cm()
+
+    # Utilities per calcolare frame speculare
+    def frame_left_for(pn: int) -> float:
+        # pari: interno a sinistra; dispari: interno a destra
+        return (km["inner"] * cm) if (pn % 2 == 0) else (km["outer"] * cm)
+
+    def frame_right_for(pn: int) -> float:
+        # pari: esterno a destra; dispari: esterno a sinistra
+        return width - ((km["outer"] * cm) if (pn % 2 == 0) else (km["inner"] * cm))
+
+    top_margin = km["top"] * cm
+    bottom_margin = km["bottom"] * cm
 
     # Metadati PDF
     c.setTitle(book_title or "EccomiBook")
 
-    # Cover (opzionale)
-    page_num = 0
+    # Cover interna semplice (senza header/footer)
     if show_cover:
         c.setFont(_BODY_FONT_BOLD, 22)
-        c.drawCentredString(width / 2.0, height - 5 * cm, (book_title or ""))
+        c.drawCentredString(width / 2.0, height - 6 * cm, (book_title or ""))
         if author:
             c.setFont(_BODY_FONT, 14)
-            c.drawCentredString(width / 2.0, height - 6 * cm, f"di {author}")
+            c.drawCentredString(width / 2.0, height - 7 * cm, f"di {author}")
         c.setFont(_BODY_FONT, 10)
         c.drawCentredString(
-            width / 2.0,
-            2 * cm,
+            width / 2.0, 2 * cm,
             f"Generato con EccomiBook — {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
         )
-        c.showPage()  # niente footer in cover
+        c.showPage()
 
-    # Contenuto
-    footer_left = f"{book_title or ''}" + (f" — {author}" if author else "")
-    y = height - mt
+    page_num = 1  # prima pagina di contenuto
     c.setFont(_BODY_FONT, body_font_size)
 
-    for idx, (title, text) in enumerate(items, start=1):
-        # Se poco spazio per il titolo, nuova pagina
-        if y < mb + (line_h * 3):
-            # footer pagina precedente
-            if page_num >= 1 or not show_cover:
-                _draw_footer(
-                    c,
-                    width=width, left=ml, right=mr, bottom=mb,
-                    footer_left=footer_left,
-                    footer_right=str(page_num),
-                    font=_BODY_FONT, font_size=9
-                )
+    for chapter_title, chapter_text in items:
+        # Ogni capitolo su pagina DISPARI (1,3,5…) per prassi editoriale
+        if page_num > 1 and page_num % 2 == 0:
             c.showPage()
             page_num += 1
-            y = height - mt
-            c.setFont(_BODY_FONT, body_font_size)
 
-        # Titolo capitolo centrato
-        title_lines = _wrap_title(title or "Senza titolo", c, max_width, _BODY_FONT_BOLD, 16)
+        # Header/footer pagina corrente
+        _draw_header_footer(c, width, height, page_num, (book_title or ""), (chapter_title or ""), _BODY_FONT)
+
+        left = frame_left_for(page_num)
+        right = frame_right_for(page_num)
+        usable_w = right - left
+        y = height - top_margin
+
+        # Titolo capitolo (bandiera sinistra)
         c.setFont(_BODY_FONT_BOLD, 16)
-        for tl in title_lines:
-            c.drawCentredString(width / 2.0, y, tl)
+        for tl in _wrap_text((chapter_title or "Senza titolo"), c, usable_w, _BODY_FONT_BOLD, 16):
+            if y < bottom_margin + line_h:
+                c.showPage()
+                page_num += 1
+                _draw_header_footer(c, width, height, page_num, (book_title or ""), (chapter_title or ""), _BODY_FONT)
+                left = frame_left_for(page_num)
+                right = frame_right_for(page_num)
+                usable_w = right - left
+                y = height - top_margin
+            c.drawString(left, y, tl)
             y -= (line_h + 2)
+
         y -= (line_h // 2)
         c.setFont(_BODY_FONT, body_font_size)
 
-        # Corpo
-        para_lines = _wrap_text(text or "", c, max_width, _BODY_FONT, body_font_size)
-        for line in para_lines:
-            if y < mb + line_h:
-                # chiude pagina corrente con footer, poi nuova pagina
-                if page_num >= 1 or not show_cover:
-                    _draw_footer(
-                        c,
-                        width=width, left=ml, right=mr, bottom=mb,
-                        footer_left=footer_left,
-                        footer_right=str(page_num),
-                        font=_BODY_FONT, font_size=9
-                    )
+        # Corpo del capitolo
+        for line in _wrap_text((chapter_text or ""), c, usable_w, _BODY_FONT, body_font_size):
+            if y < bottom_margin + line_h:
                 c.showPage()
                 page_num += 1
-                y = height - mt
+                _draw_header_footer(c, width, height, page_num, (book_title or ""), (chapter_title or ""), _BODY_FONT)
+                left = frame_left_for(page_num)
+                right = frame_right_for(page_num)
+                usable_w = right - left
+                y = height - top_margin
                 c.setFont(_BODY_FONT, body_font_size)
-            c.drawString(ml, y, line)
+            c.drawString(left, y, line)
             y -= line_h
 
-        # spazio tra capitoli
-        y -= (line_h * 2)
-
-    # Footer ultima pagina (se abbiamo scritto almeno una pagina di contenuto)
-    if items:
-        if (page_num == 0 and not show_cover) or page_num >= 1:
-            # Se non c'era cover, la prima pagina di contenuto è page_num==0 → mostriamo "1"
-            page_str = str(page_num if page_num >= 1 else 1)
-            _draw_footer(
-                c,
-                width=width, left=ml, right=mr, bottom=mb,
-                footer_left=footer_left,
-                footer_right=page_str,
-                font=_BODY_FONT, font_size=9
-            )
+        # Pagina successiva (separatore capitolo)
+        c.showPage()
+        page_num += 1
 
     c.save()
     buf.seek(0)
