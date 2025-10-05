@@ -1318,6 +1318,54 @@ async function renameBook(bookId, oldTitle){
   }
 }
 
+/* =========================================================
+ * EccomiBook — Anteprima capitolo PDF (singolo)
+ * ========================================================= */
+
+// === 1. Funzioni per aprire/chiudere la modale ===
+function openPdfPreview(url) {
+  const modal = document.getElementById("pdfPreviewModal");
+  const frame = document.getElementById("pdfPreviewFrame");
+  if (!modal || !frame) return;
+
+  frame.src = url;
+  modal.style.display = "block";
+  document.body.style.overflow = "hidden"; // blocca scroll sotto
+}
+
+function closePdfPreview() {
+  const modal = document.getElementById("pdfPreviewModal");
+  const frame = document.getElementById("pdfPreviewFrame");
+  if (!modal || !frame) return;
+
+  frame.src = "about:blank";
+  modal.style.display = "none";
+  document.body.style.overflow = "";
+}
+
+// === 2. Eventi di chiusura modale ===
+document.getElementById("pdfPreviewClose")?.addEventListener("click", closePdfPreview);
+document.getElementById("pdfPreviewModal")?.addEventListener("click", (e) => {
+  if (e.target.id === "pdfPreviewModal") closePdfPreview(); // click su sfondo
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closePdfPreview();
+});
+
+// === 3. Pulsante “📖 Anteprima” per ogni capitolo ===
+// (usa delegation per gestire anche elementi creati dinamicamente)
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".btn-preview");
+  if (!btn) return;
+
+  const bookId = btn.dataset.bid;
+  const chapterId = btn.dataset.cid;
+  if (!bookId || !chapterId) return;
+
+  const url = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}/export/pdf`;
+  openPdfPreview(url);
+});
+
 /* ===== UI Tweaks Editor ===== */
 function tweakChapterEditorUI() {
   const root =
