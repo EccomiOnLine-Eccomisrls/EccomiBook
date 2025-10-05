@@ -1367,7 +1367,7 @@ document.addEventListener("click", (e) => {
   const chapterId = btn.dataset.cid;
   if (!bookId || !chapterId) return;
 
-  const url = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}/export/pdf?cover=false`;
+  const url = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}/export/pdf?size=6x9&cover=false`;
   openPdfPreview(url);
 });
 
