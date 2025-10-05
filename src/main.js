@@ -1000,19 +1000,19 @@ async function downloadChapter(bookId, chapterId, anchorBtn, {debug=false} = {})
 function exportBook(bookId, anchorBtn){
   showMenuForButton(anchorBtn || document.body, EXPORT_FORMATS, async (fmt)=>{
     const base = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/export`;
-    try {
-      if (fmt === "kdp") {
-  const size      = localStorage.getItem("chapter_pdf_format") || "6x9";
-  const coverMode = localStorage.getItem("book_cover_mode")     || "front";      // "none" | "front" | "front_back"
-  const backText  = localStorage.getItem("book_backcover_text") || "";
+try {
+  if (fmt === "kdp") {
+    const fmt = localStorage.getItem("chapter_pdf_format") || "6x9";
+    const coverMode = localStorage.getItem("book_cover_mode") || "front";
+    const backText = localStorage.getItem("book_backcover_text") || "";
 
-  const url = `${base}/kdp?size=${encodeURIComponent(size)}&cover_mode=${encodeURIComponent(coverMode)}${
-    backText ? `&backcover_text=${encodeURIComponent(backText)}` : ""
-  }`;
+    const url = `${base}/kdp?size=${encodeURIComponent(fmt)}&cover_mode=${encodeURIComponent(coverMode)}${
+      backText ? `&backcover_text=${encodeURIComponent(backText)}` : ""
+    }`;
 
-  await fetchAndDownload(url, `book_${bookId}_kdp.zip`);
-  return;
-}
+    await fetchAndDownload(url, `book_${bookId}_kdp.zip`);
+    return;
+  }
 
       // pdf / md / txt
       const url  = `${base}/${fmt}`;
