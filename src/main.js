@@ -201,6 +201,12 @@ const loadLastAuthor     = ()=>{ try{ return localStorage.getItem("last_author")
 // === Page format (persistenza) ===
 const rememberPageFormat = (fmt)=>{ try{ localStorage.setItem("chapter_pdf_format", fmt||"6x9"); }catch{} };
 const loadPageFormat     = ()=>{ try{ return localStorage.getItem("chapter_pdf_format") || "6x9"; }catch{ return "6x9"; } };
+// === KDP prefs (persistenza) ===
+const rememberCoverMode     = (m)=>{ try{ localStorage.setItem("book_cover_mode", m||"front"); }catch{} };
+const loadCoverMode         = ()=>{ try{ return localStorage.getItem("book_cover_mode") || "front"; }catch{ return "front"; } };
+
+const rememberBackcoverText = (t)=>{ try{ localStorage.setItem("book_backcover_text", t||""); }catch{} };
+const loadBackcoverText     = ()=>{ try{ return localStorage.getItem("book_backcover_text") || ""; }catch{ return ""; } };
 
 /* ===== UI state ===== */
 const uiState = {
@@ -563,7 +569,7 @@ function renderChaptersList(bookId, chapters){
   }
   list.innerHTML="";
 
-   // --- Header sopra la lista capitoli (formato pagina) ---
+   // --- Header sopra la lista capitoli (formato + KDP) ---
 const header = document.createElement("div");
 header.className = "row-right";
 header.style.justifyContent = "flex-start";
@@ -571,21 +577,68 @@ header.style.alignItems = "center";
 header.style.gap = "8px";
 header.style.marginBottom = "8px";
 
-const currentFmt = (typeof loadPageFormat === "function" ? loadPageFormat() : "6x9");
+const currentFmt   = (typeof loadPageFormat     === "function") ? loadPageFormat()     : "6x9";
+const currentCover = (typeof loadCoverMode      === "function") ? loadCoverMode()      : "front";
+const currentBack  = (typeof loadBackcoverText  === "function") ? loadBackcoverText()  : "";
+
 header.innerHTML = `
-  <label for="formatSelect" style="font-weight:600;">Formato pagina:</label>
+  <label for="formatSelect" style="font-weight:600;">Formato:</label>
   <select id="formatSelect" class="input" style="margin-left:6px;">
     <option value="A4"  ${currentFmt==="A4"  ? "selected" : ""}>A4</option>
     <option value="6x9" ${currentFmt==="6x9" ? "selected" : ""}>6x9 (KDP)</option>
     <option value="5x8" ${currentFmt==="5x8" ? "selected" : ""}>5x8</option>
   </select>
+
+  <span class="muted">·</span>
+
+  <label for="coverModeSelect" style="font-weight:600;">Copertina:</label>
+  <select id="coverModeSelect" class="input" style="margin-left:6px;">
+    <option value="none"       ${currentCover==="none"       ? "selected" : ""}>Nessuna</option>
+    <option value="front"      ${currentCover==="front"      ? "selected" : ""}>Solo fronte</option>
+    <option value="front_back" ${currentCover==="front_back" ? "selected" : ""}>Fronte + retro</option>
+  </select>
+
+  <button id="toggleBackcover" class="btn btn-ghost" title="Mostra/nascondi quarta di copertina">✏️ Quarta</button>
 `;
 list.appendChild(header);
 
-// salva/persisti quando cambia
+// --- Area testo "quarta di copertina" (collassabile) ---
+const backWrap = document.createElement("div");
+backWrap.id = "backcoverWrap";
+backWrap.style.display = (currentCover === "front_back") ? "block" : "none";
+backWrap.style.margin = "6px 0 10px 0";
+backWrap.innerHTML = `
+  <textarea id="backcoverText" rows="3" class="input" placeholder="Testo quarta di copertina…"
+            style="width:100%;resize:vertical;">${escapeHtml(currentBack)}</textarea>
+  <div class="row-right" style="justify-content:flex-start;gap:8px;margin-top:6px">
+    <button id="saveKdpPrefs" class="btn btn-secondary">💾 Salva impostazioni KDP</button>
+    <span class="muted">Verranno ricordate per i prossimi export.</span>
+  </div>
+`;
+list.appendChild(backWrap);
+
+// --- Event listeners ---
 header.querySelector("#formatSelect")?.addEventListener("change",(e)=>{
   const v = e.target.value || "6x9";
   if (typeof rememberPageFormat === "function") rememberPageFormat(v);
+  toast(`Formato: ${v}`);
+});
+
+header.querySelector("#coverModeSelect")?.addEventListener("change",(e)=>{
+  const m = e.target.value || "front";
+  if (typeof rememberCoverMode === "function") rememberCoverMode(m);
+  backWrap.style.display = (m === "front_back") ? "block" : "none";
+  toast(`Copertina: ${m === "none" ? "nessuna" : m === "front" ? "solo fronte" : "fronte+retro"}`);
+});
+
+header.querySelector("#toggleBackcover")?.addEventListener("click", ()=>{
+  backWrap.style.display = (backWrap.style.display === "none") ? "block" : "none";
+});
+
+backWrap.querySelector("#saveKdpPrefs")?.addEventListener("click", ()=>{
+  const t = backWrap.querySelector("#backcoverText")?.value || "";
+  if (typeof rememberBackcoverText === "function") rememberBackcoverText(t.trim());
+  toast("Impostazioni KDP salvate.");
 });
    
   // Navigazione veloce
