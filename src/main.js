@@ -603,9 +603,14 @@ function renderChaptersList(bookId, chapters){
     </div>
   </div>
   <div class="chapter-actions">
+    <!-- ✅ NUOVO: apre la modale con il PDF del capitolo -->
+    <button class="btn btn-secondary btn-preview"
+            data-bid="${escapeAttr(bookId)}"
+            data-cid="${escapeAttr(cid)}">📖 Anteprima</button>
+
     <button class="btn btn-secondary" data-ch-open="${escapeAttr(cid)}">Apri</button>
-    <button class="btn btn-ghost" data-ch-edit="${escapeAttr(cid)}">Modifica</button>
-    <button class="btn btn-ghost" data-ch-del="${escapeAttr(cid)}">Elimina</button>
+    <button class="btn btn-ghost"     data-ch-edit="${escapeAttr(cid)}">Modifica</button>
+    <button class="btn btn-ghost"     data-ch-del="${escapeAttr(cid)}">Elimina</button>
     ${ENABLE_CHAPTER_DOWNLOAD ? `<button class="btn btn-ghost" data-ch-dl="${escapeAttr(cid)}">Scarica</button>` : ``}
   </div>`;
     ul.appendChild(row);
