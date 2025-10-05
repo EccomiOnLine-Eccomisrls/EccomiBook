@@ -198,6 +198,9 @@ const rememberLastLang   = (lang)=>{ try{ localStorage.setItem("last_language", 
 const loadLastLang       = ()=>{ try{ return (localStorage.getItem("last_language")||"it").toLowerCase(); }catch{ return "it"; } };
 const rememberLastAuthor = (a)=>{ try{ localStorage.setItem("last_author", a||"Nome artista"); }catch{} };
 const loadLastAuthor     = ()=>{ try{ return localStorage.getItem("last_author") || "Nome artista"; }catch{ return "Nome artista"; } };
+// === Page format (persistenza) ===
+const rememberPageFormat = (fmt)=>{ try{ localStorage.setItem("chapter_pdf_format", fmt||"6x9"); }catch{} };
+const loadPageFormat     = ()=>{ try{ return localStorage.getItem("chapter_pdf_format") || "6x9"; }catch{ return "6x9"; } };
 
 /* ===== UI state ===== */
 const uiState = {
