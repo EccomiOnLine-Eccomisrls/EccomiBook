@@ -110,6 +110,14 @@ def _wrap_text(text: str, canv: canvas.Canvas, max_w: float) -> List[str]:
         out.append(line)
     return out
 
+def _collect_book_texts(book: dict) -> List[Tuple[str, str]]:
+    out: List[Tuple[str, str]] = []
+    for ch in (book.get("chapters") or []):
+        title = str(ch.get("title") or "Senza titolo")
+        text  = _chapter_body(book, ch)
+        out.append((title, text))
+    return out
+    
 # ---------- Endpoints ----------
 @router.get("/export/books/{book_id}/export/pdf")
 def export_book_pdf(book_id: str):
@@ -190,6 +198,7 @@ def export_book_kdp(book_id: str):
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+    
 @router.get("/export/books/{book_id}/chapters/{chapter_id}/export/pdf")
 def export_single_chapter_pdf(book_id: str, chapter_id: str):
     book = _get_book_or_404(book_id)
