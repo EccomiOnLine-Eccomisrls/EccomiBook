@@ -66,12 +66,11 @@ def _ensure_fonts():
 
 def _resolve_pagesize(kind: str):
     k = (kind or "").strip().lower()
-    if k in ("6x9", "6×9", "6in x 9in"):
+    if k in ("6x9", "6×9", "6in x 9in", "kdp"):
         return (6 * inch, 9 * inch)
     if k in ("5x8", "5×8", "5in x 8in"):
         return (5 * inch, 8 * inch)
-    # default: A4
-    return A4
+    return A4  # default
 
 # =========================================================
 # Helpers di dominio
