@@ -190,107 +190,127 @@ def _draw_header_footer(c: canvas.Canvas, width: float, height: float,
         c.drawRightString(width - 1.5 * cm, header_y, (book_title or "")[:120])
         # numero pagina lato interno (sinistra su dispari)
         c.drawString(2.0 * cm, footer_y, str(page_num))
+
+def _draw_typographic_cover(c: canvas.Canvas, *, width, height, title, author, theme="auto"):
+    # Semplice cover tipografica “pulita”: titolo centrato, autore sotto
+    # Piccolo accento cromatico se vuoi (qui usiamo solo nero per semplicità KDP safe)
+    top_y = height * 0.62
+    c.setFont(_BODY_FONT_BOLD, 28)
+    for i, line in enumerate(_wrap_title(title or "", c, width*0.8, _BODY_FONT_BOLD, 28)):
+        c.drawCentredString(width/2.0, top_y - i*34, line)
+    if author:
+        c.setFont(_BODY_FONT, 14)
+        c.drawCentredString(width/2.0, top_y - 34*len(_wrap_title(title or "", c, width*0.8, _BODY_FONT_BOLD, 28)) - 18, f"di {author}")
+
+    c.setFont(_BODY_FONT, 9)
+    c.drawCentredString(width/2.0, 1.8*cm, "Creato con EccomiBook")
+
+def _draw_typographic_backcover(c: canvas.Canvas, *, width, height, text=None):
+    # Quarta di copertina minimal (testo giustificato semplice a bandiera)
+    c.setFont(_BODY_FONT_BOLD, 16)
+    c.drawString(2*cm, height - 3*cm, "Quarta di copertina")
+    c.setFont(_BODY_FONT, 11)
+    max_w = width - 4*cm
+    y = height - 4.2*cm
+    body = (text or "Questo libro è stato realizzato con EccomiBook. "
+                    "Descrivi qui la sinossi, i benefici per il lettore, il target e l’autore.")
+    for line in _wrap_text(body, c, max_w, _BODY_FONT, 11):
+        if y < 2*cm + 11:
+            break
+        c.drawString(2*cm, y, line)
+        y -= 15
         
 def _render_pdf(
     book_title: str,
     author: str | None,
     items: List[Tuple[str, str]],
     *,
-    show_cover: bool = True,
+    show_cover: bool = True,            # retro-compat (se True equivale a cover_mode="front")
+    cover_mode: str = "none",           # "none" | "front" | "front_back"
+    backcover_text: str | None = None,  # testo opzionale quarta
     page_size=A4,
-    margins_cm: Tuple[float, float, float, float] = (2.0, 2.0, 2.0, 2.0),  # L, R, T, B (ignorati per KDP speculare)
+    margins_cm: Tuple[float, float, float, float] = (2.0, 2.0, 2.0, 2.0),  # L,R,T,B
     body_font_size: int = 11,
     line_h: int = 15,
 ) -> bytes:
     _ensure_fonts()
 
+    # Normalizza cover_mode per compat
+    if show_cover and cover_mode == "none":
+        cover_mode = "front"
+
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=page_size)
     width, height = page_size
 
-    # Margini KDP (cm)
-    km = _kdp_margins_cm()
+    ml, mr, mt, mb = [v * cm for v in margins_cm]
+    max_width = width - ml - mr
 
-    # Utilities per calcolare frame speculare
-    def frame_left_for(pn: int) -> float:
-        # pari: interno a sinistra; dispari: interno a destra
-        return (km["inner"] * cm) if (pn % 2 == 0) else (km["outer"] * cm)
-
-    def frame_right_for(pn: int) -> float:
-        # pari: esterno a destra; dispari: esterno a sinistra
-        return width - ((km["outer"] * cm) if (pn % 2 == 0) else (km["inner"] * cm))
-
-    top_margin = km["top"] * cm
-    bottom_margin = km["bottom"] * cm
-
-    # Metadati PDF
     c.setTitle(book_title or "EccomiBook")
 
-    # Cover interna semplice (senza header/footer)
-    if show_cover:
-        c.setFont(_BODY_FONT_BOLD, 22)
-        c.drawCentredString(width / 2.0, height - 6 * cm, (book_title or ""))
-        if author:
-            c.setFont(_BODY_FONT, 14)
-            c.drawCentredString(width / 2.0, height - 7 * cm, f"di {author}")
-        c.setFont(_BODY_FONT, 10)
-        c.drawCentredString(
-            width / 2.0, 2 * cm,
-            f"Generato con EccomiBook — {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
-        )
-        c.showPage()
+    page_num = 0
 
-    page_num = 1  # prima pagina di contenuto
+    # ------ COVER FRONT ------
+    if cover_mode in ("front", "front_back"):
+        _draw_typographic_cover(
+            c, width=width, height=height,
+            title=(book_title or ""), author=author, theme="auto"
+        )
+        c.showPage()  # la cover non ha footer/intestazioni
+
+    # ------ CONTENUTO ------
+    footer_left = f"{book_title or ''}" + (f" — {author}" if author else "")
+    y = height - mt
     c.setFont(_BODY_FONT, body_font_size)
 
-    for chapter_title, chapter_text in items:
-        # Ogni capitolo su pagina DISPARI (1,3,5…) per prassi editoriale
-        if page_num > 1 and page_num % 2 == 0:
+    def draw_footer_if_needed():
+        if items:
+            page_str = str(page_num if page_num >= 1 or cover_mode == "none" else 1)
+            _draw_footer(
+                c,
+                width=width, left=ml, right=mr, bottom=mb,
+                footer_left=footer_left,
+                footer_right=page_str,
+                font=_BODY_FONT, font_size=9
+            )
+
+    for idx, (title, text) in enumerate(items, start=1):
+        if y < mb + (line_h * 3):
+            draw_footer_if_needed()
             c.showPage()
             page_num += 1
+            y = height - mt
+            c.setFont(_BODY_FONT, body_font_size)
 
-        # Header/footer pagina corrente
-        _draw_header_footer(c, width, height, page_num, (book_title or ""), (chapter_title or ""), _BODY_FONT)
-
-        left = frame_left_for(page_num)
-        right = frame_right_for(page_num)
-        usable_w = right - left
-        y = height - top_margin
-
-        # Titolo capitolo (bandiera sinistra)
+        # intestazione semplice (titolo capitolo)
+        title_lines = _wrap_title(title or "Senza titolo", c, max_width, _BODY_FONT_BOLD, 16)
         c.setFont(_BODY_FONT_BOLD, 16)
-        for tl in _wrap_text((chapter_title or "Senza titolo"), c, usable_w, _BODY_FONT_BOLD, 16):
-            if y < bottom_margin + line_h:
-                c.showPage()
-                page_num += 1
-                _draw_header_footer(c, width, height, page_num, (book_title or ""), (chapter_title or ""), _BODY_FONT)
-                left = frame_left_for(page_num)
-                right = frame_right_for(page_num)
-                usable_w = right - left
-                y = height - top_margin
-            c.drawString(left, y, tl)
+        for tl in title_lines:
+            c.drawCentredString(width / 2.0, y, tl)
             y -= (line_h + 2)
-
         y -= (line_h // 2)
         c.setFont(_BODY_FONT, body_font_size)
 
-        # Corpo del capitolo
-        for line in _wrap_text((chapter_text or ""), c, usable_w, _BODY_FONT, body_font_size):
-            if y < bottom_margin + line_h:
+        para_lines = _wrap_text(text or "", c, max_width, _BODY_FONT, body_font_size)
+        for line in para_lines:
+            if y < mb + line_h:
+                draw_footer_if_needed()
                 c.showPage()
                 page_num += 1
-                _draw_header_footer(c, width, height, page_num, (book_title or ""), (chapter_title or ""), _BODY_FONT)
-                left = frame_left_for(page_num)
-                right = frame_right_for(page_num)
-                usable_w = right - left
-                y = height - top_margin
+                y = height - mt
                 c.setFont(_BODY_FONT, body_font_size)
-            c.drawString(left, y, line)
+            c.drawString(ml, y, line)
             y -= line_h
 
-        # Pagina successiva (separatore capitolo)
+        y -= (line_h * 2)
+
+    if items:
+        draw_footer_if_needed()
+
+    # ------ BACK COVER (quarta) ------
+    if cover_mode == "front_back":
         c.showPage()
-        page_num += 1
+        _draw_typographic_backcover(c, width=width, height=height, text=backcover_text)
 
     c.save()
     buf.seek(0)
@@ -303,7 +323,9 @@ def _render_pdf(
 @router.get("/export/books/{book_id}/export/pdf")
 def export_book_pdf(
     book_id: str,
-    cover: bool = Query(True, description="Includi pagina di copertina"),
+    cover: bool = Query(True, description="(Compat) Includi copertina tipografica"),
+    cover_mode: str = Query("front", description='"none" | "front" | "front_back"'),
+    backcover_text: str | None = Query(None, description="Testo per la quarta di copertina"),
     size: str = Query("A4", description="A4 | 6x9 | 5x8"),
 ):
     book = _get_book_or_404(book_id)
@@ -313,6 +335,8 @@ def export_book_pdf(
         book.get("author"),
         items,
         show_cover=cover,
+        cover_mode=cover_mode,
+        backcover_text=backcover_text,
         page_size=_resolve_pagesize(size),
     )
     filename = f"{book.get('id','book')}.pdf"
@@ -360,24 +384,28 @@ def export_book_md(book_id: str):
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
-# ✅ GET/POST compat (legacy)
 @router.api_route("/export/books/{book_id}/export/kdp", methods=["GET", "POST"])
 def export_book_kdp(
     book_id: str,
-    size: str = Query("A4", description="A4 | 6x9 | 5x8"),
+    size: str = Query("6x9", description="A4 | 6x9 | 5x8"),
+    cover_mode: str = Query("none", description='"none" | "front" | "front_back"'),
+    backcover_text: str | None = Query(None, description="Testo quarta di copertina"),
 ):
     """
     Restituisce un .zip con:
-      - interior.pdf (senza cover, pronto KDP)
+      - interior.pdf (KDP-ready)
       - metadata.txt
     """
     book = _get_book_or_404(book_id)
     items = _collect_book_texts(book)
+
     pdf_bytes = _render_pdf(
         book.get("title") or "Senza titolo",
         book.get("author"),
         items,
-        show_cover=False,  # Interior KDP: niente cover
+        show_cover=(cover_mode != "none"),
+        cover_mode=cover_mode,
+        backcover_text=backcover_text,
         page_size=_resolve_pagesize(size),
     )
 
@@ -390,7 +418,10 @@ def export_book_kdp(
             f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
             f"Chapters: {len(items)}",
             f"Trim size: {size}",
+            f"Cover: {cover_mode}",
         ]
+        if backcover_text:
+            meta.append(f"Backcover: yes ({min(len(backcover_text),100)} chars)")
         z.writestr("metadata.txt", "\n".join(meta))
     zip_buf.seek(0)
 
