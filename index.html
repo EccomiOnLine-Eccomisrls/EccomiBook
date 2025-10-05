@@ -6,14 +6,14 @@
     <title>EccomiBook</title>
 
     <!-- ✅ Favicon multipiattaforma -->
-<link rel="icon" href="/favicon.ico" />
-<link rel="icon" type="image/png" href="/favicon.png" />
-<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-    <!-- index.html (dentro <head>) -->
-<script>
-  window.VITE_API_BASE_URL = "https://eccomibook-backend.onrender.com/api/v1";
-</script>
+    <!-- Config base API -->
+    <script>
+      window.VITE_API_BASE_URL = "https://eccomibook-backend.onrender.com/api/v1";
+    </script>
   </head>
   <body>
     <!-- Topbar -->
@@ -134,7 +134,7 @@
       <p class="footer">© EccomiBook</p>
     </main>
 
-    <!-- Modal: Modifica libro (sempre nel body) -->
+    <!-- Modal: Modifica libro -->
     <div id="modal-edit-book" class="modal" aria-hidden="true">
       <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="meb-title">
         <div class="modal__head">
@@ -163,49 +163,49 @@
     </div>
 
     <!-- Modal: Nuovo capitolo -->
-<div id="new-chapter-modal" class="modal" hidden>
-  <div class="modal__backdrop" data-close="1"></div>
-  <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="newChTitle">
-    <div class="modal__head">
-      <h3 id="newChTitle">Nuovo capitolo</h3>
-      <button type="button" class="modal__close" id="btn-newch-cancel" aria-label="Chiudi">×</button>
+    <div id="new-chapter-modal" class="modal" hidden>
+      <div class="modal__backdrop" data-close="1"></div>
+      <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="newChTitle">
+        <div class="modal__head">
+          <h3 id="newChTitle">Nuovo capitolo</h3>
+          <button type="button" class="modal__close" id="btn-newch-cancel" aria-label="Chiudi">×</button>
+        </div>
+
+        <form id="new-chapter-form" class="modal__body">
+          <label class="field">
+            <span>Titolo</span>
+            <input type="text" name="title" placeholder="Titolo del capitolo" required />
+          </label>
+
+          <label class="field" style="align-items:flex-start; gap:8px;">
+            <input type="checkbox" name="autoAI" />
+            <div>
+              <div>Genera subito con AI</div>
+              <div class="muted" style="font-size:.9em">Facoltativo: istruzioni per l’AI</div>
+              <textarea name="topic" rows="4" placeholder="Tono, stile, target, punti chiave…"></textarea>
+            </div>
+          </label>
+
+          <div class="modal__foot">
+            <button type="button" class="btn btn-ghost" id="btn-newch-cancel-2">Annulla</button>
+            <button type="submit" class="btn btn-secondary" id="btn-newch-create">Crea</button>
+          </div>
+        </form>
+      </div>
     </div>
 
-    <form id="new-chapter-form" class="modal__body">
-      <label class="field">
-        <span>Titolo</span>
-        <input type="text" name="title" placeholder="Titolo del capitolo" required />
-      </label>
-
-      <label class="field" style="align-items:flex-start; gap:8px;">
-        <input type="checkbox" name="autoAI" />
-        <div>
-          <div>Genera subito con AI</div>
-          <div class="muted" style="font-size:.9em">Facoltativo: istruzioni per l’AI</div>
-          <textarea name="topic" rows="4" placeholder="Tono, stile, target, punti chiave…"></textarea>
+    <!-- 📖 Modal Anteprima PDF -->
+    <div id="pdfPreviewModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999;">
+      <div style="position:absolute; top:4%; left:4%; width:92%; height:92%; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.4);">
+        <div style="height:48px; display:flex; align-items:center; justify-content:space-between; padding:0 12px; border-bottom:1px solid #eee;">
+          <strong>📖 Anteprima capitolo</strong>
+          <button id="pdfPreviewClose" style="border:none; background:#f24; color:#fff; border-radius:6px; padding:8px 10px; cursor:pointer;">Chiudi</button>
         </div>
-      </label>
-
-      <div class="modal__foot">
-        <button type="button" class="btn btn-ghost" id="btn-newch-cancel-2">Annulla</button>
-        <button type="submit" class="btn btn-secondary" id="btn-newch-create">Crea</button>
+        <iframe id="pdfPreviewFrame" title="Anteprima PDF" style="width:100%; height:calc(100% - 48px); border:0;"></iframe>
       </div>
-    </form>
-  </div>
-</div>
+    </div>
 
-    <!-- Vite dev: /src/main.js — in build sarà bundlato -->
+    <!-- Script principale -->
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
-
-    <!-- Modal Anteprima PDF -->
-<div id="pdfPreviewModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999;">
-  <div style="position:absolute; top:4%; left:4%; width:92%; height:92%; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.4);">
-    <div style="height:48px; display:flex; align-items:center; justify-content:space-between; padding:0 12px; border-bottom:1px solid #eee;">
-      <strong>📖 Anteprima capitolo</strong>
-      <button id="pdfPreviewClose" style="border:none; background:#f24; color:#fff; border-radius:6px; padding:8px 10px; cursor:pointer;">Chiudi</button>
-    </div>
-    <iframe id="pdfPreviewFrame" title="Anteprima PDF" style="width:100%; height:calc(100% - 48px); border:0;"></iframe>
-  </div>
-</div>
