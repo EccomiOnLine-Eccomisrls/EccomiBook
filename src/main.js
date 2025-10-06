@@ -591,14 +591,21 @@ header.innerHTML = `
 
   <span class="muted">·</span>
 
-  <label for="coverModeSelect" style="font-weight:600;">Copertina:</label>
-  <select id="coverModeSelect" class="input" style="margin-left:6px;">
-    <option value="none"       ${currentCover==="none"       ? "selected" : ""}>Nessuna</option>
-    <option value="front"      ${currentCover==="front"      ? "selected" : ""}>Solo fronte</option>
-    <option value="front_back" ${currentCover==="front_back" ? "selected" : ""}>Fronte + retro</option>
-  </select>
+<label for="coverModeSelect" style="font-weight:600;">Copertina:</label>
+<select id="coverModeSelect" class="input" style="margin-left:6px;">
+  <option value="none"       ${currentCover==="none"       ? "selected" : ""}>Nessuna</option>
+  <option value="front"      ${currentCover==="front"      ? "selected" : ""}>Solo fronte</option>
+  <option value="front_back" ${currentCover==="front_back" ? "selected" : ""}>Fronte + retro</option>
+</select>
 
-  <button id="toggleBackcover" class="btn btn-ghost" title="Mostra/nascondi quarta di copertina">✏️ Quarta</button>
+<span class="muted">·</span>
+
+<label style="display:inline-flex;align-items:center;gap:6px;">
+  <input type="checkbox" id="aiCover" ${ (localStorage.getItem("ai_cover")==="0") ? "" : "checked" } />
+  Genera copertina AI
+</label>
+
+<button id="toggleBackcover" class="btn btn-ghost" title="Mostra/nascondi quarta di copertina">✏️ Quarta</button>
 `;
 list.appendChild(header);
 
@@ -639,6 +646,13 @@ backWrap.querySelector("#saveKdpPrefs")?.addEventListener("click", ()=>{
   const t = backWrap.querySelector("#backcoverText")?.value || "";
   if (typeof rememberBackcoverText === "function") rememberBackcoverText(t.trim());
   toast("Impostazioni KDP salvate.");
+});
+
+// ✅ Persistenza checkbox "Genera copertina AI"
+header.querySelector("#aiCover")?.addEventListener("change", (e)=>{
+  const on = e.target.checked ? "1" : "0";
+  try { localStorage.setItem("ai_cover", on); } catch {}
+  toast(`Copertina AI: ${on==="1" ? "attiva" : "spenta"}`);
 });
    
   // Navigazione veloce
