@@ -417,6 +417,43 @@ def create_cover_image(title: str, author: str = "", style: str = "tipografica",
     out_path = _COVER_DIR / fname
     im.save(out_path, format="JPEG", quality=92, optimize=True)
     return str(out_path)
+
+# ============================================================
+#  AI-like Cover Generator (local)
+# ============================================================
+
+from fastapi.responses import FileResponse
+from pathlib import Path
+from PIL import Image, ImageDraw, ImageFont
+import io
+
+@router.get("/generate/cover")
+async def generate_cover(
+    title: str,
+    author: str,
+    style: str = "dark",
+    size: str = "6x9"
+):
+    """Genera una copertina tipografica base (placeholder locale)"""
+    width, height = (1800, 2700) if size == "6x9" else (2480, 3508)
+    bg_color = "#111" if style == "dark" else "#fff"
+    text_color = "#fff" if style == "dark" else "#000"
+
+    img = Image.new("RGB", (width, height), color=bg_color)
+    draw = ImageDraw.Draw(img)
+
+    # Titolo
+    font_title = ImageFont.load_default()
+    draw.text((width/2, height/2 - 50), title, fill=text_color, font=font_title, anchor="mm")
+
+    # Autore
+    draw.text((width/2, height/2 + 60), f"di {author}", fill=text_color, font=font_title, anchor="mm")
+
+    # Salva in memoria e restituisci
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/jpeg")
     
 # =========================================================
 # Endpoints
