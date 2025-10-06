@@ -1048,37 +1048,33 @@ async function downloadChapter(bookId, chapterId, anchorBtn, {debug=false} = {})
 }
 
 function exportBook(bookId, anchorBtn){
-  showMenuForButton(anchorBtn || document.body, EXPORT_FORMATS, async (fmt)=>{
+  showMenuForButton(anchorBtn || document.body, EXPORT_FORMATS, async (fmtChoice)=>{
     const base = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/export`;
-try {
-  if (fmt === "kdp") {
-  const base = `${API_BASE_URL}/export/books/${encodeURIComponent(bookId)}/export`;
-  const fmt  = localStorage.getItem("chapter_pdf_format") || "6x9";
-  const mode = localStorage.getItem("book_cover_mode") || "front";
-  const back = localStorage.getItem("book_backcover_text") || "";
-  const ai   = (localStorage.getItem("ai_cover") === "0") ? "0" : "1"; // default ON
+    try {
+      if (fmtChoice === "kdp") {
+        const trimSize   = localStorage.getItem("chapter_pdf_format") || "6x9";
+        const coverMode  = localStorage.getItem("book_cover_mode")   || "front";
+        const backText   = localStorage.getItem("book_backcover_text") || "";
+        const aiFlag     = (localStorage.getItem("ai_cover") === "0") ? "0" : "1"; // default ON
 
-  const url = `${base}/kdp` +
-              `?size=${encodeURIComponent(fmt)}` +
-              `&cover_mode=${encodeURIComponent(mode)}` +
-              (back ? `&backcover_text=${encodeURIComponent(back)}` : "") +
-              (ai   ? `&ai_cover=${ai}` : "");
+        const url = `${base}/kdp`
+          + `?size=${encodeURIComponent(trimSize)}`
+          + `&cover_mode=${encodeURIComponent(coverMode)}`
+          + (backText ? `&backcover_text=${encodeURIComponent(backText)}` : "")
+          + `&ai_cover=${aiFlag}`;
 
-  await fetchAndDownload(url, `book_${bookId}_kdp.zip`);
-  return;
-}
+        await fetchAndDownload(url, `book_${bookId}_kdp.zip`);
+        return;
+      }
 
       // pdf / md / txt
-      const url  = `${base}/${fmt}`;
-      const name = `book_${bookId}.${fmt}`;
+      const url  = `${base}/${fmtChoice}`;
+      const name = `book_${bookId}.${fmtChoice}`;
 
       if (isSafariLike()) {
-        // Safari/iPad: fetch+blob
         await fetchAndDownload(url, name);
       } else {
-        // Browser “liberi”: prova fast-path con window.open
         const win = window.open(url, "_blank", "noopener");
-        // Se popup bloccato, fallback a fetch+blob
         if (!win || win.closed || typeof win.closed === "undefined") {
           await fetchAndDownload(url, name);
         }
