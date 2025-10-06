@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse, PlainTextResponse
+from fastapi.responses import StreamingResponse, PlainTextResponse, FileResponse
 from typing import List, Tuple
 from io import BytesIO
 from zipfile import ZipFile, ZIP_DEFLATED
 from pathlib import Path
 from datetime import datetime
+from PIL import Image, ImageDraw, ImageFont
+import re
 
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -317,6 +319,106 @@ def _render_pdf(
     return buf.read()
 
 # =========================================================
+# AI-like Cover (placeholder locale, no AI)
+# =========================================================
+
+_COVER_DIR = Path("/tmp/eccomibook_covers")
+_COVER_DIR.mkdir(parents=True, exist_ok=True)
+
+def _slugify(x: str) -> str:
+    x = re.sub(r"\s+", "-", x.strip())
+    x = re.sub(r"[^a-zA-Z0-9\-_.]", "", x)
+    return x.lower()[:80] or "cover"
+
+def _pick_colors(style: str) -> tuple[str, str]:
+    s = (style or "").lower()
+    if "artist" in s:   return ("#1f2937", "#f59e0b")  # dark + amber
+    if "photo" in s:    return ("#0f172a", "#e2e8f0")  # very dark + light
+    if "light" in s:    return ("#ffffff", "#111827")  # white + near-black
+    if "dark" in s:     return ("#0b0f19", "#e5e7eb")  # dark + light gray
+    return ("#fafafa", "#111827")                      # default tipografica
+
+def _load_font(size: int, bold=False) -> ImageFont.FreeTypeFont:
+    # Prova font comuni; fallback a font di default
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"  if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSerif-Bold.ttf"     if bold else "/usr/share/fonts/truetype/noto/NotoSerif-Regular.ttf",
+    ]
+    for p in candidates:
+        try:
+            if Path(p).exists():
+                return ImageFont.truetype(p, size=size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+def _wrap_text_pil(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int) -> list[str]:
+    lines, cur = [], ""
+    for word in (text or "").split():
+        trial = (cur + " " + word).strip()
+        if draw.textlength(trial, font=font) <= max_w:
+            cur = trial
+        else:
+            if cur: lines.append(cur)
+            cur = word
+    if cur: lines.append(cur)
+    # preserva ritorni a capo manuali
+    out = []
+    for line in "\n".join(lines).splitlines():
+        out.append(line)
+    return out
+
+def create_cover_image(title: str, author: str = "", style: str = "tipografica", size: str = "6x9") -> str:
+    # Misure “fronte” a 300 DPI (KDP: 6x9 -> 1800x2700). A4: 2480x3508
+    if (size or "").lower() in ("6x9", "kdp"):
+        W, H = 1800, 2700
+    elif (size or "").lower() in ("5x8",):
+        W, H = 1500, 2400
+    else:  # A4
+        W, H = 2480, 3508
+
+    bg, fg = _pick_colors(style)
+    im = Image.new("RGB", (W, H), bg)
+    d  = ImageDraw.Draw(im)
+
+    # Cornice leggera
+    d.rectangle([40, 40, W-40, H-40], outline=fg, width=4)
+
+    # Tipografia
+    f_title = _load_font(96, bold=True)
+    f_sub   = _load_font(48, bold=False)
+
+    # Box di impaginazione
+    pad = 140
+    max_w = W - pad*2
+
+    # Titolo (centrato)
+    title = (title or "").strip() or "Senza titolo"
+    t_lines = _wrap_text_pil(d, title, f_title, max_w)
+    y = int(H*0.25)
+    for line in t_lines:
+        tw = d.textlength(line, font=f_title)
+        d.text(((W-tw)//2, y), line, font=f_title, fill=fg)
+        y += int(f_title.size * 1.15)
+
+    # Autore (sotto titolo)
+    if author:
+        a = f"di {author}"
+        aw = d.textlength(a, font=f_sub)
+        d.text(((W-aw)//2, y+20), a, font=f_sub, fill=fg)
+
+    # Bollino discreto
+    tag = "Creato con EccomiBook"
+    d.text((W//2 - d.textlength(tag, font=_load_font(28))/2, H - 120), tag, font=_load_font(28), fill=fg)
+
+    # Salva su /tmp ed esponi path
+    fname = f"{_slugify(title)}_{_slugify(author)}_{_slugify(style)}_{W}x{H}.jpg"
+    out_path = _COVER_DIR / fname
+    im.save(out_path, format="JPEG", quality=92, optimize=True)
+    return str(out_path)
+    
+# =========================================================
 # Endpoints
 # =========================================================
 
@@ -516,3 +618,19 @@ def export_preview_chapter_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": 'inline; filename="preview_chapter.pdf"'}
     )
+
+@router.get("/generate/cover")
+def generate_cover(
+    title: str,
+    author: str = "",
+    style: str = "tipografica",
+    size: str = "6x9"
+):
+    """
+    Genera una copertina JPG (placeholder tipografico) per anteprime o mock KDP.
+    style: tipografica | artistica | fotografica | light | dark
+    size : 6x9 | 5x8 | A4
+    """
+    img_path = create_cover_image(title=title, author=author, style=style, size=size)
+    filename = Path(img_path).name
+    return FileResponse(img_path, media_type="image/jpeg", filename=filename)
