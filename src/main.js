@@ -204,6 +204,9 @@ const loadPageFormat     = ()=>{ try{ return localStorage.getItem("chapter_pdf_f
 // === KDP prefs (persistenza) ===
 const rememberCoverMode     = (m)=>{ try{ localStorage.setItem("book_cover_mode", m||"front"); }catch{} };
 const loadCoverMode         = ()=>{ try{ return localStorage.getItem("book_cover_mode") || "front"; }catch{ return "front"; } };
+// === Cover theme (persistenza) ===
+const rememberCoverTheme = (s)=>{ try{ localStorage.setItem("cover_theme", s || "auto"); }catch{} };
+const loadCoverTheme     = ()=>{ try{ return localStorage.getItem("cover_theme") || "auto"; }catch{ return "auto"; } };
 
 const rememberBackcoverText = (t)=>{ try{ localStorage.setItem("book_backcover_text", t||""); }catch{} };
 const loadBackcoverText     = ()=>{ try{ return localStorage.getItem("book_backcover_text") || ""; }catch{ return ""; } };
