@@ -594,21 +594,36 @@ header.innerHTML = `
 
   <span class="muted">·</span>
 
-<label for="coverModeSelect" style="font-weight:600;">Copertina:</label>
-<select id="coverModeSelect" class="input" style="margin-left:6px;">
-  <option value="none"       ${currentCover==="none"       ? "selected" : ""}>Nessuna</option>
-  <option value="front"      ${currentCover==="front"      ? "selected" : ""}>Solo fronte</option>
-  <option value="front_back" ${currentCover==="front_back" ? "selected" : ""}>Fronte + retro</option>
-</select>
+  <label for="coverModeSelect" style="font-weight:600;">Copertina:</label>
+  <select id="coverModeSelect" class="input" style="margin-left:6px;">
+    <option value="none"       ${currentCover==="none"       ? "selected" : ""}>Nessuna</option>
+    <option value="front"      ${currentCover==="front"      ? "selected" : ""}>Solo fronte</option>
+    <option value="front_back" ${currentCover==="front_back" ? "selected" : ""}>Fronte + retro</option>
+  </select>
 
-<span class="muted">·</span>
+  <span class="muted">·</span>
 
-<label style="display:inline-flex;align-items:center;gap:6px;">
-  <input type="checkbox" id="aiCover" ${ (localStorage.getItem("ai_cover")==="0") ? "" : "checked" } />
-  Genera copertina AI
-</label>
+  <label style="display:inline-flex;align-items:center;gap:6px;">
+    <input type="checkbox" id="aiCover" ${ (localStorage.getItem("ai_cover")==="0") ? "" : "checked" } />
+    Genera copertina AI
+  </label>
 
-<button id="toggleBackcover" class="btn btn-ghost" title="Mostra/nascondi quarta di copertina">✏️ Quarta</button>
+  <span class="muted">·</span>
+
+  <label for="themeSelect" style="font-weight:600;">Tema:</label>
+  <select id="themeSelect" class="input" style="margin-left:6px;">
+    <option value="auto"  ${(typeof loadCoverTheme==="function"?loadCoverTheme():"auto")==="auto"  ? "selected" : ""}>Auto</option>
+    <option value="light" ${(typeof loadCoverTheme==="function"?loadCoverTheme():"auto")==="light" ? "selected" : ""}>Chiaro</option>
+    <option value="dark"  ${(typeof loadCoverTheme==="function"?loadCoverTheme():"auto")==="dark"  ? "selected" : ""}>Scuro</option>
+    <option value="blue"  ${(typeof loadCoverTheme==="function"?loadCoverTheme():"auto")==="blue"  ? "selected" : ""}>Blu</option>
+    <option value="warm"  ${(typeof loadCoverTheme==="function"?loadCoverTheme():"auto")==="warm"  ? "selected" : ""}>Caldo</option>
+  </select>
+
+  <button id="btnGenCover" class="btn btn-secondary" style="margin-left:8px;">
+    🖼️ Genera copertina (JPG)
+  </button>
+
+  <button id="toggleBackcover" class="btn btn-ghost" title="Mostra/nascondi quarta di copertina">✏️ Quarta</button>
 `;
 list.appendChild(header);
 
@@ -628,34 +643,52 @@ backWrap.innerHTML = `
 list.appendChild(backWrap);
 
 // --- Event listeners ---
+
+// Formato pagina
 header.querySelector("#formatSelect")?.addEventListener("change",(e)=>{
   const v = e.target.value || "6x9";
   if (typeof rememberPageFormat === "function") rememberPageFormat(v);
   toast(`Formato: ${v}`);
 });
 
+// Modalità copertina
 header.querySelector("#coverModeSelect")?.addEventListener("change",(e)=>{
   const m = e.target.value || "front";
   if (typeof rememberCoverMode === "function") rememberCoverMode(m);
-  backWrap.style.display = (m === "front_back") ? "block" : "none";
+  // mostra/nasconde la quarta
+  const backWrapEl = $("#backcoverWrap");
+  if (backWrapEl) backWrapEl.style.display = (m === "front_back") ? "block" : "none";
   toast(`Copertina: ${m === "none" ? "nessuna" : m === "front" ? "solo fronte" : "fronte+retro"}`);
 });
 
-header.querySelector("#toggleBackcover")?.addEventListener("click", ()=>{
-  backWrap.style.display = (backWrap.style.display === "none") ? "block" : "none";
+// Switch "Genera copertina AI"
+header.querySelector("#aiCover")?.addEventListener("change",(e)=>{
+  const on = e.target.checked ? "1" : "0";
+  try{ localStorage.setItem("ai_cover", on); }catch{}
+  toast(`Copertina AI: ${on==="1" ? "attiva" : "spenta"}`);
 });
 
+// Tema copertina
+header.querySelector("#themeSelect")?.addEventListener("change",(e)=>{
+  const v = e.target.value || "auto";
+  if (typeof rememberCoverTheme === "function") rememberCoverTheme(v);
+  toast(`Tema copertina: ${v}`);
+});
+
+// Salva testo quarta
 backWrap.querySelector("#saveKdpPrefs")?.addEventListener("click", ()=>{
   const t = backWrap.querySelector("#backcoverText")?.value || "";
   if (typeof rememberBackcoverText === "function") rememberBackcoverText(t.trim());
   toast("Impostazioni KDP salvate.");
 });
 
-// ✅ Persistenza checkbox "Genera copertina AI"
-header.querySelector("#aiCover")?.addEventListener("change", (e)=>{
-  const on = e.target.checked ? "1" : "0";
-  try { localStorage.setItem("ai_cover", on); } catch {}
-  toast(`Copertina AI: ${on==="1" ? "attiva" : "spenta"}`);
+// Genera copertina JPG (backend /generate/cover)
+header.querySelector("#btnGenCover")?.addEventListener("click", async ()=>{
+  try{
+    await generateCoverFromCurrentBook();
+  }catch(e){
+    toast("Errore generazione copertina: " + (e?.message||e));
+  }
 });
    
   // Navigazione veloce
@@ -1583,6 +1616,30 @@ function ensureChapterTitleField(){
   if (ta?.parentNode) ta.parentNode.insertBefore(block, ta);
 }
 
+async function generateCoverFromCurrentBook(){
+  const bookId = uiState.currentBookId || $("#bookIdInput")?.value?.trim();
+  if (!bookId) { toast("Apri un libro prima."); return; }
+
+  // prova a leggere titolo/autore da cache libreria
+  const book = (uiState.books || []).find(b => (b?.id||b?.book_id) === bookId) || {};
+  const title  = String(book?.title || uiState.currentBookTitle || "Senza titolo");
+  const author = String(book?.author || loadLastAuthor?.() || "");
+
+  const size  = (typeof loadPageFormat    === "function" ? loadPageFormat()    : "6x9");
+  const theme = (typeof loadCoverTheme    === "function" ? loadCoverTheme()    : "auto");
+  // ai_cover non serve per l’endpoint cover JPG (è solo per lo ZIP KDP), ma lo leggo se mai volessi mostrarlo
+  // const aiOn  = (localStorage.getItem("ai_cover") !== "0");
+
+  const url = `${API_BASE_URL}/generate/cover`
+    + `?title=${encodeURIComponent(title)}`
+    + `&author=${encodeURIComponent(author)}`
+    + `&style=${encodeURIComponent(theme)}`
+    + `&size=${encodeURIComponent(size)}`;
+
+  // scarica la JPG con il tuo helper già presente
+  await fetchAndDownload(url, `cover_${bookId}_${size}_${theme}.jpg`);
+  toast("🎉 Copertina generata!");
+}
 /* ===== Init ===== */
 document.addEventListener("DOMContentLoaded", async ()=>{
   wireButtons();
