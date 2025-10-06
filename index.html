@@ -194,18 +194,17 @@
       </div>
     </div>
 
-    <!-- 📖 Modal Anteprima PDF -->
-    <div id="pdfPreviewModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999;">
-      <div style="position:absolute; top:4%; left:4%; width:92%; height:92%; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.4);">
-        <div style="height:48px; display:flex; align-items:center; justify-content:space-between; padding:0 12px; border-bottom:1px solid #eee;">
-          <strong>📖 Anteprima capitolo</strong>
-          <button id="pdfPreviewClose" style="border:none; background:#f24; color:#fff; border-radius:6px; padding:8px 10px; cursor:pointer;">Chiudi</button>
-        </div>
-        <iframe id="pdfPreviewFrame" title="Anteprima PDF" style="width:100%; height:calc(100% - 48px); border:0;"></iframe>
-      </div>
-    </div>
+    <!-- Modal Anteprima PDF -->
+<div id="pdfPreviewModal" style="display:none" aria-hidden="true">
+  <div class="pdf-modal__backdrop"></div>
+  <div class="pdf-modal__panel" role="dialog" aria-modal="true" aria-label="Anteprima capitolo">
+    <button id="pdfPreviewClose" class="pdf-modal__close" type="button" aria-label="Chiudi anteprima">✕</button>
+    <iframe id="pdfPreviewFrame" class="pdf-modal__frame" title="Anteprima PDF"
+            sandbox="allow-scripts allow-same-origin"></iframe>
+  </div>
+</div>
 
-    <!-- Script principale -->
-    <script type="module" src="/src/main.js"></script>
-  </body>
+<!-- Script principale -->
+<script type="module" src="/src/main.js"></script>
+</body>
 </html>
