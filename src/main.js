@@ -690,6 +690,33 @@ header.querySelector("#btnGenCover")?.addEventListener("click", async ()=>{
     toast("Errore generazione copertina: " + (e?.message||e));
   }
 });
+
+// Mostra/nasconde area "quarta di copertina"
+header.querySelector("#toggleBackcover")?.addEventListener("click", ()=>{
+  const area  = document.getElementById("backcoverWrap");
+  const btn   = header.querySelector("#toggleBackcover");
+  const select= header.querySelector("#coverModeSelect");
+  if (!area) return;
+
+  const isHidden = area.style.display === "none" || getComputedStyle(area).display === "none";
+  const show = isHidden;
+
+  // mostra/nasconde
+  area.style.display = show ? "block" : "none";
+
+  // sync select (opzionale)
+  if (select) {
+    if (show && select.value !== "front_back")      select.value = "front_back";
+    if (!show && select.value === "front_back")     select.value = "front";
+  }
+
+  // accessibilità + UX (opzionale)
+  if (btn) {
+    btn.setAttribute("aria-expanded", show ? "true" : "false");
+    btn.textContent = show ? "🙈 Nascondi quarta" : "✏️ Quarta";
+  }
+  if (show) document.getElementById("backcoverText")?.focus();
+});
    
   // Navigazione veloce
   const nav=document.createElement("div");
