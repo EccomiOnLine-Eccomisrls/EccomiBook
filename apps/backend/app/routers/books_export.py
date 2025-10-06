@@ -384,44 +384,72 @@ def export_book_md(book_id: str):
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
+# ✅ GET/POST compat (legacy)
 @router.api_route("/export/books/{book_id}/export/kdp", methods=["GET", "POST"])
 def export_book_kdp(
     book_id: str,
-    size: str = Query("6x9", description="A4 | 6x9 | 5x8"),
-    cover_mode: str = Query("none", description='"none" | "front" | "front_back"'),
+    size: str = Query("A4", description="A4 | 6x9 | 5x8"),
+    cover_mode: str = Query("none", description="none | front | front_back"),
     backcover_text: str | None = Query(None, description="Testo quarta di copertina"),
+    ai_cover: bool = Query(False, description="Se true, genera copertina tipografica"),
+    theme: str = Query("auto", description="auto | light | dark | color1 ..."),
 ):
     """
     Restituisce un .zip con:
-      - interior.pdf (KDP-ready)
+      - interior.pdf (senza cover, pronto KDP)
+      - (opz) cover_front.pdf
+      - (opz) cover_back.pdf
       - metadata.txt
     """
     book = _get_book_or_404(book_id)
     items = _collect_book_texts(book)
 
-    pdf_bytes = _render_pdf(
+    # --- Interior (sempre senza cover pagina interna) ---
+    interior_bytes = _render_pdf(
         book.get("title") or "Senza titolo",
         book.get("author"),
         items,
-        show_cover=(cover_mode != "none"),
-        cover_mode=cover_mode,
-        backcover_text=backcover_text,
+        show_cover=False,
         page_size=_resolve_pagesize(size),
     )
 
+    # --- Copertine opzionali ---
+    cover_front = None
+    cover_back  = None
+    if cover_mode in ("front", "front_back") and ai_cover:
+        # usa le cover tipografiche integrate
+        buf_f = BytesIO()
+        c = canvas.Canvas(buf_f, pagesize=_resolve_pagesize(size))
+        _draw_typographic_cover(
+            c, *c._pagesize, title=(book.get("title") or ""), author=book.get("author"), theme=theme
+        )
+        c.showPage(); c.save()
+        buf_f.seek(0); cover_front = buf_f.read()
+
+        if cover_mode == "front_back":
+            buf_b = BytesIO()
+            c2 = canvas.Canvas(buf_b, pagesize=_resolve_pagesize(size))
+            _draw_typographic_backcover(c2, *c2._pagesize, text=backcover_text)
+            c2.showPage(); c2.save()
+            buf_b.seek(0); cover_back = buf_b.read()
+
+    # --- ZIP out ---
     zip_buf = BytesIO()
     with ZipFile(zip_buf, "w", ZIP_DEFLATED) as z:
-        z.writestr("interior.pdf", pdf_bytes)
+        z.writestr("interior.pdf", interior_bytes)
+        if cover_front: z.writestr("cover_front.pdf", cover_front)
+        if cover_back:  z.writestr("cover_back.pdf",  cover_back)
         meta = [
             f"Title: {book.get('title') or 'Senza titolo'}",
             f"Author: {book.get('author') or ''}",
             f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
             f"Chapters: {len(items)}",
             f"Trim size: {size}",
-            f"Cover: {cover_mode}",
+            f"Cover mode: {cover_mode}",
+            f"AI cover: {ai_cover}",
+            f"Theme: {theme}",
+            f"Backcover chars: {len(backcover_text or '')}",
         ]
-        if backcover_text:
-            meta.append(f"Backcover: yes ({min(len(backcover_text),100)} chars)")
         z.writestr("metadata.txt", "\n".join(meta))
     zip_buf.seek(0)
 
