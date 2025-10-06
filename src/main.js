@@ -1639,30 +1639,40 @@ function ensureChapterTitleField(){
   if (ta?.parentNode) ta.parentNode.insertBefore(block, ta);
 }
 
-async function generateCoverFromCurrentBook(){
+// ======================================================
+// 📘 Genera copertina (usa endpoint senza /api/v1)
+// ======================================================
+async function generateCoverFromCurrentBook() {
   const bookId = uiState.currentBookId || $("#bookIdInput")?.value?.trim();
-  if (!bookId) { toast("Apri un libro prima."); return; }
+  if (!bookId) {
+    toast("Apri un libro prima!");
+    return;
+  }
 
-  // prova a leggere titolo/autore da cache libreria
-  const book = (uiState.books || []).find(b => (b?.id||b?.book_id) === bookId) || {};
-  const title  = String(book?.title || uiState.currentBookTitle || "Senza titolo");
-  const author = String(book?.author || loadLastAuthor?.() || "");
+  // Carica titolo/autore dalla libreria o dai campi
+  const book = (uiState.books || []).find(b => b?.id === bookId);
+  const title  = String(book?.title  || loadLastBookTitle()  || "Senza titolo");
+  const author = String(book?.author || loadLastAuthor()     || "Autore sconosciuto");
 
-  const size  = (typeof loadPageFormat    === "function" ? loadPageFormat()    : "6x9");
-  const theme = (typeof loadCoverTheme    === "function" ? loadCoverTheme()    : "auto");
-  // ai_cover non serve per l’endpoint cover JPG (è solo per lo ZIP KDP), ma lo leggo se mai volessi mostrarlo
-  // const aiOn  = (localStorage.getItem("ai_cover") !== "0");
+  // Formato e tema salvati
+  const size  = (typeof loadPageFormat  === "function") ? loadPageFormat()  : "6x9";
+  const theme = (typeof loadCoverTheme  === "function") ? loadCoverTheme()  : "dark";
 
-  const url = `${API_BASE_URL}/generate/cover`
-    + `?title=${encodeURIComponent(title)}`
-    + `&author=${encodeURIComponent(author)}`
-    + `&style=${encodeURIComponent(theme)}`
-    + `&size=${encodeURIComponent(size)}`;
+  // === Base URL corretta per le cover ===
+  const COVER_BASE_URL = API_BASE_URL.replace(/\/api\/v1$/, "");
 
-  // scarica la JPG con il tuo helper già presente
+  // === Costruisci URL backend ===
+  const url = `${COVER_BASE_URL}/generate/cover`
+            + `?title=${encodeURIComponent(title)}`
+            + `&author=${encodeURIComponent(author)}`
+            + `&style=${encodeURIComponent(theme)}`
+            + `&size=${encodeURIComponent(size)}`;
+
+  // === Scarica la JPG ===
   await fetchAndDownload(url, `cover_${bookId}_${size}_${theme}.jpg`);
-  toast("🎉 Copertina generata!");
+  toast("Copertina generata!");
 }
+
 /* ===== Init ===== */
 document.addEventListener("DOMContentLoaded", async ()=>{
   wireButtons();
