@@ -90,14 +90,16 @@ def _build_outline_messages(language: str, topic: str) -> List[Dict[str, str]]:
         "4) Max 5 sezioni principali, ognuna con max 3 sottosezioni e max 3 sotto-sottosezioni.\n"
         "5) Lingua: {lang}.\n"
         "6) Se possibile, restituisci JSON conforme all'esempio:\n"
-        '   {\"outline\":[{\"n\":\"1\",\"title\":\"Introduzione\",\"children\":[{\"n\":\"1.1\",\"title\":\"Contesto\"}]}]}\n'
+        '   {"outline":[{"n":"1","title":"Introduzione","children":[{"n":"1.1","title":"Contesto"}]}]}\n'
         "7) Altrimenti restituisci testo semplice, una riga per elemento, es.: '1 Introduzione', '1.1 Contesto'."
-    ).format(lang=lang)
+    ).replace("{lang}", lang)
+
     user = f"Crea l'indice/sommario per questo libro.\nTopic: {topic or 'N/A'}"
     return [
         {"role": "system", "content": instruction},
         {"role": "user", "content": user}
     ]
+
 
 def _build_chapter_messages(language: str, topic: str, words: int, style: str) -> List[Dict[str, str]]:
     return [
