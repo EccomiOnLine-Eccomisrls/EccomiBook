@@ -25,6 +25,12 @@
 
    const escapeAttr = (s)=>escapeHtml(s).replace(/"/g,"&quot;");
 
+   // NEW — rileva "Indice/Sommario"
+function isOutlineWanted(titleOrTopic = "") {
+  const s = String(titleOrTopic).trim().toLowerCase();
+  return /^(indice|sommario)$/.test(s) || /\b(indice|sommario)\b/.test(s);
+}
+
 // Toast minimale non-bloccante (niente alert)
 const toastHostId = "__toast_host";
 function toast(msg){
@@ -453,35 +459,57 @@ async function apiCreateChapter(
   // Risposta attesa: { ok:true, chapter:{ id,title,content,language }, count }
   return r.json();
 }
+// NEW — SSE per generare l’Indice
+function generateOutlineSSE({ topic = "Indice", language = "it", onLine, onDone, onError }) {
+  const url = `${API_BASE_URL}/generate/chapter/sse`
+            + `?topic=${encodeURIComponent(topic)}`
+            + `&language=${encodeURIComponent(language)}`;
+
+  const es = new EventSource(url);
+
+  es.onmessage = (ev) => {
+    if (typeof onLine === "function") onLine(ev.data);
+  };
+  es.addEventListener("done", () => {
+    try { es.close(); } catch {}
+    if (typeof onDone === "function") onDone();
+  });
+  es.addEventListener("error", (e) => {
+    try { es.close(); } catch {}
+    if (typeof onError === "function") onError(e);
+  });
+
+  return es;
+}
 
 /* ===== Capitoli / Editor ===== */
-function nextChapterId(existing=[]) {
+function nextChapterId(existing = []) {
   const nums = existing
-    .map(c=>String(c.id||""))
-    .map(id => (id.match(/ch_(\d{4})$/)?.[1]) )
+    .map(c => String(c.id || ""))
+    .map(id => (id.match(/ch_(\d{4})$/)?.[1]))
     .filter(Boolean)
-    .map(n=>parseInt(n,10));
+    .map(n => parseInt(n, 10));
   const max = nums.length ? Math.max(...nums) : 0;
-  const n = String(max+1).padStart(4,"0");
+  const n = String(max + 1).padStart(4, "0");
   return `ch_${n}`;
 }
 
-async function showEditor(bookId){
+async function showEditor(bookId) {
   if (!uiState.books.length) { await fetchBooks(); }
 
   const idToOpen = bookId || loadLastBook() || "";
-  if(!idToOpen) return;
+  if (!idToOpen) return;
 
   rememberLastBook(idToOpen);
-  $("#editor-card").style.display="block";
-  resetEditorForBook(idToOpen);          // 👈 pulizia qui
+  $("#editor-card").style.display = "block";
+  resetEditorForBook(idToOpen); // 👈 pulizia qui
   $("#bookIdInput").value = idToOpen;
 
   await loadBookMeta(idToOpen);
   await refreshChaptersList(idToOpen);
   tweakChapterEditorUI();
 
-  if(!(uiState.chapters?.length)){
+  if (!(uiState.chapters?.length)) {
     const nid = nextChapterId([]);
     $("#chapterIdInput").value = nid;
     uiState.currentChapterId = nid;
@@ -492,17 +520,16 @@ async function showEditor(bookId){
   syncEditorButtonState();
 }
 
-function closeEditor(){
-  try{ stopAutosave(); }catch{}
+function closeEditor() {
+  try { stopAutosave(); } catch {}
   const card = $("#editor-card");
-  if (card){
+  if (card) {
     card.style.display = "none";
-    card.setAttribute("hidden","true");
-    card.setAttribute("aria-hidden","true");
+    card.setAttribute("hidden", "true");
+    card.setAttribute("aria-hidden", "true");
   }
-
   // reset stato editor per evitare autosave fantasma
-  uiState.currentChapterId  = "";
+  uiState.currentChapterId = "";
   uiState.lastSavedSnapshot = "";
   const ch  = $("#chapterIdInput");
   const ta  = $("#chapterText");
@@ -511,6 +538,72 @@ function closeEditor(){
   if (ttl) ttl.value = "";
   if (ta)  ta.value = "";
 }
+
+// NEW — entrypoint unico per generare capitoli (con ramo speciale Indice)
+async function handleGenerateChapter({ bookId, chapterId, title, topic, language = "it" }) {
+  const editor = document.querySelector("#chapterText")
+              || document.querySelector("#chapterTextarea")
+              || document.querySelector("#contentInput");
+  const wantOutline = isOutlineWanted(title || topic);
+
+  if (wantOutline) {
+    if (editor) editor.value = "";
+    const lines = [];
+
+    generateOutlineSSE({
+      topic: title || topic || "Indice",
+      language,
+      onLine: (line) => { lines.push(line); if (editor) editor.value += line + "\n"; },
+      onDone: async () => {
+        const content = lines.join("\n").trim();
+        await fetch(`${API_BASE_URL}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        }).catch(() => {});
+        console.log("Indice generato e salvato");
+      },
+      onError: (e) => {
+        console.error("Errore SSE:", e);
+        alert("Errore nella generazione dell'indice. Riprova.");
+      }
+    });
+    return; // interrompe la generazione “normale”
+  }
+
+  // 👉 qui continua la tua generazione normale (POST/stream) se non è un Indice
+  // await generateChapterNormally({ bookId, chapterId, title, topic, language });
+}
+
+/* === Router click globale: UN SOLO listener === */
+document.addEventListener("click", async (ev) => {
+  const el = ev.target.closest("[data-action]");
+  if (!el) return;
+  const action = el.getAttribute("data-action");
+
+  if (action === "generate") {
+    if (uiState.isGenerating) return;      // evita doppi click
+    uiState.isGenerating = true;
+    try {
+      const bookId    = $("#bookIdInput")?.value?.trim();
+      const chapterId = $("#chapterIdInput")?.value?.trim();
+      const title     = $("#chapterTitleInput")?.value?.trim() || "";
+      const topic     = $("#topicInput")?.value?.trim() || title || "Indice";
+      const language  = $("#languageInput")?.value || "it";
+
+      if (!bookId || !chapterId) {
+        alert("Seleziona un libro e un capitolo.");
+        return;
+      }
+      await handleGenerateChapter({ bookId, chapterId, title, topic, language });
+    } finally {
+      uiState.isGenerating = false;
+    }
+    return;
+  }
+
+  // ...altri case già presenti (open/rename/delete/...) ...
+});
 
 /* HERO helpers */
 function syncEditorButtonState(){
