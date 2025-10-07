@@ -304,8 +304,8 @@ def generate_chapter_stream(payload: GenIn = Body(...)):
 # ─────────────────────────────────────────────────────────
 @router.get("/generate/chapter/sse", tags=["generate"])
 def generate_chapter_sse(
-    book_id: str = Query(...),
-    chapter_id: str = Query(...),
+    book_id: str = Query("", description="Facoltativo"),
+    chapter_id: str = Query("", description="Facoltativo"),
     topic: str = Query("Introduzione"),
     language: str = Query("it"),
     style: str = Query("manuale/guida chiara"),
@@ -319,28 +319,28 @@ def generate_chapter_sse(
         yield (":" + " " * 2048 + "\n").encode("utf-8")
         yield b":ok\n\n"
 
+        # errori espliciti
         if not key:
-            demo = ("1 Introduzione\n1.1 Contesto\n1.2 Obiettivi\n2 Sezione successiva\n"
-                    if is_outline else
-                    "# Bozza automatica\n\n⚠️ OPENAI_API_KEY non configurata. Questo è un testo di esempio.\n")
-            for chunk in demo.split():
-                yield f"data: {chunk} ".encode("utf-8") + b"\n\n"
-                sleep(0.01)
+            yield b"event: error\ndata: OPENAI_API_KEY mancante nel backend\n\n"
             yield b"event: done\ndata: 1\n\n"
             return
-
         if client is None:
-            yield b"event: error\ndata: SDK OpenAI non disponibile\n\n"
+            yield b"event: error\ndata: SDK OpenAI non disponibile nel runtime\n\n"
             yield b"event: done\ndata: 1\n\n"
             return
 
         try:
             if is_outline:
-                messages = _build_outline_messages(language=language.strip().lower(), topic=(topic or "Indice").strip())
-                stream = _chat(client, model, messages, temperature=0.1, max_tokens=max_tokens, stream=True)
+                messages = _build_outline_messages(language=language.strip().lower(),
+                                                   topic=(topic or "Indice").strip())
+                stream = _chat(client, model, messages, temperature=0.1,
+                               max_tokens=max_tokens, stream=True)
             else:
-                messages = _build_chapter_messages(language=language.strip().lower(), topic=(topic or "Introduzione").strip(), words=words, style=style)
-                stream = _chat(client, model, messages, temperature=temperature, max_tokens=max_tokens, stream=True)
+                messages = _build_chapter_messages(language=language.strip().lower(),
+                                                   topic=(topic or "Introduzione").strip(),
+                                                   words=words, style=style)
+                stream = _chat(client, model, messages, temperature=temperature,
+                               max_tokens=max_tokens, stream=True)
 
             yield b"data: \n\n"  # micro-chunk iniziale
             buffer = ""
@@ -351,7 +351,6 @@ def generate_chapter_sse(
 
                 if is_outline:
                     buffer += part.replace("\r", "")
-                    # invia linee “chiuse”
                     while "\n" in buffer:
                         line, buffer = buffer.split("\n", 1)
                         clean = _normalize_outline(line)
