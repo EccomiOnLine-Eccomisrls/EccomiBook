@@ -177,13 +177,22 @@ def _normalize_outline(text: str) -> str:
     return s
 
 def _chat(client, model: str, messages: List[Dict[str, str]], temperature: float, max_tokens: int, stream: bool = False):
+    # Imposta il timeout correttamente per la SDK 1.x
+    cli = client.with_options(timeout=60.0)
     if stream:
-        return client.chat.completions.create(
-            model=model, messages=messages, temperature=temperature, max_tokens=max_tokens, stream=True, timeout=60,
+        return cli.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
         )
     else:
-        return client.chat.completions.create(
-            model=model, messages=messages, temperature=temperature, max_tokens=max_tokens, timeout=60,
+        return cli.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
 
 # ─────────────────────────────────────────────────────────
