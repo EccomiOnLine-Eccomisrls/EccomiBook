@@ -1833,27 +1833,65 @@ if (UX2_ENABLED) {
   s.textContent = ux2Css;
   document.head.appendChild(s);
 
-   // Patch anti-flicker aggiuntiva (sidebar iPad/Safari)
+   // Fix layout pulsanti nella colonna Indice (allineamento fisso, anti-flicker)
 (() => {
   const fix = document.createElement("style");
   fix.textContent = `
-  #ux2 .node .row .btn{
-    min-width:28px; height:28px; padding:0 8px;
+  /* Testata di ogni nodo come griglia: [info] [lock] [comandi] */
+  #ux2 .node > .row:first-child{
+    display:grid;
+    grid-template-columns: 1fr 28px 92px; /* ⬅️ colonna comandi fissa */
+    align-items:center;
+    gap:8px;
+  }
+
+  /* Area info (checkbox + id + titolo) a sinistra */
+  #ux2 .node > .row:first-child label.row{
+    min-width:0;              /* consente troncamento titolo */
+    gap:8px;
+  }
+  #ux2 .node .title{
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+    max-height:2.6em;         /* ~2 righe */
+    font-weight:600;
+    line-height:1.2;
+  }
+
+  /* Bottone lock centrato e “solido” (niente salti) */
+  #ux2 .node [data-lock]{
     display:inline-flex; align-items:center; justify-content:center;
-    line-height:1; border-radius:8px;
+    width:28px; height:28px; border-radius:6px;
+    border:1px solid #232a3a; background:#0f1320; color:#cbd5e1;
+    user-select:none;
   }
-  #ux2 .node .row .btn.ghost{
-    transition:none;
-    backface-visibility:hidden;
-    -webkit-backface-visibility:hidden;
-    will-change: transform;
+
+  /* Gruppo comandi (↑ ↓ ✕) a destra, larghezza fissa */
+  #ux2 .node > .row:first-child > .row{
+    justify-content:flex-end; gap:6px;
   }
-  #ux2 .btn.ghost{ border:1px solid #232a3a; }
-  #ux2 .btn.ghost:hover{ border-color:#2e354a; }
-  #ux2 .node{ contain: layout paint; transform: translateZ(0); }
-  #ux2 .panel .body{ -webkit-overflow-scrolling: touch; }
-  #ux2 *{ -webkit-tap-highlight-color: transparent; }
-  #ux2 .node .row .btn:active{ transform: scale(0.98); }
+  #ux2 .node > .row:first-child > .row .btn{
+    width:28px; height:28px; padding:0;
+    display:inline-flex; align-items:center; justify-content:center;
+    border-radius:6px; line-height:1; font-size:12px;
+    border:1px solid #232a3a; background:#0f1320; color:#cbd5e1;
+    transition:none; backface-visibility:hidden; -webkit-backface-visibility:hidden;
+  }
+  #ux2 .node > .row:first-child > .row .btn:hover{ border-color:#2e354a }
+  #ux2 .node > .row:first-child > .row .btn:active{ transform:scale(.98) }
+
+  /* Meta sotto (stato) più compatta */
+  #ux2 .node > .row:last-child{
+    margin-top:6px; color:#8a93a6; font-size:12px;
+    display:flex; justify-content:space-between;
+  }
+
+  /* Anti-flicker extra su iPad/Safari */
+  #ux2 .node{ contain: layout paint; transform:translateZ(0) }
+  #ux2 .panel .body{ -webkit-overflow-scrolling:touch }
+  #ux2 *{ -webkit-tap-highlight-color:transparent }
   `;
   document.head.appendChild(fix);
 })();
