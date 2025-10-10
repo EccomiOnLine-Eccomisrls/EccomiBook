@@ -2192,9 +2192,10 @@ if (UX2_ENABLED) {
           await refreshChaptersList(bookId);
         } catch (e) { console.warn("createChapter fail", e); continue; }
       }
-      $("#bookIdInput")?.value = bookId;
-      $("#chapterIdInput")?.value = chId;
-      $("#chapterTitleInput")?.value = n.title;
+      { const el = document.querySelector("#bookIdInput");    if (el) el.value = bookId; }
+      { const el = document.querySelector("#chapterIdInput"); if (el) el.value = chapterId; } 
+      { const el = document.querySelector("#chapterTitleInput"); if (el) el.value = title; }
+
 
       n.status = "generazione…"; n.pct = 10; updateJobsPreview();
       try{
