@@ -2146,10 +2146,11 @@ if (UX2_ENABLED) {
       const title     = "Indice";
       const topic     = buildIndexMarkdown(); // come prompt contenutistico
 
-      if (!bookId) { toast?.("Apri un libro prima"); return; }
-      $("#bookIdInput")?.value = bookId;
-      $("#chapterIdInput")?.value = chapterId;
-      $("#chapterTitleInput")?.value = title;
+      if (!bookId) { try{ toast("Apri un libro prima"); }catch{} return; }
+      { const el = document.querySelector("#bookIdInput");       if (el) el.value = bookId; }
+      { const el = document.querySelector("#chapterIdInput");    if (el) el.value = chapterId; }
+      { const el = document.querySelector("#chapterTitleInput"); if (el) el.value = title; }
+
 
       await handleGenerateChapter({ bookId, chapterId, title, topic, language: uiState.currentLanguage||"it" });
       toast?.("✅ Indice generato/salvato");
