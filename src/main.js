@@ -1833,14 +1833,14 @@ if (UX2_ENABLED) {
   s.textContent = ux2Css;
   document.head.appendChild(s);
 
-   // Fix layout pulsanti nella colonna Indice (allineamento fisso, anti-flicker)
+   // Fix layout pulsanti + leggibilità titoli + sidebar più comoda
 (() => {
   const fix = document.createElement("style");
   fix.textContent = `
   /* Testata di ogni nodo come griglia: [info] [lock] [comandi] */
   #ux2 .node > .row:first-child{
     display:grid;
-    grid-template-columns: 1fr 28px 92px; /* ⬅️ colonna comandi fissa */
+    grid-template-columns: 1fr 28px 92px; /* colonna comandi fissa */
     align-items:center;
     gap:8px;
   }
@@ -1850,12 +1850,18 @@ if (UX2_ENABLED) {
     min-width:0;              /* consente troncamento titolo */
     gap:8px;
   }
+
+  /* Titoli leggibili: no spezzature brutte, fino a 3 righe */
   #ux2 .node .title{
-    display:-webkit-box;
-    -webkit-line-clamp:2;
-    -webkit-box-orient:vertical;
-    overflow:hidden;
-    max-height:2.6em;         /* ~2 righe */
+    white-space: normal;
+    word-break: normal;            /* evita spezzare nel mezzo */
+    overflow-wrap: break-word;     /* va a capo su spazi/punteggiatura */
+    hyphens: auto;                 /* sillabazione automatica */
+    -webkit-hyphens: auto;         /* iOS/Safari */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;         /* 3 righe visibili */
+    max-height: 3.9em;             /* ~3 righe */
     font-weight:600;
     line-height:1.2;
   }
@@ -1888,6 +1894,12 @@ if (UX2_ENABLED) {
     display:flex; justify-content:space-between;
   }
 
+  /* Sidebar un filo più larga per dare respiro ai titoli */
+  #ux2 .main{ grid-template-columns: 360px 1fr 340px; } /* prima 320px 1fr 360px */
+  @media (max-width: 1024px){
+    #ux2 .main{ grid-template-columns: 1fr; }
+  }
+
   /* Anti-flicker extra su iPad/Safari */
   #ux2 .node{ contain: layout paint; transform:translateZ(0) }
   #ux2 .panel .body{ -webkit-overflow-scrolling:touch }
@@ -1895,6 +1907,7 @@ if (UX2_ENABLED) {
   `;
   document.head.appendChild(fix);
 })();
+
 
 
   // 2) Inject HTML
