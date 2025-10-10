@@ -1833,6 +1833,32 @@ if (UX2_ENABLED) {
   s.textContent = ux2Css;
   document.head.appendChild(s);
 
+   // Patch anti-flicker aggiuntiva (sidebar iPad/Safari)
+(() => {
+  const fix = document.createElement("style");
+  fix.textContent = `
+  #ux2 .node .row .btn{
+    min-width:28px; height:28px; padding:0 8px;
+    display:inline-flex; align-items:center; justify-content:center;
+    line-height:1; border-radius:8px;
+  }
+  #ux2 .node .row .btn.ghost{
+    transition:none;
+    backface-visibility:hidden;
+    -webkit-backface-visibility:hidden;
+    will-change: transform;
+  }
+  #ux2 .btn.ghost{ border:1px solid #232a3a; }
+  #ux2 .btn.ghost:hover{ border-color:#2e354a; }
+  #ux2 .node{ contain: layout paint; transform: translateZ(0); }
+  #ux2 .panel .body{ -webkit-overflow-scrolling: touch; }
+  #ux2 *{ -webkit-tap-highlight-color: transparent; }
+  #ux2 .node .row .btn:active{ transform: scale(0.98); }
+  `;
+  document.head.appendChild(fix);
+})();
+
+
   // 2) Inject HTML
   const UX2_HTML = `
   <div id="ux2">
