@@ -2126,7 +2126,7 @@ if (UX2_ENABLED) {
           <label class="row start" style="gap:8px;flex:1">
             <input type="checkbox" ${n.do?"checked":""} data-id="${n.id}">
             <span class="chip mono">${n.id}</span>
-            <span class="title">${escapeHtml(n.title||"")}</span>
+            <span class="title" title="${escapeAttr(n.title||'')}">${escapeHtml(n.title||"")}</span>
           </label>
           <span class="chip ${n.lock?"muted":""}" data-lock="${n.id}" title="Blocca/sblocca">🔒</span>
           <div class="row" style="gap:6px">
