@@ -1925,6 +1925,8 @@ if (UX2_ENABLED) {
         <div class="spacer"></div>
         <div class="row start"><span class="led ok"></span><span class="muted mono">UX2</span></div>
       </div>
+      
+<button class="tab" id="ux2LibraryBtn">📚 Libreria</button>
 
       <div class="main">
         <!-- Indice (albero) -->
@@ -2051,6 +2053,21 @@ if (UX2_ENABLED) {
 
   const container = document.createElement("div");
   container.innerHTML = UX2_HTML;
+   // Pulsante Libreria (UX2)
+document.getElementById("ux2LibraryBtn")?.addEventListener("click", async ()=>{
+  try {
+    const res = await fetch(`${API_BASE_URL}/books`);
+    const books = await res.json();
+    alert(
+      books.length
+        ? books.map(b=>`📘 ${b.title} (${b.id.slice(0,6)}…)`).join("\n")
+        : "Nessun libro trovato."
+    );
+  } catch(err){
+    alert("Errore nel caricamento libreria");
+  }
+});
+
   document.body.innerHTML = "";                 // nasconde la vecchia UI (non la cancella dalla memoria)
   document.body.appendChild(container.firstElementChild);
 
