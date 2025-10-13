@@ -326,4 +326,14 @@ body.modal-open .menu-pop{ display:none !important; }
   z-index: 1000;
 }
 
+/* Anti-overlay definitivo per click/tap */
+#backend-status,
+.app-statusbar,
+.noticebar,
+.toast,
+.statusbar {
+  pointer-events: none !important;
+}
+.topbar { position: relative; z-index: 1000; }
+.cta, .cta * { pointer-events: auto; } /* assicura che il bottone prenda i tap */
 
