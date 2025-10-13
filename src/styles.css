@@ -337,3 +337,10 @@ body.modal-open .menu-pop{ display:none !important; }
 .topbar { position: relative; z-index: 1000; }
 .cta, .cta * { pointer-events: auto; } /* assicura che il bottone prenda i tap */
 
+/* === Fix: evita che la barra di stato blocchi i click === */
+#backend-status { pointer-events: none; }
+.topbar { position: relative; z-index: 1000; }
+
+/* (opzionale ma utile) assicura che i bottoni prendano il tap */
+.cta, .cta * { pointer-events: auto; }
+
