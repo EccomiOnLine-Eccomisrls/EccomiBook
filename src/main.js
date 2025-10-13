@@ -2015,58 +2015,63 @@ if (UX2_ENABLED) {
     return _escapeHtml(String(s).replace(/\n/g," "));
   }
 
-  // === Libreria UX2 — selezione con prompt (setta davvero il libro corrente) ===
+  // === Libreria UX2 — SELETTORE CON SCELTA NUMERICA + APERTURA EDITOR ===
 (() => {
   const API = (window.VITE_API_BASE_URL) || "https://eccomibook-backend.onrender.com/api/v1";
   const ux2LibBtn = ux2Root.querySelector("#ux2LibraryBtn");
   if (!ux2LibBtn) return;
 
-  ux2LibBtn.addEventListener("click", async ()=>{
+  ux2LibBtn.addEventListener("click", async () => {
     try {
-      const res = await fetch(`${API}/books?ts=${Date.now()}`, { method:"GET", cache:"no-store" });
+      const res = await fetch(`${API}/books`, { method: "GET", cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const raw  = await res.json();
-      const books = Array.isArray(raw) ? raw : (raw.items || raw.books || []);
+      const data  = await res.json();
+      const books = Array.isArray(data) ? data : (data.items || data.books || []);
       if (!books.length) { alert("Nessun libro presente."); return; }
 
-      const list = books.map((b,i)=>{
-        const id = (b.id || b.book_id || "").toString();
-        const short = id ? id.slice(0,6)+"…" : "—";
-        return `${String(i+1).padStart(2," ")}) ${b.title || "(senza titolo)"} — ${short}`;
-      }).join("\n");
+      const lines = books.map((b, i) => {
+        const id = (b.id || b.book_id || b._id || "—").toString();
+        const t  = b.title || "(senza titolo)";
+        return `${i+1}) ${t} — ${id.slice(0,6)}…`;
+      });
 
-      const ans = prompt(`Seleziona un libro inserendo il numero:\n\n${list}\n\nNumero:`);
-      if (ans == null) return; // annullato
-      const idx = parseInt(ans,10) - 1;
-      if (isNaN(idx) || idx < 0 || idx >= books.length) { alert("Scelta non valida."); return; }
+      const pick = prompt(`Seleziona un libro inserendo il numero:\n\n${lines.join("\n")}\n\nNumero:`);
+      if (pick == null) return;
 
+      const idx = parseInt(pick, 10) - 1;
       const chosen = books[idx];
-      const bid = chosen.id || chosen.book_id;
-      if (!bid) { alert("Libro senza ID valido."); return; }
+      if (!chosen) { alert("Scelta non valida."); return; }
 
-      // Aggiorna stato globale usato da UX2/Autocompose
-      if (!window.uiState) window.uiState = {};
-      window.uiState.currentBookId   = bid;
-      window.uiState.currentLanguage = String(chosen.language || "it").toLowerCase();
-      window.uiState.books           = books;
+      const bookId = chosen.id || chosen.book_id || chosen._id;
+      const bookTitle = chosen.title || "(senza titolo)";
 
-      // Aggiorna pill "Libro: …" in topbar
-      const nameEl = ux2Root.querySelector("#ux2BookName");
-      if (nameEl) { nameEl.textContent = chosen.title || "—"; }
+      // Stato globale
+      window.uiState = window.uiState || {};
+      window.uiState.currentBookId = bookId;
+      localStorage.setItem("last_book_id", bookId);
 
-      // Carica capitoli per Autocompose / Insert Index
-      try { if (typeof window.refreshChaptersList === "function") { await window.refreshChaptersList(bid); } } catch {}
+      // Aggiorna label in topbar UX2
+      const tag = ux2Root.querySelector("#ux2BookName");
+      if (tag) tag.textContent = bookTitle;
 
-      // Feedback
-      if (typeof window.toast === "function") window.toast("📘 Libro selezionato");
-      else alert("Libro selezionato");
+      // Specchia anche nel form editor classico (se visibile)
+      const bidInput = document.querySelector("#bookIdInput");
+      if (bidInput) bidInput.value = bookId;
+
+      // Apri editor e carica capitoli (usa le funzioni già esistenti del tuo main)
+      if (typeof window.showEditor === "function") {
+        await window.showEditor(bookId);           // apre editor + lista capitoli
+      } else {
+        await window.refreshChaptersList?.(bookId); // fallback: almeno capitoli
+      }
+
+      alert("Libro selezionato");
     } catch (err) {
       console.error("[UX2] Libreria errore:", err);
       alert("Errore nel caricamento della libreria");
     }
   });
 })();
-
 
   // Preset albero
   var presetAcc = [
