@@ -275,6 +275,19 @@ body.modal-open .menu-pop{ display:none !important; }
   margin:6px 0;
 }
 
+/* === Fix overlay che blocca i click sulla topbar === */
+.app-statusbar,
+.toast,
+.noticebar {
+  pointer-events: none; /* la barra rossa non riceve più i click */
+}
+
+.topbar,
+.app-header {
+  position: relative;
+  z-index: 1000; /* tiene i bottoni davanti a tutto */
+}
+
 /* ===== PDF preview modal ===== */
 #pdfPreviewModal[aria-hidden="true"] { display:none; }
 #pdfPreviewModal {
