@@ -316,3 +316,14 @@ body.modal-open .menu-pop{ display:none !important; }
 /* Tieni la topbar sopra tutto */
 .topbar { position: relative; z-index: 1000; }
 
+/* === Fix: libreria non cliccabile / overlay === */
+#backend-status {
+  pointer-events: none;  /* disattiva cattura click sulla barra di stato */
+}
+
+.topbar {
+  position: relative;    /* la tiene sopra ai layer sottostanti */
+  z-index: 1000;
+}
+
+
