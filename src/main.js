@@ -2327,100 +2327,111 @@ document.getElementById("ux2LibraryBtn")?.addEventListener("click", async ()=>{
   }catch{ ux2.q("#ux2BookName").textContent = "—"; }
 }
 
-/* ===== LIBRERIA MINIMAL v3 (no conflitti) ===== */
-if (!window.__LIB_PATCH_V3__) {
-  window.__LIB_PATCH_V3__ = true;
+/* =========================================================
+ * LIBRERIA — BIND SICURO (no conflitti) — v4
+ * ========================================================= */
+(() => {
+  if (window.__LIB_V4_BOUND__) return;
+  window.__LIB_V4_BOUND__ = true;
 
   const API =
     (typeof window !== "undefined" && window.VITE_API_BASE_URL) ||
     "https://eccomibook-backend.onrender.com/api/v1";
 
-  // Funzione globale, richiamata dal bottone con onclick
-  window.openLibraryFromCTA = async function () {
-    const sec    = document.getElementById("library-section");
-    const list   = document.getElementById("library-list");
-    const editor = document.getElementById("editor-card");
+  const $id  = (x) => document.getElementById(x);
+  const btn  = $id("btn-library");
+  const sec  = $id("library-section");
+  const list = $id("library-list");
+  const ed   = $id("editor-card");
+  const bann = $id("lib-banner");
+  const btnEditor = $id("btn-editor");
+  const bookIdInput = $id("bookIdInput");
 
-    if (sec)    sec.style.display = "block";
-    if (editor) editor.style.display = "none";
+  // Banner helper
+  function flash(msg, ms = 1400) {
+    if (!bann) return;
+    bann.textContent = msg;
+    bann.style.display = "block";
+    clearTimeout(bann.__t);
+    bann.__t = setTimeout(() => (bann.style.display = "none"), ms);
+  }
 
-    // feedback visivo immediato (sparisce da solo)
-    showFlash("Libreria: caricamento...");
+  // Evita doppio-bind
+  btn?.removeEventListener("click", window.__LIB_V4_OPEN__);
+  window.__LIB_V4_OPEN__ = async function openLibraryClick(e) {
+    e?.preventDefault?.();
+    // mostra/nascondi
+    if (sec) sec.style.display = "block";
+    if (ed)  ed.style.display  = "none";
+    flash("Libreria: caricamento…");
 
     try {
-      const res = await fetch(`${API}/books`, { method: "GET" });
-      const data = await res.json();
-      const books = Array.isArray(data) ? data : (data.books || []);
-
-      if (!books.length) {
-        list.innerHTML = `<div class="muted">Nessun libro presente.</div>`;
-        showFlash("Libreria aperta (0 libri).");
-        return;
-      }
-
-      const html = books.map(b => {
-        const id     = b.id || b._id || b.book_id || "—";
-        const title  = b.title || "Senza titolo";
-        const author = b.author || "";
-        const lang   = b.language || b.lang || "";
-        const meta   = [author, lang].filter(Boolean).join(" · ");
-        return `
-          <div class="card" style="margin-bottom:10px">
-            <div class="card-head"><strong>${escapeHtml(title)}</strong></div>
-            <div class="card-body"><div class="muted">${escapeHtml(meta)}</div></div>
-            <div class="card-foot" style="display:flex; gap:8px">
-              <button class="btn btn-secondary" onclick="openEditorForBook('${encodeURIComponent(id)}')">Apri nell’Editor</button>
-              <a class="btn btn-ghost" href="${API}/books/${encodeURIComponent(id)}/export/md" target="_blank" rel="noopener">Scarica MD</a>
-            </div>
-          </div>
-        `;
-      }).join("");
-      list.innerHTML = html;
-      showFlash(`Libreria: ${books.length} libro/i.`);
-    } catch (e) {
-      console.error(e);
-      list.innerHTML = `<div class="muted">Errore nel caricamento della libreria.</div>`;
-      showFlash("Errore libreria.", true);
+      const books = await LIB_getBooks();
+      LIB_renderList(books);
+      flash(`Libreria: ${books.length} libro/i`);
+    } catch (err) {
+      console.error("[LIB] Errore caricamento libreria:", err);
+      if (list) list.innerHTML = `<div class="muted">Errore nel caricamento della libreria.</div>`;
+      flash("Errore libreria");
     }
   };
+  btn?.addEventListener("click", window.__LIB_V4_OPEN__, { passive: false });
 
-  // Apre l’editor per un libro scelto
-  window.openEditorForBook = function (encodedId) {
-    const id     = decodeURIComponent(encodedId || "");
-    const sec    = document.getElementById("library-section");
-    const editor = document.getElementById("editor-card");
-    const input  = document.getElementById("bookIdInput");
-    if (input) input.value = id;
-    if (sec)    sec.style.display = "none";
-    if (editor) editor.style.display = "block";
-    showFlash(`Editor aperto per ID: ${id}`);
-  };
-
-  // Flash message minimale
-  function showFlash(text, isError = false) {
-    let bar = document.getElementById("flashbar");
-    if (!bar) {
-      bar = document.createElement("div");
-      bar.id = "flashbar";
-      bar.style.cssText = "position:fixed;top:10px;left:50%;transform:translateX(-50%);padding:8px 12px;border-radius:8px;background:#1e293b;color:#fff;border:1px solid #334155;z-index:2000;font-size:13px";
-      document.body.appendChild(bar);
-    }
-    bar.textContent = text;
-    bar.style.background = isError ? "#7f1d1d" : "#1e293b";
-    clearTimeout(bar.__t);
-    bar.__t = setTimeout(() => (bar.textContent = ""), 1800);
+  // Usa eventuale fetchBooks esistente, altrimenti chiama API
+  async function LIB_getBooks() {
+    if (typeof window.fetchBooks === "function") return window.fetchBooks();
+    if (typeof fetchBooks === "function") return fetchBooks(); // altra definizione nel file
+    const res = await fetch(`${API}/books`, { method: "GET" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return Array.isArray(data) ? data : (data.books || []);
   }
 
-  function escapeHtml(s) {
+  function esc(s) {
     return String(s)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
+      .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;").replaceAll("'","&#39;");
   }
-}
 
+  function LIB_renderList(books = []) {
+    if (!list) return;
+    if (!books.length) {
+      list.innerHTML = `<div class="muted">Nessun libro presente.</div>`;
+      return;
+    }
+    const html = books.map(b => {
+      const id     = b.id || b._id || b.book_id || "";
+      const title  = b.title || "Senza titolo";
+      const author = b.author || "";
+      const lang   = b.language || b.lang || "";
+      const meta   = [author, lang].filter(Boolean).join(" · ");
+      return `
+        <div class="card" style="margin-bottom:10px">
+          <div class="card-head"><strong>${esc(title)}</strong></div>
+          <div class="card-body"><div class="muted">${esc(meta)}</div></div>
+          <div class="card-foot" style="display:flex; gap:8px; flex-wrap:wrap">
+            <button class="btn btn-secondary" data-lib-open="${encodeURIComponent(id)}">Apri nell’Editor</button>
+            <a class="btn btn-ghost" href="${API}/books/${encodeURIComponent(id)}/export/md" target="_blank" rel="noopener">Scarica MD</a>
+          </div>
+        </div>
+      `;
+    }).join("");
+    list.innerHTML = html;
+  }
+
+  // Delega: Apri nell’Editor
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest?.("[data-lib-open]");
+    if (!t) return;
+    e.preventDefault();
+    const id = decodeURIComponent(t.getAttribute("data-lib-open") || "");
+    if (bookIdInput) bookIdInput.value = id;
+    btnEditor?.removeAttribute?.("disabled");
+    if (sec) sec.style.display = "none";
+    if (ed)  ed.style.display  = "block";
+    flash(`Editor aperto (${id || "—"})`);
+  });
+})();
 
 
 /* ===== Fine UX2 Add-on ===== */
