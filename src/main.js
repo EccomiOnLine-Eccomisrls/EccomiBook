@@ -2326,5 +2326,39 @@ document.getElementById("ux2LibraryBtn")?.addEventListener("click", async ()=>{
     ux2.q("#ux2BookName").textContent = cur?.title || "—";
   }catch{ ux2.q("#ux2BookName").textContent = "—"; }
 }
+
+/* =========================================================
+ * Libreria — apertura/chiusura pannello
+ * ========================================================= */
+
+// Delega globale: intercetta i click sul bottone Libreria o sul tasto Chiudi
+document.addEventListener('click', (e) => {
+  const openBtn = e.target.closest('[data-action="open-library"]');
+  const closeBtn = e.target.closest('[data-action="close-library"]');
+
+  if (openBtn) {
+    e.preventDefault();
+    openLibraryPanel();
+  } else if (closeBtn) {
+    e.preventDefault();
+    closeLibraryPanel();
+  }
+});
+
+function openLibraryPanel() {
+  const panel = document.querySelector('#libraryPanel');
+  if (!panel) {
+    console.warn('⚠️ Pannello libreria mancante');
+    return;
+  }
+  panel.classList.add('is-open');
+  // Focus gentile sul primo input/bottone
+  requestAnimationFrame(() => panel.querySelector('input,button,select,textarea')?.focus());
+}
+
+function closeLibraryPanel() {
+  document.querySelector('#libraryPanel')?.classList.remove('is-open');
+}
+
 /* ===== Fine UX2 Add-on ===== */
 
