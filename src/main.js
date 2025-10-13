@@ -1804,7 +1804,6 @@ const UX2_HTML = (function(){
       <span class="pill">Libro: <span id="ux2BookName">—</span></span>
       <div class="spacer"></div>
       <button class="tab" id="ux2LibraryBtn" title="Libreria">📚</button>
-      <button class="tab" id="ux2ChaptersBtn">📄 Capitoli</button>
       <div class="row start"><span class="led ok"></span><span class="muted mono">UX2</span></div>
     </div>
 
@@ -2016,13 +2015,13 @@ if (UX2_ENABLED) {
     return _escapeHtml(String(s).replace(/\n/g," "));
   }
 
-  // === Bottone "📄 Capitoli" + apertura capitolo nel pannello Self ===
+  // === Bottone "📄 Capitoli" + apertura contenuto nel pannello Self ===
 (() => {
   const API = (window.VITE_API_BASE_URL) || "https://eccomibook-backend.onrender.com/api/v1";
 
-  // 1) Aggiungo il bottone nella topbar UX2
+  // 1️⃣ Aggiungo SOLO una volta il bottone Capitoli, se non esiste
   const topbar = document.querySelector("#ux2 .topbar");
-  if (!topbar) return;
+  if (!topbar || document.getElementById("ux2ChaptersBtn")) return;
 
   const chBtn = document.createElement("button");
   chBtn.id = "ux2ChaptersBtn";
@@ -2030,64 +2029,79 @@ if (UX2_ENABLED) {
   chBtn.textContent = "📄 Capitoli";
   topbar.appendChild(chBtn);
 
-  // 2) Handler: elenco capitoli -> scelta numerica -> carica contenuto
+  // 2️⃣ Handler di click
   chBtn.addEventListener("click", async () => {
-    const bookId = window.uiState?.currentBookId
-      || document.querySelector("#bookIdInput")?.value?.trim();
-    if (!bookId) { alert("Seleziona un libro prima (📚 Libreria)."); return; }
+    const bookId =
+      (window.uiState?.currentBookId) ||
+      document.querySelector("#bookIdInput")?.value?.trim();
+
+    if (!bookId) {
+      alert("📚 Seleziona prima un libro dalla Libreria");
+      return;
+    }
 
     try {
-      // prendo l’elenco libri e trovo quello corrente (include i capitoli)
-      const res = await fetch(`${API}/books?ts=${Date.now()}`, { cache: "no-store" });
+      const res = await fetch(`${API}/books/${encodeURIComponent(bookId)}`, {
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const arr = await res.json();
-      const items = Array.isArray(arr) ? arr : (arr.items || arr.books || []);
-      const bk = items.find(b => (b.id || b.book_id || b._id) === bookId);
+      const bk = await res.json();
       const chapters = bk?.chapters || [];
-      if (!chapters.length) { alert("Nessun capitolo nel libro."); return; }
 
-      // lista numerata
-      const lines = chapters.map((c, i) =>
-        `${i + 1}) ${(c.title || c.id || "").trim()} — ${c.id}`);
-      const pick = prompt(`Scegli un capitolo inserendo il numero:\n\n${lines.join("\n")}\n\nNumero:`);
+      if (!chapters.length) {
+        alert("Nessun capitolo trovato in questo libro.");
+        return;
+      }
+
+      // Prompt di scelta
+      const lines = chapters.map(
+        (c, i) => `${i + 1}) ${(c.title || c.id || "").trim()} — ${c.id}`
+      );
+      const pick = prompt(
+        `Scegli un capitolo inserendo il numero:\n\n${lines.join("\n")}\n\nNumero:`
+      );
       if (pick == null) return;
 
       const idx = parseInt(pick, 10) - 1;
-      const ch  = chapters[idx];
-      if (!ch) { alert("Scelta non valida."); return; }
+      const ch = chapters[idx];
+      if (!ch) {
+        alert("Scelta non valida.");
+        return;
+      }
 
-      // scarico il contenuto del capitolo scelto
+      // Fetch contenuto capitolo
       const r = await fetch(
-        `${API}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(ch.id)}?ts=${Date.now()}`,
+        `${API}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(ch.id)}`,
         { cache: "no-store" }
       );
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
 
-      // 3) Riempio il pannello Self (UX2)
+      // Inserisci nei campi Self-compose
       const titleEl = document.querySelector("#ux2ChapterTitle");
       const editorEl = document.querySelector("#ux2Editor");
-
       if (titleEl) titleEl.value = data?.title || ch.title || "";
       if (editorEl) editorEl.value = data?.content || "";
 
-      // salvo lo stato corrente
+      // Aggiorna stato
       window.uiState = window.uiState || {};
       window.uiState.currentBookId = bookId;
       window.uiState.currentChapterId = ch.id;
 
-      // porto l’utente sulla tab Self
-      const selfTab = Array.from(document.querySelectorAll("#ux2 .tab"))
-        .find(t => t.getAttribute("data-mode") === "self");
+      // Porta sulla tab Self
+      const selfTab = Array.from(
+        document.querySelectorAll("#ux2 .tab")
+      ).find((t) => t.getAttribute("data-mode") === "self");
       selfTab?.click();
 
-      alert("Capitolo aperto.");
-    } catch (e) {
-      console.error("[UX2] Capitoli errore:", e);
-      alert("Errore nel caricamento capitoli.");
+      alert(`✅ Capitolo "${ch.title}" aperto`);
+    } catch (err) {
+      console.error("[UX2] Capitoli errore:", err);
+      alert("Errore nel caricamento capitoli");
     }
   });
 })();
+
 
   // Preset albero
   var presetAcc = [
