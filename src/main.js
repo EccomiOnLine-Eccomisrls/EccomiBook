@@ -2006,6 +2006,59 @@ if (UX2_ENABLED) {
   var ux2Root = container.firstElementChild;
   document.body.appendChild(ux2Root);
 
+  // === Bottone "📚 Libreria" — scegli il libro e popola la UI ===
+(function(){
+  var API = (window.VITE_API_BASE_URL) || "https://eccomibook-backend.onrender.com/api/v1";
+  var btn = document.getElementById("ux2LibraryBtn");   // è già nel tuo UX2_HTML
+  if (!btn) return;
+
+  btn.addEventListener("click", async function(){
+    try{
+      // 1) Carico i libri
+      var res = await fetch(API + "/books?ts=" + Date.now(), { cache:"no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      var data = await res.json();
+      var books = Array.isArray(data) ? data : (data.items || data.books || []);
+
+      if (!books.length){
+        alert("Nessun libro presente.");
+        return;
+      }
+
+      // 2) Prompt di scelta
+      var lines = books.map(function(b, i){
+        var id = (b.id || b.book_id || b._id || "—").toString();
+        return (i+1) + ") " + (b.title || "(senza titolo)") + " — " + id;
+      });
+      var pick = prompt("Seleziona un libro inserendo il numero:\n\n" + lines.join("\n") + "\n\nNumero:");
+      if (pick == null) return;
+
+      var idx = parseInt(pick, 10) - 1;
+      var book = books[idx];
+      if (!book){ alert("Scelta non valida."); return; }
+
+      // 3) Aggiorno stato globale + UI
+      window.uiState = window.uiState || {};
+      window.uiState.currentBookId   = (book.id || book.book_id || "");
+      window.uiState.currentLanguage = String(book.language || "it").toLowerCase();
+
+      var nameEl = document.getElementById("ux2BookName");
+      if (nameEl) nameEl.textContent = (book.title || "—");
+
+      // 4) Popola l’elenco capitoli a sinistra (se la funzione esiste)
+      if (typeof window.refreshChaptersList === "function") {
+        try { await window.refreshChaptersList(window.uiState.currentBookId); } catch(e){}
+      }
+
+      alert("📘 Libro selezionato");
+    }catch(err){
+      console.error("[UX2] Libreria errore:", err);
+      alert("Errore nel caricamento della libreria");
+    }
+  });
+})();
+
+
   // Utils locali (no optional chaining in assegnazioni)
   function _escapeHtml(s){
     s = String(s == null ? "" : s);
