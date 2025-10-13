@@ -197,48 +197,22 @@
       </div>
     </div>
 
-    <!-- Modal Anteprima PDF -->
+        <!-- Modal Anteprima PDF -->
     <div id="pdfPreviewModal" style="display:none" aria-hidden="true">
       <div class="pdf-modal__backdrop"></div>
       <div class="pdf-modal__panel" role="dialog" aria-modal="true" aria-label="Anteprima capitolo">
         <button id="pdfPreviewClose" class="pdf-modal__close" type="button" aria-label="Chiudi anteprima">✕</button>
         <iframe id="pdfPreviewFrame" class="pdf-modal__frame" title="Anteprima PDF"
-          sandbox="allow-scripts allow-same-origin"></iframe>
+                sandbox="allow-scripts allow-same-origin"></iframe>
       </div>
     </div>
 
-    <!-- ✅ Fallback libreria (funziona sempre) -->
-    <script>
-      window.__openLibHard = function () {
-        var sec = document.getElementById('library-section');
-        var list = document.getElementById('library-list');
-        var editor = document.getElementById('editor-card');
-        if (sec) sec.style.display = 'block';
-        if (editor) editor.style.display = 'none';
+    <!-- Banner debug (facoltativo) -->
+    <div id="lib-banner" style="display:none;position:fixed;top:10px;left:50%;transform:translateX(-50%);
+      background:#111;color:#fff;padding:8px 12px;border:1px solid #333;border-radius:8px;z-index:3000;
+      font:500 13px system-ui"></div>
 
-        if (list && !list.__init) {
-          list.__init = true;
-          list.innerHTML =
-            '<div class="muted">Verifica: pulsante funzionante. (Niente libri elencati perché questo è un test.)</div>';
-        }
-
-        var b = document.getElementById('lib-banner');
-        if (!b) {
-          b = document.createElement('div');
-          b.id = 'lib-banner';
-          b.style.cssText =
-            'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:8px 12px;border:1px solid #333;border-radius:8px;z-index:3000;font:500 13px system-ui';
-          document.body.appendChild(b);
-        }
-        b.textContent = '📚 Libreria APERTA (fallback)';
-        clearTimeout(b.__t);
-        b.__t = setTimeout(() => {
-          b.remove();
-        }, 1500);
-      };
-    </script>
-
-    <!-- Script principale -->
-    <script type="module" src="/src/main.js"></script>
+    <!-- Script principale (Vite module) -->
+    <script type="module" src="/src/main.js?v=lib1"></script>
   </body>
 </html>
