@@ -15,6 +15,7 @@
       window.VITE_API_BASE_URL = "https://eccomibook-backend.onrender.com/api/v1";
     </script>
   </head>
+
   <body>
     <!-- Topbar -->
     <header class="topbar">
@@ -41,6 +42,7 @@
             </span>
           </button>
 
+          <!-- ✅ Libreria con fallback attivo -->
           <button id="btn-library" class="cta cta--outline" onclick="__openLibHard()">
             <span class="cta__icon">📚</span>
             <span class="cta__text">
@@ -72,7 +74,7 @@
         <!-- Book ID + menu -->
         <label for="bookIdInput">Book ID</label>
         <div class="input-row">
-          <input id="bookIdInput" type="text" placeholder="ID libro" list="books-dl" autocomplete="off"/>
+          <input id="bookIdInput" type="text" placeholder="ID libro" list="books-dl" autocomplete="off" />
           <button id="btn-book-menu" class="iconbtn" title="Elenco libri">▼</button>
         </div>
 
@@ -81,7 +83,7 @@
           <div>
             <label for="chapterIdInput">Chapter ID</label>
             <div class="input-row">
-              <input id="chapterIdInput" type="text" placeholder="es. ch_0001" list="chapters-dl" autocomplete="off"/>
+              <input id="chapterIdInput" type="text" placeholder="es. ch_0001" list="chapters-dl" autocomplete="off" />
               <button id="btn-ch-menu" class="iconbtn" title="Elenco capitoli">▼</button>
               <button id="btn-ch-new" class="iconbtn" title="Nuovo capitolo">＋</button>
             </div>
@@ -91,11 +93,12 @@
           </div>
         </div>
 
-        <!-- Wrapper a due colonne: Topic (largo) + Lingua (compatta a destra) -->
+        <!-- Topic + Lingua -->
         <div class="fields" style="margin-top:8px">
           <label class="field" style="grid-column:1 / 2" for="topicInput">
-            <span>Topic (per AI) <span title="Indica obiettivo, tono, pubblico, punti da coprire e vincoli di stile.">ℹ️</span></span>
-            <!-- TEXTAREA larga -->
+            <span>Topic (per AI)
+              <span title="Indica obiettivo, tono, pubblico, punti da coprire e vincoli di stile.">ℹ️</span>
+            </span>
             <textarea id="topicInput" rows="4"
               placeholder="Obiettivo, tono, pubblico, punti chiave, vincoli (es. 5 sezioni + esercizio finale)"></textarea>
           </label>
@@ -144,15 +147,15 @@
         <div class="modal__body">
           <label class="field">
             <span>Titolo</span>
-            <input type="text" id="meb-title-input" placeholder="Titolo">
+            <input type="text" id="meb-title-input" placeholder="Titolo" />
           </label>
           <label class="field">
             <span>Autore</span>
-            <input type="text" id="meb-author-input" placeholder="Autore">
+            <input type="text" id="meb-author-input" placeholder="Autore" />
           </label>
           <label class="field">
             <span>Lingua</span>
-            <input type="text" id="meb-lang-input" placeholder="it / en / es…" maxlength="10">
+            <input type="text" id="meb-lang-input" placeholder="it / en / es…" maxlength="10" />
           </label>
         </div>
         <div class="modal__foot">
@@ -195,16 +198,47 @@
     </div>
 
     <!-- Modal Anteprima PDF -->
-<div id="pdfPreviewModal" style="display:none" aria-hidden="true">
-  <div class="pdf-modal__backdrop"></div>
-  <div class="pdf-modal__panel" role="dialog" aria-modal="true" aria-label="Anteprima capitolo">
-    <button id="pdfPreviewClose" class="pdf-modal__close" type="button" aria-label="Chiudi anteprima">✕</button>
-    <iframe id="pdfPreviewFrame" class="pdf-modal__frame" title="Anteprima PDF"
-            sandbox="allow-scripts allow-same-origin"></iframe>
-  </div>
-</div>
+    <div id="pdfPreviewModal" style="display:none" aria-hidden="true">
+      <div class="pdf-modal__backdrop"></div>
+      <div class="pdf-modal__panel" role="dialog" aria-modal="true" aria-label="Anteprima capitolo">
+        <button id="pdfPreviewClose" class="pdf-modal__close" type="button" aria-label="Chiudi anteprima">✕</button>
+        <iframe id="pdfPreviewFrame" class="pdf-modal__frame" title="Anteprima PDF"
+          sandbox="allow-scripts allow-same-origin"></iframe>
+      </div>
+    </div>
 
-<!-- Script principale -->
-<script type="module" src="/src/main.js"></script>
-</body>
+    <!-- ✅ Fallback libreria (funziona sempre) -->
+    <script>
+      window.__openLibHard = function () {
+        var sec = document.getElementById('library-section');
+        var list = document.getElementById('library-list');
+        var editor = document.getElementById('editor-card');
+        if (sec) sec.style.display = 'block';
+        if (editor) editor.style.display = 'none';
+
+        if (list && !list.__init) {
+          list.__init = true;
+          list.innerHTML =
+            '<div class="muted">Verifica: pulsante funzionante. (Niente libri elencati perché questo è un test.)</div>';
+        }
+
+        var b = document.getElementById('lib-banner');
+        if (!b) {
+          b = document.createElement('div');
+          b.id = 'lib-banner';
+          b.style.cssText =
+            'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:8px 12px;border:1px solid #333;border-radius:8px;z-index:3000;font:500 13px system-ui';
+          document.body.appendChild(b);
+        }
+        b.textContent = '📚 Libreria APERTA (fallback)';
+        clearTimeout(b.__t);
+        b.__t = setTimeout(() => {
+          b.remove();
+        }, 1500);
+      };
+    </script>
+
+    <!-- Script principale -->
+    <script type="module" src="/src/main.js"></script>
+  </body>
 </html>
