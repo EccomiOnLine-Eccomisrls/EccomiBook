@@ -2124,9 +2124,10 @@ if (UX2_ENABLED) {
       const topic     = buildIndexMarkdown();
 
       if (!bookId) { try{ window.toast?.("Apri un libro prima"); }catch{} return; }
-      document.querySelector("#bookIdInput")?.value    = bookId;
-      document.querySelector("#chapterIdInput")?.value = chapterId || "";
-      document.querySelector("#chapterTitleInput")?.value = title;
+      { const el = document.querySelector("#bookIdInput");       if (el) el.value = bookId; }
+      { const el = document.querySelector("#chapterIdInput");    if (el) el.value = chapterId || ""; }
+      { const el = document.querySelector("#chapterTitleInput"); if (el) el.value = title; }
+
 
       await window.handleGenerateChapter?.({ bookId, chapterId, title, topic, language: window.uiState?.currentLanguage||"it" });
       window.toast?.("✅ Indice generato/salvato");
@@ -2167,8 +2168,9 @@ if (UX2_ENABLED) {
           await window.refreshChaptersList?.(bookId);
         } catch (e) { console.warn("createChapter fail", e); continue; }
       }
-      document.querySelector("#bookIdInput")?.value    = bookId;
-      document.querySelector("#chapterIdInput")?.value = chId || "";
+      { const el = document.querySelector("#bookIdInput");    if (el) el.value = bookId; }
+      { const el = document.querySelector("#chapterIdInput"); if (el) el.value = chId || ""; }
+
 
       n.status = "generazione…"; n.pct = 10; updateJobsPreview();
       try{
