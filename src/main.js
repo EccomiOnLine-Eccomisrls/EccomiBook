@@ -2360,5 +2360,122 @@ function closeLibraryPanel() {
   document.querySelector('#libraryPanel')?.classList.remove('is-open');
 }
 
+/* =========================================================
+ * Libreria: apri/chiudi + carica elenco libri
+ * ========================================================= */
+
+// Base URL (usa quello che hai in window.VITE_API_BASE_URL)
+const API_BASE =
+  (typeof window !== "undefined" && window.VITE_API_BASE_URL) ||
+  "https://eccomibook-backend.onrender.com/api/v1";
+
+// Riferimenti DOM
+const btnLibrary     = document.getElementById('btn-library');
+const btnEditor      = document.getElementById('btn-editor');
+const librarySection = document.getElementById('library-section');
+const libraryList    = document.getElementById('library-list');
+const editorCard     = document.getElementById('editor-card');
+const bookIdInput    = document.getElementById('bookIdInput');
+
+// Apri Libreria
+btnLibrary?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  await openLibrary();
+});
+
+async function openLibrary() {
+  // mostra sezione Libreria, nascondi Editor
+  librarySection.style.display = 'block';
+  editorCard.style.display = 'none';
+
+  // carica e renderizza
+  try {
+    const books = await fetchBooks();
+    renderLibrary(books);
+  } catch (err) {
+    console.error('Errore caricamento libreria:', err);
+    libraryList.innerHTML = `<div class="muted">Errore nel caricamento della libreria.</div>`;
+  }
+}
+
+// Chiudi Libreria e apri Editor per un libro
+function openEditorForBook(bookId) {
+  // imposta ID libro, abilita pulsante editor (se vuoi) e mostra editor
+  if (bookIdInput) bookIdInput.value = bookId;
+  btnEditor?.removeAttribute('disabled');
+
+  librarySection.style.display = 'none';
+  editorCard.style.display = 'block';
+}
+
+// Fetch libri dal backend
+async function fetchBooks() {
+  const res = await fetch(`${API_BASE}/books`, { method: 'GET' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  // compat: accetta sia {books:[...]} sia [...]
+  return Array.isArray(data) ? data : (data.books || []);
+}
+
+// Disegna lista libri
+function renderLibrary(books = []) {
+  if (!books.length) {
+    libraryList.innerHTML = `<div class="muted">Nessun libro presente.</div>`;
+    return;
+  }
+
+  libraryList.innerHTML = books.map(b => {
+    const id = b.id || b._id || b.book_id || '—';
+    const title = b.title || 'Senza titolo';
+    const author = b.author || '';
+    const lang = b.language || b.lang || '';
+    const meta = [author, lang].filter(Boolean).join(' · ');
+    return `
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-head"><strong>${escapeHtml(title)}</strong></div>
+        <div class="card-body">
+          <div class="muted">${escapeHtml(meta)}</div>
+        </div>
+        <div class="card-foot" style="display:flex; gap:8px">
+          <button class="btn btn-secondary" data-open-book="${encodeURIComponent(id)}">Apri nell’Editor</button>
+          <button class="btn btn-ghost" data-edit-book="${encodeURIComponent(id)}">Modifica metadati</button>
+          <a class="btn btn-ghost" href="${API_BASE}/books/${encodeURIComponent(id)}/export/md" target="_blank" rel="noopener">Scarica MD</a>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Delega click per i pulsanti della lista
+document.addEventListener('click', (e) => {
+  const open = e.target.closest('[data-open-book]');
+  if (open) {
+    e.preventDefault();
+    const id = decodeURIComponent(open.getAttribute('data-open-book'));
+    openEditorForBook(id);
+    return;
+  }
+
+  const edit = e.target.closest('[data-edit-book]');
+  if (edit) {
+    e.preventDefault();
+    const id = decodeURIComponent(edit.getAttribute('data-edit-book'));
+    // se hai già un tuo modal "Modifica libro", puoi valorizzarlo qui:
+    // (apre il modal esistente #modal-edit-book)
+    document.getElementById('modal-edit-book')?.classList?.remove('hidden');
+    // TODO: carica i metadati del libro e riempi i campi meb-*
+  }
+});
+
+// Utility minima per sicurezza HTML
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#39;');
+}
+
 /* ===== Fine UX2 Add-on ===== */
 
