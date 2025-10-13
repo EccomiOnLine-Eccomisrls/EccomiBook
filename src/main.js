@@ -1804,6 +1804,7 @@ const UX2_HTML = (function(){
       <span class="pill">Libro: <span id="ux2BookName">—</span></span>
       <div class="spacer"></div>
       <button class="tab" id="ux2LibraryBtn" title="Libreria">📚</button>
+      <button class="tab" id="ux2ChaptersBtn">📄 Capitoli</button>
       <div class="row start"><span class="led ok"></span><span class="muted mono">UX2</span></div>
     </div>
 
