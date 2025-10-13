@@ -1910,166 +1910,51 @@ if (UX2_ENABLED) {
 
 
 
-  // 2) Inject HTML
-  const UX2_HTML = `
-  <div id="ux2">
-    <div class="app">
-      <div class="topbar">
-        <div class="brand"><span class="dot"></span> EccomiBook</div>
-        <div class="mode-tabs">
-          <button class="tab active" data-mode="indice">Indice</button>
-          <button class="tab" data-mode="autocompose">AI Autocompose Book</button>
-          <button class="tab" data-mode="self">Scrivi il titolo…</button>
-        </div>
-        <span class="pill">Libro: <span id="ux2BookName">—</span></span>
-        <div class="spacer"></div>
-        <div class="row start"><span class="led ok"></span><span class="muted mono">UX2</span></div>
-      </div>
-      
-<button class="tab" id="ux2LibraryBtn">📚 Libreria</button>
-
-      <div class="main">
-        <!-- Indice (albero) -->
-        <section class="panel">
-          <h3>Indice</h3>
-          <div class="body">
-            <div class="row start" style="gap:8px;margin-bottom:10px">
-              <button class="btn secondary" id="ux2GenIndex">Genera Indice</button>
-              <button class="btn ghost" id="ux2LockAll">Blocca tutti</button>
-              <button class="btn ghost" id="ux2MarkAll">Seleziona comporre</button>
-            </div>
-            <div id="ux2Tree"></div>
-          </div>
-          <div class="actions-bar">
-            <button class="btn ghost" data-preset="acc">Preset: Accademico</button>
-            <button class="btn ghost" data-preset="nar">Preset: Narrativo</button>
-            <button class="btn ghost" data-preset="man">Preset: Manuale</button>
-          </div>
-        </section>
-
-        <!-- Centro -->
-        <section class="panel">
-          <h3 id="ux2CenterTitle">Index Builder</h3>
-          <div class="body">
-            <!-- MODE: Indice -->
-            <div id="ux2ModeIndice">
-              <div class="row start" style="gap:8px;margin-bottom:8px;flex-wrap:wrap">
-                <input class="input" id="ux2IndexTitle" placeholder="Titolo libro" style="max-width:420px">
-                <select class="input" id="ux2Parts" style="max-width:200px">
-                  <option value="with">Con Parti</option>
-                  <option value="no">Solo capitoli</option>
-                </select>
-                <select class="input" id="ux2IndexMode" style="max-width:260px">
-                  <option value="respect">Respect capitoli esistenti</option>
-                  <option value="fresh">Fresh da zero</option>
-                  <option value="blurb">Blurb da sinossi</option>
-                </select>
-              </div>
-              <textarea id="ux2Blurb" class="input mono" rows="6" placeholder="Sinossi / scopo / note editoriali (per modalità Blurb)…"></textarea>
-              <div style="display:flex;gap:8px;margin:10px 0">
-                <button class="btn" id="ux2PreviewIndex">Anteprima</button>
-                <button class="btn ghost" id="ux2InsertIndex">Inserisci come capitolo 'Indice'</button>
-              </div>
-              <pre id="ux2IndexPreview" class="mono" style="white-space:pre-wrap;background:#0d1019;border:1px solid #232a3a;padding:10px;border-radius:10px;min-height:120px"></pre>
-            </div>
-
-            <!-- MODE: Autocompose -->
-            <div id="ux2ModeAuto" style="display:none">
-              <div class="row start" style="gap:8px;flex-wrap:wrap;margin-bottom:8px">
-                <select class="input" id="ux2Style" style="max-width:210px">
-                  <option value="acc">Stile: Accademico</option>
-                  <option value="nar">Stile: Narrativo</option>
-                  <option value="man">Stile: Manuale</option>
-                </select>
-                <select class="input" id="ux2Tone" style="max-width:210px">
-                  <option value="neutro">Tono: Neutro</option>
-                  <option value="amichevole">Tono: Amichevole</option>
-                  <option value="tecnico">Tono: Tecnico</option>
-                </select>
-              </div>
-              <div class="row start" style="gap:8px;margin:8px 0">
-                <button class="btn" id="ux2Compose">Autocompose selezionati</button>
-                <button class="btn ghost" id="ux2Pause">Pausa</button>
-                <button class="btn ghost" id="ux2Resume">Riprendi</button>
-              </div>
-              <div>
-                <div class="progress"><div id="ux2BookBar" class="bar" style="width:0%"></div></div>
-                <div class="row"><small class="muted">Completato</small><small id="ux2BookPct">0%</small></div>
-              </div>
-              <div style="margin-top:10px">
-                <h4 class="muted" style="margin:0 0 6px">Coda lavori</h4>
-                <div id="ux2Jobs"></div>
-              </div>
-            </div>
-
-            <!-- MODE: Self -->
-            <div id="ux2ModeSelf" style="display:none">
-              <input class="input" id="ux2ChapterTitle" placeholder="Titolo capitolo…" style="margin-bottom:8px">
-              <textarea class="input mono" id="ux2Editor" placeholder="Scrivi qui il contenuto…"></textarea>
-              <div class="row" style="margin-top:8px">
-                <div>
-                  <button class="btn ghost" id="ux2Expand">Espandi</button>
-                  <button class="btn ghost" id="ux2Rewrite">Riformula</button>
-                  <button class="btn ghost" id="ux2Summ">Sintetizza</button>
-                </div>
-                <div class="muted">Autosave • ⌘S</div>
-              </div>
-            </div>
-          </div>
-          <div class="actions-bar">
-            <button class="btn ghost" id="ux2ExportPdf">Esporta PDF</button>
-            <button class="btn ghost" id="ux2ExportMd">Esporta MD</button>
-            <button class="btn" id="ux2ExportKdp">Esporta KDP ZIP</button>
-          </div>
-        </section>
-
-        <!-- Destra -->
-        <aside class="panel">
-          <h3>Profilo & Copertina</h3>
-          <div class="body">
-            <div style="border:1px dashed #232a3a;border-radius:12px;padding:10px;margin-bottom:10px">
-              <label class="muted">Scopo del libro</label>
-              <textarea id="ux2Scope" class="input" rows="2" placeholder="Es. fornire basi teoriche e pratiche…"></textarea>
-              <label class="muted" style="margin-top:6px;display:block">Metodologia / Note</label>
-              <textarea id="ux2Meth" class="input" rows="2" placeholder="Es. approccio graduale, esempi, esercizi…"></textarea>
-            </div>
-            <div style="border:1px dashed #232a3a;border-radius:12px;padding:10px">
-              <div class="row start" style="gap:8px">
-                <select class="input" id="ux2Trim" style="max-width:140px">
-                  <option>6x9</option><option>5x8</option><option>A4</option>
-                </select>
-                <select class="input" id="ux2CoverMode" style="max-width:160px">
-                  <option value="front">Solo fronte</option>
-                  <option value="front_back">Fronte + retro</option>
-                </select>
-              </div>
-              <button class="btn ghost" id="ux2GenCover" style="margin-top:8px">Genera copertina (JPG)</button>
-            </div>
-          </div>
-        </aside>
-      </div>
-    </div>
-  </div>`;
-
+    // 2) Inject HTML
   const container = document.createElement("div");
   container.innerHTML = UX2_HTML;
-   // Pulsante Libreria (UX2)
-document.getElementById("ux2LibraryBtn")?.addEventListener("click", async ()=>{
-  try {
-    const res = await fetch(`${API_BASE_URL}/books`);
-    const books = await res.json();
-    alert(
-      books.length
-        ? books.map(b=>`📘 ${b.title} (${b.id.slice(0,6)}…)`).join("\n")
-        : "Nessun libro trovato."
-    );
-  } catch(err){
-    alert("Errore nel caricamento libreria");
-  }
-});
 
-  document.body.innerHTML = "";                 // nasconde la vecchia UI (non la cancella dalla memoria)
-  document.body.appendChild(container.firstElementChild);
+  // Sostituisci il body con UX2
+  document.body.innerHTML = "";
+  const ux2Root = container.firstElementChild;
+  document.body.appendChild(ux2Root);
+
+  // Utils (servono anche al renderTree)
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#39;");
+  }
+  function escapeAttr(s){
+    return escapeHtml(s).replaceAll("\n"," ");
+  }
+
+  // === Libreria UX2 — bind DOPO append + API corretta ===
+  (() => {
+    const API = (window.VITE_API_BASE_URL) || "https://eccomibook-backend.onrender.com/api/v1";
+    const ux2LibBtn = ux2Root.querySelector("#ux2LibraryBtn");
+    if (!ux2LibBtn) return;
+
+    ux2LibBtn.addEventListener("click", async ()=>{
+      try {
+        const res = await fetch(`${API}/books`, { method:"GET" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data  = await res.json();
+        const books = Array.isArray(data) ? data : (data.books || []);
+        alert(
+          books.length
+            ? books.map(b => `📘 ${(b.title||"Senza titolo")} (${(b.id||b._id||b.book_id||"——").toString().slice(0,6)}…)`).join("\n")
+            : "Nessun libro presente."
+        );
+      } catch (err) {
+        console.error("[UX2] Libreria errore:", err);
+        alert("Errore nel caricamento della libreria");
+      }
+    });
+  })();
 
   // 3) Preset di esempio per l’albero (solo UI, i dati reali arrivano dai tuoi books/chapters)
   const presetAcc = [
@@ -2113,8 +1998,8 @@ document.getElementById("ux2LibraryBtn")?.addEventListener("click", async ()=>{
 
   const ux2 = {
     state: { mode:"indice", tree:[...presetAcc], paused:false, composing:false, bookPct:0 },
-    q: (s, r=document)=> (r||document).querySelector(s),
-    qa:(s, r=document)=> Array.from((r||document).querySelectorAll(s)),
+    q:  (s, r=document) => (r||document).querySelector(s),
+    qa: (s, r=document) => Array.from((r||document).querySelectorAll(s)),
   };
 
   // 4) Tabs
@@ -2174,7 +2059,7 @@ document.getElementById("ux2LibraryBtn")?.addEventListener("click", async ()=>{
     const up   = e.target.getAttribute("data-up");
     const down = e.target.getAttribute("data-down");
     const del  = e.target.getAttribute("data-del");
-    const lock = e.target.closest("[data-lock]")?.getAttribute("data-lock");
+    const lock = e.target.closest?.("[data-lock]")?.getAttribute("data-lock");
     if(up)   moveNode(up, -1);
     if(down) moveNode(down, +1);
     if(del){ ux2.state.tree = ux2.state.tree.filter(x=>x.id!==del); renderTree(); updateJobsPreview(); }
@@ -2204,7 +2089,7 @@ document.getElementById("ux2LibraryBtn")?.addEventListener("click", async ()=>{
   ux2.q("#ux2LockAll").addEventListener("click", ()=>{ ux2.state.tree.forEach(n=>n.lock=true); renderTree(); });
   ux2.q("#ux2MarkAll").addEventListener("click", ()=>{ ux2.state.tree.forEach(n=>n.do=true); renderTree(); updateJobsPreview(); });
 
-  // 8) Preview indice (Markdown “editoriale”)
+  // 8) Preview indice
   function buildIndexMarkdown(){
     const withParts = ux2.q("#ux2Parts").value === "with";
     const lines = [];
@@ -2226,33 +2111,30 @@ document.getElementById("ux2LibraryBtn")?.addEventListener("click", async ()=>{
     ux2.q("#ux2IndexPreview").textContent = buildIndexMarkdown();
   });
 
-  // 9) Integra GENERA INDICE con il tuo flusso “Indice”
+  // 9) Integra GENERA INDICE (nota: rimuovo $ jQuery-like per stabilità)
   ux2.q("#ux2GenIndex").addEventListener("click", async ()=>{
-    // forza la tab Indice e mostra anteprima
     ux2.qa("#ux2 .tab").find(t=>t.dataset.mode==="indice")?.click();
     ux2.q("#ux2PreviewIndex").click();
   });
   ux2.q("#ux2InsertIndex").addEventListener("click", async ()=>{
-    // Usa il tuo handleGenerateChapter con titolo “Indice”
     try{
-      const bookId    = uiState.currentBookId || $("#bookIdInput")?.value?.trim();
-      const chapterId = uiState.currentChapterId || $("#chapterIdInput")?.value?.trim() || nextChapterId(uiState.chapters||[]);
+      const bookId    = (window.uiState?.currentBookId) || document.querySelector("#bookIdInput")?.value?.trim();
+      const chapterId = (window.uiState?.currentChapterId) || document.querySelector("#chapterIdInput")?.value?.trim() || nextChapterId?.(window.uiState?.chapters||[]);
       const title     = "Indice";
-      const topic     = buildIndexMarkdown(); // come prompt contenutistico
+      const topic     = buildIndexMarkdown();
 
-      if (!bookId) { try{ toast("Apri un libro prima"); }catch{} return; }
-      { const el = document.querySelector("#bookIdInput");       if (el) el.value = bookId; }
-      { const el = document.querySelector("#chapterIdInput");    if (el) el.value = chapterId; }
-      { const el = document.querySelector("#chapterTitleInput"); if (el) el.value = title; }
+      if (!bookId) { try{ window.toast?.("Apri un libro prima"); }catch{} return; }
+      document.querySelector("#bookIdInput")?.value    = bookId;
+      document.querySelector("#chapterIdInput")?.value = chapterId || "";
+      document.querySelector("#chapterTitleInput")?.value = title;
 
-
-      await handleGenerateChapter({ bookId, chapterId, title, topic, language: uiState.currentLanguage||"it" });
-      toast?.("✅ Indice generato/salvato");
-      await refreshChaptersList(bookId);
-    }catch(e){ toast?.("Errore inserimento indice: " + (e?.message||e)); }
+      await window.handleGenerateChapter?.({ bookId, chapterId, title, topic, language: window.uiState?.currentLanguage||"it" });
+      window.toast?.("✅ Indice generato/salvato");
+      await window.refreshChaptersList?.(bookId);
+    }catch(e){ window.toast?.("Errore inserimento indice: " + (e?.message||e)); }
   });
 
-  // 10) Autocompose queue (UI → chiama generateWithAI_auto per ogni nodo spuntato)
+  // 10) Autocompose queue (nessun $)
   const jobsEl = ux2.q("#ux2Jobs");
   function updateJobsPreview(){
     const todo = ux2.state.tree.filter(n=>n.do && !n.lock);
@@ -2269,37 +2151,32 @@ document.getElementById("ux2LibraryBtn")?.addEventListener("click", async ()=>{
   updateJobsPreview();
 
   ux2.q("#ux2Compose").addEventListener("click", async ()=>{
-    const bookId = uiState.currentBookId || $("#bookIdInput")?.value?.trim();
-    if (!bookId) { toast?.("Apri un libro prima"); return; }
+    const bookId = (window.uiState?.currentBookId) || document.querySelector("#bookIdInput")?.value?.trim();
+    if (!bookId) { window.toast?.("Apri un libro prima"); return; }
     const todo = ux2.state.tree.filter(n=>n.do && !n.lock);
-    if (!todo.length) { toast?.("Seleziona nodi 'da comporre'"); return; }
+    if (!todo.length) { window.toast?.("Seleziona nodi 'da comporre'"); return; }
 
     ux2.state.composing = true; ux2.state.paused = false; ux2.state.bookPct = 0;
     for (const n of todo) {
       if (ux2.state.paused) break;
-      // trova/crea capitolo coerente con titolo
-      let chId = uiState.chapters?.find(c=> (c.title||"").trim()===n.title)?.id;
+      let chId = window.uiState?.chapters?.find(c=> (c.title||"").trim()===n.title)?.id;
       if (!chId) {
-        // crea capitolo vuoto usando la tua API
         try {
-          const res = await apiCreateChapter(bookId, { title:n.title, content:"", language: uiState.currentLanguage||"it" });
+          const res = await window.apiCreateChapter?.(bookId, { title:n.title, content:"", language: window.uiState?.currentLanguage||"it" });
           chId = res?.chapter?.id;
-          await refreshChaptersList(bookId);
+          await window.refreshChaptersList?.(bookId);
         } catch (e) { console.warn("createChapter fail", e); continue; }
       }
-      { const el = document.querySelector("#bookIdInput");    if (el) el.value = bookId; }
-      { const el = document.querySelector("#chapterIdInput"); if (el) el.value = chapterId; } 
-      { const el = document.querySelector("#chapterTitleInput"); if (el) el.value = title; }
-
+      document.querySelector("#bookIdInput")?.value    = bookId;
+      document.querySelector("#chapterIdInput")?.value = chId || "";
 
       n.status = "generazione…"; n.pct = 10; updateJobsPreview();
       try{
-        await generateWithAI_auto();
+        await window.generateWithAI_auto?.();
         n.status = "composto"; n.pct = 100; updateJobsPreview();
       }catch(e){
         n.status = "errore"; n.pct = 0; updateJobsPreview();
       }
-      // progress libro (grezzo)
       ux2.state.bookPct = Math.min(100, Math.floor(((todo.filter(x=>x.pct===100).length)/todo.length)*100));
       ux2.q("#ux2BookBar").style.width = ux2.state.bookPct + "%";
       ux2.q("#ux2BookPct").textContent = ux2.state.bookPct + "%";
@@ -2309,130 +2186,22 @@ document.getElementById("ux2LibraryBtn")?.addEventListener("click", async ()=>{
   ux2.q("#ux2Pause").addEventListener("click", ()=>{ ux2.state.paused = true; });
   ux2.q("#ux2Resume").addEventListener("click", ()=>{ ux2.state.paused = false; });
 
-  // 11) Self-compose pannello (scrive sugli stessi campi dell’editor attuale → autosave invariato)
-  ux2.q("#ux2Expand") .addEventListener("click", ()=> toast?.("Mock: Espandi (hook pronto)"));
-  ux2.q("#ux2Rewrite").addEventListener("click", ()=> toast?.("Mock: Riformula (hook pronto)"));
-  ux2.q("#ux2Summ")   .addEventListener("click", ()=> toast?.("Mock: Sintetizza (hook pronto)"));
+  // 11) Self-compose pannello
+  ux2.q("#ux2Expand") .addEventListener("click", ()=> window.toast?.("Mock: Espandi (hook pronto)"));
+  ux2.q("#ux2Rewrite").addEventListener("click", ()=> window.toast?.("Mock: Riformula (hook pronto)"));
+  ux2.q("#ux2Summ")   .addEventListener("click", ()=> window.toast?.("Mock: Sintetizza (hook pronto)"));
 
   // 12) Export & Cover (riuso funzioni esistenti)
-  ux2.q("#ux2ExportPdf").addEventListener("click", ()=> exportBook?.(uiState.currentBookId, null, "pdf"));
-  ux2.q("#ux2ExportMd") .addEventListener("click", ()=> exportBook?.(uiState.currentBookId, null, "md"));
-  ux2.q("#ux2ExportKdp").addEventListener("click", ()=> exportBook?.(uiState.currentBookId, null, "kdp"));
-  ux2.q("#ux2GenCover") .addEventListener("click", ()=> generateCoverFromCurrentBook?.());
+  ux2.q("#ux2ExportPdf").addEventListener("click", ()=> window.exportBook?.(window.uiState?.currentBookId, null, "pdf"));
+  ux2.q("#ux2ExportMd") .addEventListener("click", ()=> window.exportBook?.(window.uiState?.currentBookId, null, "md"));
+  ux2.q("#ux2ExportKdp").addEventListener("click", ()=> window.exportBook?.(window.uiState?.currentBookId, null, "kdp"));
+  ux2.q("#ux2GenCover") .addEventListener("click", ()=> window.generateCoverFromCurrentBook?.());
 
   // 13) Nome libro (se disponibile)
   try{
-    const cur = uiState.books?.find(b=> (b.id||b.book_id) === (uiState.currentBookId||$("#bookIdInput")?.value?.trim()));
+    const cur = window.uiState?.books?.find(b=> (b.id||b.book_id) === (window.uiState?.currentBookId||document.querySelector("#bookIdInput")?.value?.trim()));
     ux2.q("#ux2BookName").textContent = cur?.title || "—";
   }catch{ ux2.q("#ux2BookName").textContent = "—"; }
-}
-
-/* =========================================================
- * LIBRERIA — BIND SICURO (no conflitti) — v4
- * ========================================================= */
-(() => {
-  if (window.__LIB_V4_BOUND__) return;
-  window.__LIB_V4_BOUND__ = true;
-
-  const API =
-    (typeof window !== "undefined" && window.VITE_API_BASE_URL) ||
-    "https://eccomibook-backend.onrender.com/api/v1";
-
-  const $id  = (x) => document.getElementById(x);
-  const btn  = $id("btn-library");
-  const sec  = $id("library-section");
-  const list = $id("library-list");
-  const ed   = $id("editor-card");
-  const bann = $id("lib-banner");
-  const btnEditor = $id("btn-editor");
-  const bookIdInput = $id("bookIdInput");
-
-  // Banner helper
-  function flash(msg, ms = 1400) {
-    if (!bann) return;
-    bann.textContent = msg;
-    bann.style.display = "block";
-    clearTimeout(bann.__t);
-    bann.__t = setTimeout(() => (bann.style.display = "none"), ms);
-  }
-
-  // Evita doppio-bind
-  btn?.removeEventListener("click", window.__LIB_V4_OPEN__);
-  window.__LIB_V4_OPEN__ = async function openLibraryClick(e) {
-    e?.preventDefault?.();
-    // mostra/nascondi
-    if (sec) sec.style.display = "block";
-    if (ed)  ed.style.display  = "none";
-    flash("Libreria: caricamento…");
-
-    try {
-      const books = await LIB_getBooks();
-      LIB_renderList(books);
-      flash(`Libreria: ${books.length} libro/i`);
-    } catch (err) {
-      console.error("[LIB] Errore caricamento libreria:", err);
-      if (list) list.innerHTML = `<div class="muted">Errore nel caricamento della libreria.</div>`;
-      flash("Errore libreria");
-    }
-  };
-  btn?.addEventListener("click", window.__LIB_V4_OPEN__, { passive: false });
-
-  // Usa eventuale fetchBooks esistente, altrimenti chiama API
-  async function LIB_getBooks() {
-    if (typeof window.fetchBooks === "function") return window.fetchBooks();
-    if (typeof fetchBooks === "function") return fetchBooks(); // altra definizione nel file
-    const res = await fetch(`${API}/books`, { method: "GET" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    return Array.isArray(data) ? data : (data.books || []);
-  }
-
-  function esc(s) {
-    return String(s)
-      .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;").replaceAll("'","&#39;");
-  }
-
-  function LIB_renderList(books = []) {
-    if (!list) return;
-    if (!books.length) {
-      list.innerHTML = `<div class="muted">Nessun libro presente.</div>`;
-      return;
-    }
-    const html = books.map(b => {
-      const id     = b.id || b._id || b.book_id || "";
-      const title  = b.title || "Senza titolo";
-      const author = b.author || "";
-      const lang   = b.language || b.lang || "";
-      const meta   = [author, lang].filter(Boolean).join(" · ");
-      return `
-        <div class="card" style="margin-bottom:10px">
-          <div class="card-head"><strong>${esc(title)}</strong></div>
-          <div class="card-body"><div class="muted">${esc(meta)}</div></div>
-          <div class="card-foot" style="display:flex; gap:8px; flex-wrap:wrap">
-            <button class="btn btn-secondary" data-lib-open="${encodeURIComponent(id)}">Apri nell’Editor</button>
-            <a class="btn btn-ghost" href="${API}/books/${encodeURIComponent(id)}/export/md" target="_blank" rel="noopener">Scarica MD</a>
-          </div>
-        </div>
-      `;
-    }).join("");
-    list.innerHTML = html;
-  }
-
-  // Delega: Apri nell’Editor
-  document.addEventListener("click", (e) => {
-    const t = e.target.closest?.("[data-lib-open]");
-    if (!t) return;
-    e.preventDefault();
-    const id = decodeURIComponent(t.getAttribute("data-lib-open") || "");
-    if (bookIdInput) bookIdInput.value = id;
-    btnEditor?.removeAttribute?.("disabled");
-    if (sec) sec.style.display = "none";
-    if (ed)  ed.style.display  = "block";
-    flash(`Editor aperto (${id || "—"})`);
-  });
-})();
-
+} // <-- chiusura if (UX2_ENABLED)
 
 /* ===== Fine UX2 Add-on ===== */
-
