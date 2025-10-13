@@ -2015,60 +2015,75 @@ if (UX2_ENABLED) {
     return _escapeHtml(String(s).replace(/\n/g," "));
   }
 
-  // === Libreria UX2 — SELETTORE CON SCELTA NUMERICA + APERTURA EDITOR ===
+  // === Bottone "📄 Capitoli" + apertura capitolo nel pannello Self ===
 (() => {
   const API = (window.VITE_API_BASE_URL) || "https://eccomibook-backend.onrender.com/api/v1";
-  const ux2LibBtn = ux2Root.querySelector("#ux2LibraryBtn");
-  if (!ux2LibBtn) return;
 
-  ux2LibBtn.addEventListener("click", async () => {
+  // 1) Aggiungo il bottone nella topbar UX2
+  const topbar = document.querySelector("#ux2 .topbar");
+  if (!topbar) return;
+
+  const chBtn = document.createElement("button");
+  chBtn.id = "ux2ChaptersBtn";
+  chBtn.className = "tab";
+  chBtn.textContent = "📄 Capitoli";
+  topbar.appendChild(chBtn);
+
+  // 2) Handler: elenco capitoli -> scelta numerica -> carica contenuto
+  chBtn.addEventListener("click", async () => {
+    const bookId = window.uiState?.currentBookId
+      || document.querySelector("#bookIdInput")?.value?.trim();
+    if (!bookId) { alert("Seleziona un libro prima (📚 Libreria)."); return; }
+
     try {
-      const res = await fetch(`${API}/books`, { method: "GET", cache: "no-store" });
+      // prendo l’elenco libri e trovo quello corrente (include i capitoli)
+      const res = await fetch(`${API}/books?ts=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data  = await res.json();
-      const books = Array.isArray(data) ? data : (data.items || data.books || []);
-      if (!books.length) { alert("Nessun libro presente."); return; }
+      const arr = await res.json();
+      const items = Array.isArray(arr) ? arr : (arr.items || arr.books || []);
+      const bk = items.find(b => (b.id || b.book_id || b._id) === bookId);
+      const chapters = bk?.chapters || [];
+      if (!chapters.length) { alert("Nessun capitolo nel libro."); return; }
 
-      const lines = books.map((b, i) => {
-        const id = (b.id || b.book_id || b._id || "—").toString();
-        const t  = b.title || "(senza titolo)";
-        return `${i+1}) ${t} — ${id.slice(0,6)}…`;
-      });
-
-      const pick = prompt(`Seleziona un libro inserendo il numero:\n\n${lines.join("\n")}\n\nNumero:`);
+      // lista numerata
+      const lines = chapters.map((c, i) =>
+        `${i + 1}) ${(c.title || c.id || "").trim()} — ${c.id}`);
+      const pick = prompt(`Scegli un capitolo inserendo il numero:\n\n${lines.join("\n")}\n\nNumero:`);
       if (pick == null) return;
 
       const idx = parseInt(pick, 10) - 1;
-      const chosen = books[idx];
-      if (!chosen) { alert("Scelta non valida."); return; }
+      const ch  = chapters[idx];
+      if (!ch) { alert("Scelta non valida."); return; }
 
-      const bookId = chosen.id || chosen.book_id || chosen._id;
-      const bookTitle = chosen.title || "(senza titolo)";
+      // scarico il contenuto del capitolo scelto
+      const r = await fetch(
+        `${API}/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(ch.id)}?ts=${Date.now()}`,
+        { cache: "no-store" }
+      );
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
 
-      // Stato globale
+      // 3) Riempio il pannello Self (UX2)
+      const titleEl = document.querySelector("#ux2ChapterTitle");
+      const editorEl = document.querySelector("#ux2Editor");
+
+      if (titleEl) titleEl.value = data?.title || ch.title || "";
+      if (editorEl) editorEl.value = data?.content || "";
+
+      // salvo lo stato corrente
       window.uiState = window.uiState || {};
       window.uiState.currentBookId = bookId;
-      localStorage.setItem("last_book_id", bookId);
+      window.uiState.currentChapterId = ch.id;
 
-      // Aggiorna label in topbar UX2
-      const tag = ux2Root.querySelector("#ux2BookName");
-      if (tag) tag.textContent = bookTitle;
+      // porto l’utente sulla tab Self
+      const selfTab = Array.from(document.querySelectorAll("#ux2 .tab"))
+        .find(t => t.getAttribute("data-mode") === "self");
+      selfTab?.click();
 
-      // Specchia anche nel form editor classico (se visibile)
-      const bidInput = document.querySelector("#bookIdInput");
-      if (bidInput) bidInput.value = bookId;
-
-      // Apri editor e carica capitoli (usa le funzioni già esistenti del tuo main)
-      if (typeof window.showEditor === "function") {
-        await window.showEditor(bookId);           // apre editor + lista capitoli
-      } else {
-        await window.refreshChaptersList?.(bookId); // fallback: almeno capitoli
-      }
-
-      alert("Libro selezionato");
-    } catch (err) {
-      console.error("[UX2] Libreria errore:", err);
-      alert("Errore nel caricamento della libreria");
+      alert("Capitolo aperto.");
+    } catch (e) {
+      console.error("[UX2] Capitoli errore:", e);
+      alert("Errore nel caricamento capitoli.");
     }
   });
 })();
