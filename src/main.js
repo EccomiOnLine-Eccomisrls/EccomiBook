@@ -2328,49 +2328,16 @@ document.getElementById("ux2LibraryBtn")?.addEventListener("click", async ()=>{
 }
 
 /* =========================================================
- * Libreria — apertura/chiusura pannello
- * ========================================================= */
-
-// Delega globale: intercetta i click sul bottone Libreria o sul tasto Chiudi
-document.addEventListener('click', (e) => {
-  const openBtn = e.target.closest('[data-action="open-library"]');
-  const closeBtn = e.target.closest('[data-action="close-library"]');
-
-  if (openBtn) {
-    e.preventDefault();
-    openLibraryPanel();
-  } else if (closeBtn) {
-    e.preventDefault();
-    closeLibraryPanel();
-  }
-});
-
-function openLibraryPanel() {
-  const panel = document.querySelector('#libraryPanel');
-  if (!panel) {
-    console.warn('⚠️ Pannello libreria mancante');
-    return;
-  }
-  panel.classList.add('is-open');
-  // Focus gentile sul primo input/bottone
-  requestAnimationFrame(() => panel.querySelector('input,button,select,textarea')?.focus());
-}
-
-function closeLibraryPanel() {
-  document.querySelector('#libraryPanel')?.classList.remove('is-open');
-}
-
-/* =========================================================
- * Libreria — patch SAFE (evita doppie dichiarazioni)
+ * Libreria — patch SAFE (evita doppie dichiarazioni) — v2
  * ========================================================= */
 (function () {
-  // Riusa la costante che già hai (API_BASE_URL) oppure la di fallback
+  // Base API
   const API =
     (typeof API_BASE_URL !== "undefined" && API_BASE_URL) ||
     (typeof window !== "undefined" && window.VITE_API_BASE_URL) ||
     "https://eccomibook-backend.onrender.com/api/v1";
 
-  // Helper
+  // Helper DOM
   const $ = (id) => document.getElementById(id);
 
   // Riferimenti UI
@@ -2381,12 +2348,11 @@ function closeLibraryPanel() {
   const editorCard  = $('editor-card');
   const bookIdInput = $('bookIdInput');
 
-  // Apertura Libreria
+  // Apri Libreria
   btnLibrary?.addEventListener('click', async (e) => {
     e.preventDefault();
     librarySec.style.display = 'block';
     editorCard.style.display = 'none';
-
     try {
       const books = await getBooks();
       renderLibrary(books);
@@ -2398,32 +2364,30 @@ function closeLibraryPanel() {
 
   // Usa la tua fetchBooks se esiste; altrimenti chiama l’API
   async function getBooks() {
-    // tua funzione globale/progetto (se già definita)
     if (typeof window !== 'undefined' && typeof window.fetchBooks === 'function') {
       return window.fetchBooks();
     }
-    if (typeof fetchBooks === 'function') { // altra definizione già presente nel file
+    if (typeof fetchBooks === 'function') { // altra definizione nel file
       return fetchBooks();
     }
-    // fallback minimale verso l’API
     const res = await fetch(`${API}/books`, { method: 'GET' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     return Array.isArray(data) ? data : (data.books || []);
   }
 
-  // Render lista
+  // Render lista libri (QUI il .map(...).join('') è DENTRO la funzione)
   function renderLibrary(books = []) {
     if (!books.length) {
       libraryList.innerHTML = `<div class="muted">Nessun libro presente.</div>`;
       return;
     }
-    libraryList.innerHTML = books.map(b => {
-      const id = b.id || b._id || b.book_id || '—';
-      const title = b.title || 'Senza titolo';
+    const html = books.map((b) => {
+      const id     = b.id || b._id || b.book_id || '—';
+      const title  = b.title || 'Senza titolo';
       const author = b.author || '';
-      const lang = b.language || b.lang || '';
-      const meta = [author, lang].filter(Boolean).join(' · ');
+      const lang   = b.language || b.lang || '';
+      const meta   = [author, lang].filter(Boolean).join(' · ');
       return `
         <div class="card" style="margin-bottom:10px">
           <div class="card-head"><strong>${escapeHtml(title)}</strong></div>
@@ -2435,14 +2399,15 @@ function closeLibraryPanel() {
         </div>
       `;
     }).join('');
+    libraryList.innerHTML = html;
   }
 
-  // Delega pulsanti della lista
+  // Delega click sui bottoni della lista
   document.addEventListener('click', (e) => {
     const open = e.target.closest('[data-open-book]');
     if (open) {
       e.preventDefault();
-      const id = decodeURIComponent(open.getAttribute('data-open-book'));
+      const id = decodeURIComponent(open.getAttribute('data-open-book') || '');
       if (bookIdInput) bookIdInput.value = id;
       btnEditor?.removeAttribute('disabled');
       librarySec.style.display = 'none';
@@ -2450,7 +2415,7 @@ function closeLibraryPanel() {
     }
   });
 
-  // Utility HTML safe
+  // Utility
   function escapeHtml(s) {
     return String(s)
       .replaceAll('&','&amp;')
@@ -2461,39 +2426,6 @@ function closeLibraryPanel() {
   }
 })();
 
-  }).join('');
-}
-
-// Delega click per i pulsanti della lista
-document.addEventListener('click', (e) => {
-  const open = e.target.closest('[data-open-book]');
-  if (open) {
-    e.preventDefault();
-    const id = decodeURIComponent(open.getAttribute('data-open-book'));
-    openEditorForBook(id);
-    return;
-  }
-
-  const edit = e.target.closest('[data-edit-book]');
-  if (edit) {
-    e.preventDefault();
-    const id = decodeURIComponent(edit.getAttribute('data-edit-book'));
-    // se hai già un tuo modal "Modifica libro", puoi valorizzarlo qui:
-    // (apre il modal esistente #modal-edit-book)
-    document.getElementById('modal-edit-book')?.classList?.remove('hidden');
-    // TODO: carica i metadati del libro e riempi i campi meb-*
-  }
-});
-
-// Utility minima per sicurezza HTML
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'",'&#39;');
-}
 
 /* ===== Fine UX2 Add-on ===== */
 
