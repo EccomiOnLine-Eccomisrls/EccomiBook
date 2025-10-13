@@ -1779,9 +1779,20 @@ document.addEventListener("DOMContentLoaded", async ()=>{
  * UI nuova: Indice · AI Autocompose · Self-compose
  * ========================================================= */
 
-/* === Markup della UI UX2 === */
-const UX2_HTML = `
-<div id="ux2">
+/* ---- Feature flag ---- */
+const UX2_ENABLED = (function(){
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.get("ux2") === "1") { localStorage.setItem("ux2", "1"); }
+    if (q.get("ux2") === "0") { localStorage.setItem("ux2", "0"); }
+    return (localStorage.getItem("ux2") === "1");
+  } catch (e) { return false; }
+})();
+
+/* ---- Markup HTML UX2 (scoped) ---- */
+const UX2_HTML = (function(){
+  return (
+`<div id="ux2">
   <div class="app">
     <div class="topbar">
       <div class="brand"><span class="dot"></span> EccomiBook</div>
@@ -1792,13 +1803,12 @@ const UX2_HTML = `
       </div>
       <span class="pill">Libro: <span id="ux2BookName">—</span></span>
       <div class="spacer"></div>
+      <button class="tab" id="ux2LibraryBtn" title="Libreria">📚</button>
       <div class="row start"><span class="led ok"></span><span class="muted mono">UX2</span></div>
     </div>
 
-    <button class="tab" id="ux2LibraryBtn" style="margin:10px 14px 0">📚 Libreria</button>
-
     <div class="main">
-      <!-- Indice -->
+      <!-- SINISTRA: Indice -->
       <section class="panel">
         <h3>Indice</h3>
         <div class="body">
@@ -1816,7 +1826,7 @@ const UX2_HTML = `
         </div>
       </section>
 
-      <!-- Centro -->
+      <!-- CENTRO -->
       <section class="panel">
         <h3 id="ux2CenterTitle">Index Builder</h3>
         <div class="body">
@@ -1892,7 +1902,7 @@ const UX2_HTML = `
         </div>
       </section>
 
-      <!-- Destra -->
+      <!-- DESTRA -->
       <aside class="panel">
         <h3>Profilo & Copertina</h3>
         <div class="body">
@@ -1918,125 +1928,121 @@ const UX2_HTML = `
       </aside>
     </div>
   </div>
-</div>`;
-
-/* ---- Feature flag ---- */
-const UX2_ENABLED = (() => {
-  try {
-    const q = new URLSearchParams(location.search);
-    if (q.get("ux2") === "1") { localStorage.setItem("ux2", "1"); }
-    if (q.get("ux2") === "0") { localStorage.setItem("ux2", "0"); }
-    return (localStorage.getItem("ux2") === "1");
-  } catch { return false; }
+</div>`
+  );
 })();
 
 /* ---- Mount only if enabled ---- */
 if (UX2_ENABLED) {
   console.log("[UX2] enabled");
 
-  // 1) CSS base
-  const ux2Css = `
-  #ux2{position:relative; z-index:5; color:#e9edf5; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  #ux2, #ux2 *{box-sizing:border-box}
-  #ux2 .app{display:grid;grid-template-rows:58px auto;min-height:100vh;background:linear-gradient(180deg,#0b0e13,#0f1115)}
-  #ux2 .topbar{display:flex;align-items:center;gap:16px;padding:10px 16px;background:#151924;border-bottom:1px solid #232a3a;position:sticky;top:0;z-index:10}
-  #ux2 .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px}
-  #ux2 .brand .dot{width:10px;height:10px;border-radius:50%;background:#ff2244;box-shadow:0 0 0 3px rgba(255,34,68,.25)}
-  #ux2 .mode-tabs{display:flex;gap:6px;margin-left:8px}
-  #ux2 .tab{border:1px solid #232a3a;background:#0f1320;color:#cbd5e1;padding:8px 12px;border-radius:10px;cursor:pointer}
-  #ux2 .tab.active{border-color:#ff2244;color:#fff;box-shadow:0 0 0 2px rgba(255,34,68,.2) inset}
-  #ux2 .spacer{flex:1}
-  #ux2 .led{width:10px;height:10px;border-radius:50%;background:#3a3f52;margin-right:6px}
-  #ux2 .led.ok{background:#25d366;box-shadow:0 0 0 4px rgba(37,211,102,.2)}
-  #ux2 .pill{padding:6px 10px;border-radius:999px;background:#1a2130;border:1px solid #232a3a;color:#cdd6e6}
-  #ux2 .btn{background:#ff2244;color:#fff;border:0;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:600}
-  #ux2 .btn.secondary{background:#2d6bff}
-  #ux2 .btn.ghost{background:transparent;border:1px solid #232a3a;color:#cbd5e1}
-  #ux2 .main{display:grid;gap:14px;padding:14px;grid-template-columns:320px 1fr 360px}
-  #ux2 .panel{background:#151924;border:1px solid #232a3a;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:0}
-  #ux2 .panel h3{margin:0;padding:12px 14px;border-bottom:1px solid #232a3a;font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:#b8c2d9}
-  #ux2 .panel .body{padding:10px 12px;overflow:auto;min-height:0}
-  #ux2 .node{background:#0f1320;border:1px solid #232a3a;border-radius:10px;padding:10px;margin-bottom:8px}
-  #ux2 .row{display:flex;align-items:center;gap:8px;justify-content:space-between}
-  #ux2 .row.start{justify-content:flex-start}
-  #ux2 .title{flex:1;font-weight:600}
-  #ux2 .chip{background:#1a2130;border:1px solid #232a3a;color:#cbd5e1;padding:3px 8px;border-radius:999px;font-size:12px}
-  #ux2 .muted{color:#8a93a6}
-  #ux2 .actions-bar{display:flex;gap:8px;padding:10px;background:#0d1019;border-top:1px solid #232a3a}
-  #ux2 .input, #ux2 textarea, #ux2 select{background:#0e1220;color:#e9edf5;border:1px solid #232a3a;border-radius:10px;padding:8px 10px;width:100%}
-  #ux2 textarea{min-height:200px;resize:vertical}
-  #ux2 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
-  #ux2 .progress{height:8px;background:#0b0e16;border:1px solid #232a3a;border-radius:999px;overflow:hidden}
-  #ux2 .bar{height:100%;width:0%;background:linear-gradient(90deg,#ff2244,#ff5f7a)}
-  @media (max-width: 1024px){ #ux2 .main{grid-template-columns:1fr} }
-  `;
-  const s = document.createElement("style");
-  s.textContent = ux2Css;
-  document.head.appendChild(s);
+  // 1) Inject CSS (scoped)
+  (function(){
+    var css = ''
+    + '#ux2{position:relative; z-index:5; color:#e9edf5; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}'
+    + '#ux2, #ux2 *{box-sizing:border-box}'
+    + '#ux2 .app{display:grid;grid-template-rows:58px auto;min-height:100vh;background:linear-gradient(180deg,#0b0e13,#0f1115)}'
+    + '#ux2 .topbar{display:flex;align-items:center;gap:16px;padding:10px 16px;background:#151924;border-bottom:1px solid #232a3a;position:sticky;top:0;z-index:10}'
+    + '#ux2 .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px}'
+    + '#ux2 .brand .dot{width:10px;height:10px;border-radius:50%;background:#ff2244;box-shadow:0 0 0 3px rgba(255,34,68,.25)}'
+    + '#ux2 .mode-tabs{display:flex;gap:6px;margin-left:8px}'
+    + '#ux2 .tab{border:1px solid #232a3a;background:#0f1320;color:#cbd5e1;padding:8px 12px;border-radius:10px;cursor:pointer}'
+    + '#ux2 .tab.active{border-color:#ff2244;color:#fff;box-shadow:0 0 0 2px rgba(255,34,68,.2) inset}'
+    + '#ux2 .spacer{flex:1}'
+    + '#ux2 .led{width:10px;height:10px;border-radius:50%;background:#3a3f52;margin-right:6px}'
+    + '#ux2 .led.ok{background:#25d366;box-shadow:0 0 0 4px rgba(37,211,102,.2)}'
+    + '#ux2 .pill{padding:6px 10px;border-radius:999px;background:#1a2130;border:1px solid #232a3a;color:#cdd6e6}'
+    + '#ux2 .btn{background:#ff2244;color:#fff;border:0;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:600}'
+    + '#ux2 .btn.secondary{background:#2d6bff}'
+    + '#ux2 .btn.ghost{background:transparent;border:1px solid #232a3a;color:#cbd5e1}'
+    + '#ux2 .main{display:grid;gap:14px;padding:14px;grid-template-columns:320px 1fr 360px}'
+    + '#ux2 .panel{background:#151924;border:1px solid #232a3a;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:0}'
+    + '#ux2 .panel h3{margin:0;padding:12px 14px;border-bottom:1px solid #232a3a;font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:#b8c2d9}'
+    + '#ux2 .panel .body{padding:10px 12px;overflow:auto;min-height:0}'
+    + '#ux2 .node{background:#0f1320;border:1px solid #232a3a;border-radius:10px;padding:10px;margin-bottom:8px}'
+    + '#ux2 .row{display:flex;align-items:center;gap:8px;justify-content:space-between}'
+    + '#ux2 .row.start{justify-content:flex-start}'
+    + '#ux2 .title{flex:1;font-weight:600}'
+    + '#ux2 .chip{background:#1a2130;border:1px solid #232a3a;color:#cbd5e1;padding:3px 8px;border-radius:999px;font-size:12px}'
+    + '#ux2 .muted{color:#8a93a6}'
+    + '#ux2 .actions-bar{display:flex;gap:8px;padding:10px;background:#0d1019;border-top:1px solid #232a3a}'
+    + '#ux2 .input, #ux2 textarea, #ux2 select{background:#0e1220;color:#e9edf5;border:1px solid #232a3a;border-radius:10px;padding:8px 10px;width:100%}'
+    + '#ux2 textarea{min-height:200px;resize:vertical}'
+    + '#ux2 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}'
+    + '#ux2 .progress{height:8px;background:#0b0e16;border:1px solid #232a3a;border-radius:999px;overflow:hidden}'
+    + '#ux2 .bar{height:100%;width:0%;background:linear-gradient(90deg,#ff2244,#ff5f7a)}'
+    + '@media (max-width: 1024px){ #ux2 .main{grid-template-columns:1fr} }';
+    var s = document.createElement("style");
+    s.textContent = css;
+    document.head.appendChild(s);
+  })();
 
-  // 1b) Fix layout aggiuntivi
-  (()=>{
-    const fix = document.createElement("style");
-    fix.textContent = `
-      #ux2 .node > .row:first-child{display:grid;grid-template-columns:1fr 28px 92px;align-items:center;gap:8px}
-      #ux2 .node > .row:first-child label.row{min-width:0;gap:8px}
-      #ux2 .node .title{white-space:normal;word-break:normal;overflow-wrap:break-word;hyphens:auto;-webkit-hyphens:auto;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;max-height:3.9em;font-weight:600;line-height:1.2}
-      #ux2 .node [data-lock]{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;border:1px solid #232a3a;background:#0f1320;color:#cbd5e1;user-select:none}
-      #ux2 .node > .row:first-child > .row{justify-content:flex-end;gap:6px}
-      #ux2 .node > .row:first-child > .row .btn{width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;line-height:1;font-size:12px;border:1px solid #232a3a;background:#0f1320;color:#cbd5e1}
-      #ux2 .node > .row:last-child{margin-top:6px;color:#8a93a6;font-size:12px;display:flex;justify-content:space-between}
-      #ux2 .main{grid-template-columns:360px 1fr 340px}
-      @media (max-width:1024px){ #ux2 .main{grid-template-columns:1fr} }
-      #ux2 .node{contain:layout paint;transform:translateZ(0)}
-      #ux2 .panel .body{-webkit-overflow-scrolling:touch}
-      #ux2 *{-webkit-tap-highlight-color:transparent}
-    `;
+  // Fix layout extra (no optional chaining)
+  (function(){
+    var fix = document.createElement("style");
+    fix.textContent =
+      ' #ux2 .node > .row:first-child{display:grid;grid-template-columns:1fr 28px 92px;align-items:center;gap:8px;}'
+    + ' #ux2 .node > .row:first-child label.row{min-width:0;gap:8px;}'
+    + ' #ux2 .node .title{white-space:normal;word-break:normal;overflow-wrap:break-word;hyphens:auto;-webkit-hyphens:auto;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;max-height:3.9em;font-weight:600;line-height:1.2;}'
+    + ' #ux2 .node [data-lock]{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;border:1px solid #232a3a;background:#0f1320;color:#cbd5e1;user-select:none;}'
+    + ' #ux2 .node > .row:first-child > .row{justify-content:flex-end;gap:6px;}'
+    + ' #ux2 .node > .row:first-child > .row .btn{width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;line-height:1;font-size:12px;border:1px solid #232a3a;background:#0f1320;color:#cbd5e1;transition:none;}'
+    + ' #ux2 .node > .row:first-child > .row .btn:hover{border-color:#2e354a}'
+    + ' #ux2 .node > .row:first-child > .row .btn:active{transform:scale(.98)}'
+    + ' #ux2 .node > .row:last-child{margin-top:6px;color:#8a93a6;font-size:12px;display:flex;justify-content:space-between;}'
+    + ' #ux2 .main{grid-template-columns:360px 1fr 340px;}'
+    + ' @media (max-width:1024px){ #ux2 .main{grid-template-columns:1fr;} }'
+    + ' #ux2 .node{contain:layout paint;transform:translateZ(0)}'
+    + ' #ux2 .panel .body{-webkit-overflow-scrolling:touch}'
+    + ' #ux2 *{-webkit-tap-highlight-color:transparent}';
     document.head.appendChild(fix);
   })();
 
-  // 2) Mount HTML
-  const container = document.createElement("div");
+  // 2) Inject HTML
+  var container = document.createElement("div");
   container.innerHTML = UX2_HTML;
-  document.body.innerHTML = "";
-  const ux2Root = container.firstElementChild;
+
+  document.body.innerHTML = ""; // nasconde la vecchia UI
+  var ux2Root = container.firstElementChild;
   document.body.appendChild(ux2Root);
 
-  // Utils
-  function escapeHtml(s){
-    return String(s)
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#39;");
+  // Utils locali (no optional chaining in assegnazioni)
+  function _escapeHtml(s){
+    s = String(s == null ? "" : s);
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/\'/g,"&#39;");
   }
-  function escapeAttr(s){ return escapeHtml(s).replaceAll("\n"," "); }
+  function _escapeAttr(s){
+    return _escapeHtml(String(s).replace(/\n/g," "));
+  }
 
-  // 3) Libreria (pulsante)
-  (() => {
-    const API = (window.VITE_API_BASE_URL) || "https://eccomibook-backend.onrender.com/api/v1";
-    const ux2LibBtn = ux2Root.querySelector("#ux2LibraryBtn");
+  // Libreria (usa API base già definita in index)
+  (function(){
+    var API = (window.VITE_API_BASE_URL) || "https://eccomibook-backend.onrender.com/api/v1";
+    var ux2LibBtn = ux2Root.querySelector("#ux2LibraryBtn");
     if (!ux2LibBtn) return;
-    ux2LibBtn.addEventListener("click", async ()=>{
-      try {
-        const res = await fetch(`${API}/books`, { method:"GET" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data  = await res.json();
-        const books = Array.isArray(data) ? data : (data.books || []);
+    ux2LibBtn.addEventListener("click", function(){
+      fetch(API + "/books").then(function(res){
+        if(!res.ok) throw new Error("HTTP "+res.status);
+        return res.json();
+      }).then(function(data){
+        var books = Array.isArray(data) ? data : (data.books || []);
         alert(
           books.length
-            ? books.map(b => `📘 ${(b.title||"Senza titolo")} (${(b.id||b._id||b.book_id||"——").toString().slice(0,6)}…)`).join("\n")
+            ? books.map(function(b){
+                var id = (b.id||b._id||b.book_id||"——").toString();
+                return "📘 " + (b.title||"Senza titolo") + " (" + id.slice(0,6) + "…)";
+              }).join("\n")
             : "Nessun libro presente."
         );
-      } catch (err) {
+      }).catch(function(err){
         console.error("[UX2] Libreria errore:", err);
         alert("Errore nel caricamento della libreria");
-      }
+      });
     });
   })();
 
-  // 4) Preset struttura
-  const presetAcc = [
+  // Preset albero
+  var presetAcc = [
     { id:"1",   title:"Indice", lock:true },
     { id:"1.1", title:"Scopo del libro" },
     { id:"1.2", title:"Struttura del libro" },
@@ -2056,244 +2062,290 @@ if (UX2_ENABLED) {
     { id:"5",   title:"Appendici" },
     { id:"5.1", title:"Glossario" },
     { id:"5.2", title:"Riferimenti" },
-    { id:"5.3", title:"Ringraziamenti" },
+    { id:"5.3", title:"Ringraziamenti" }
   ];
-  const presetNar = [
+  var presetNar = [
     { id:"0", title:"Indice", lock:true },
     { id:"1", title:"Prologo" },
     { id:"2", title:"Atto I — L’innesco" },
     { id:"3", title:"Atto II — Il conflitto" },
     { id:"4", title:"Atto III — La risoluzione" },
-    { id:"5", title:"Epilogo" },
+    { id:"5", title:"Epilogo" }
   ];
-  const presetMan = [
+  var presetMan = [
     { id:"0", title:"Indice", lock:true },
     { id:"1", title:"Introduzione" },
     { id:"2", title:"Setup e prerequisiti" },
     { id:"3", title:"Procedure passo-passo" },
     { id:"4", title:"Checklist finali" },
-    { id:"5", title:"FAQ + Troubleshooting" },
+    { id:"5", title:"FAQ + Troubleshooting" }
   ];
 
-  const ux2 = {
-    state: { mode:"indice", tree:[...presetAcc], paused:false, composing:false, bookPct:0 },
-    q:  (s, r=document) => (r||document).querySelector(s),
-    qa: (s, r=document) => Array.from((r||document).querySelectorAll(s)),
+  var ux2 = {
+    state: { mode:"indice", tree:[].concat(presetAcc), paused:false, composing:false, bookPct:0 },
+    q:  function(s, r){ return (r||document).querySelector(s); },
+    qa: function(s, r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); }
   };
 
-  // 5) Tabs
-  ux2.qa("#ux2 .tab").forEach(t=>{
-    t.addEventListener("click", ()=>{
-      ux2.qa("#ux2 .tab").forEach(x=>x.classList.remove("active"));
+  // Tabs
+  ux2.qa("#ux2 .tab").forEach(function(t){
+    t.addEventListener("click", function(){
+      ux2.qa("#ux2 .tab").forEach(function(x){ x.classList.remove("active"); });
       t.classList.add("active");
-      ux2.state.mode = t.dataset.mode;
+      ux2.state.mode = t.getAttribute("data-mode");
       ux2.q("#ux2CenterTitle").textContent =
         ux2.state.mode==="indice" ? "Index Builder" :
         ux2.state.mode==="autocompose" ? "AI Autocompose" : "Editor (Self-compose)";
-      ux2.q("#ux2ModeIndice").style.display = ux2.state.mode==="indice" ? "block" : "none";
-      ux2.q("#ux2ModeAuto").style.display   = ux2.state.mode==="autocompose" ? "block" : "none";
-      ux2.q("#ux2ModeSelf").style.display   = ux2.state.mode==="self" ? "block" : "none";
+      ux2.q("#ux2ModeIndice").style.display = (ux2.state.mode==="indice" ? "block" : "none");
+      ux2.q("#ux2ModeAuto").style.display   = (ux2.state.mode==="autocompose" ? "block" : "none");
+      ux2.q("#ux2ModeSelf").style.display   = (ux2.state.mode==="self" ? "block" : "none");
     });
   });
 
-  // 6) Render albero
+  // Render albero
   function renderTree(){
-    const host = ux2.q("#ux2Tree"); host.innerHTML = "";
-    ux2.state.tree.forEach(n=>{
-      const row = document.createElement("div");
+    var host = ux2.q("#ux2Tree"); host.innerHTML = "";
+    ux2.state.tree.forEach(function(n){
+      var row = document.createElement("div");
       row.className = "node";
-      row.innerHTML = `
-        <div class="row">
-          <label class="row start" style="gap:8px;flex:1">
-            <input type="checkbox" ${n.do?"checked":""} data-id="${n.id}">
-            <span class="chip mono">${n.id}</span>
-            <span class="title" title="${escapeAttr(n.title||'')}">${escapeHtml(n.title||"")}</span>
-          </label>
-          <span class="chip ${n.lock?"muted":""}" data-lock="${n.id}" title="Blocca/sblocca">🔒</span>
-          <div class="row" style="gap:6px">
-            <button class="btn ghost" data-up="${n.id}">↑</button>
-            <button class="btn ghost" data-down="${n.id}">↓</button>
-            <button class="btn ghost" data-del="${n.id}">✕</button>
-          </div>
-        </div>
-        <div class="row" style="margin-top:6px">
-          <small class="muted">${n.lock ? "bloccato (manuale)" : (n.do ? "da comporre" : "—")}</small>
-          <small class="muted">stato: <span class="mono">${n.status||"vuoto"}</span></small>
-        </div>`;
+
+      var tTitle = _escapeHtml(n.title||"");
+      var tId    = _escapeAttr(n.id||"");
+
+      row.innerHTML =
+        '<div class="row">'
+          + '<label class="row start" style="gap:8px;flex:1">'
+            + '<input type="checkbox" '+(n.do?'checked':'')+' data-id="'+tId+'">'
+            + '<span class="chip mono">'+tId+'</span>'
+            + '<span class="title" title="'+tTitle+'">'+tTitle+'</span>'
+          + '</label>'
+          + '<span class="chip '+(n.lock?'muted':'')+'" data-lock="'+tId+'" title="Blocca/sblocca">🔒</span>'
+          + '<div class="row" style="gap:6px">'
+            + '<button class="btn ghost" data-up="'+tId+'">↑</button>'
+            + '<button class="btn ghost" data-down="'+tId+'">↓</button>'
+            + '<button class="btn ghost" data-del="'+tId+'">✕</button>'
+          + '</div>'
+        + '</div>'
+        + '<div class="row" style="margin-top:6px">'
+          + '<small class="muted">'+(n.lock ? "bloccato (manuale)" : (n.do ? "da comporre" : "—"))+'</small>'
+          + '<small class="muted">stato: <span class="mono">'+(n.status?n.status:"vuoto")+'</span></small>'
+        + '</div>';
+
       host.appendChild(row);
     });
   }
   renderTree();
 
-  // 7) Interazioni albero
-  ux2.q("#ux2Tree").addEventListener("change",(e)=>{
-    if(e.target.matches("input[type=checkbox]")){
-      const id = e.target.getAttribute("data-id");
-      const node = ux2.state.tree.find(x=>x.id===id);
-      if(node) node.do = e.target.checked;
+  // Interazioni albero
+  ux2.q("#ux2Tree").addEventListener("change", function(e){
+    var tgt = e.target;
+    if (tgt && tgt.matches && tgt.matches("input[type=checkbox]")) {
+      var id = tgt.getAttribute("data-id");
+      var node = ux2.state.tree.find(function(x){ return x.id===id; });
+      if (node) node.do = !!tgt.checked;
       updateJobsPreview();
     }
   });
-  ux2.q("#ux2Tree").addEventListener("click",(e)=>{
-    const up   = e.target.getAttribute("data-up");
-    const down = e.target.getAttribute("data-down");
-    const del  = e.target.getAttribute("data-del");
-    const lock = e.target.closest?.("[data-lock]")?.getAttribute("data-lock");
-    if(up)   moveNode(up, -1);
-    if(down) moveNode(down, +1);
-    if(del){ ux2.state.tree = ux2.state.tree.filter(x=>x.id!==del); renderTree(); updateJobsPreview(); }
-    if(lock){
-      const node = ux2.state.tree.find(x=>x.id===lock);
-      if(node){ node.lock = !node.lock; renderTree(); }
+
+  ux2.q("#ux2Tree").addEventListener("click", function(e){
+    var up   = e.target.getAttribute && e.target.getAttribute("data-up");
+    var down = e.target.getAttribute && e.target.getAttribute("data-down");
+    var del  = e.target.getAttribute && e.target.getAttribute("data-del");
+
+    var lockEl = null;
+    if (e.target && e.target.closest) {
+      lockEl = e.target.closest("[data-lock]");
+    }
+    var lock = lockEl ? lockEl.getAttribute("data-lock") : null;
+
+    if (up)   moveNode(up, -1);
+    if (down) moveNode(down, +1);
+    if (del)  { ux2.state.tree = ux2.state.tree.filter(function(x){ return x.id!==del; }); renderTree(); updateJobsPreview(); }
+    if (lock){
+      var node = ux2.state.tree.find(function(x){ return x.id===lock; });
+      if (node){ node.lock = !node.lock; renderTree(); }
     }
   });
+
   function moveNode(id, delta){
-    const i = ux2.state.tree.findIndex(x=>x.id===id);
+    var i = ux2.state.tree.findIndex(function(x){ return x.id===id; });
     if(i<0) return;
-    const j = Math.max(0, Math.min(ux2.state.tree.length-1, i+delta));
+    var j = Math.max(0, Math.min(ux2.state.tree.length-1, i+delta));
     if(i===j) return;
-    const [n] = ux2.state.tree.splice(i,1);
+    var n = ux2.state.tree.splice(i,1)[0];
     ux2.state.tree.splice(j,0,n);
     renderTree(); updateJobsPreview();
   }
 
-  // 8) Preset
-  ux2.qa('[data-preset]').forEach(b=>{
-    b.addEventListener("click", ()=>{
-      const p = b.getAttribute("data-preset");
-      ux2.state.tree = p==="nar" ? [...presetNar] : p==="man" ? [...presetMan] : [...presetAcc];
+  // Preset
+  ux2.qa('[data-preset]').forEach(function(b){
+    b.addEventListener("click", function(){
+      var p = b.getAttribute("data-preset");
+      ux2.state.tree = (p==="nar") ? [].concat(presetNar) : (p==="man") ? [].concat(presetMan) : [].concat(presetAcc);
       renderTree(); updateJobsPreview();
     });
   });
-  ux2.q("#ux2LockAll").addEventListener("click", ()=>{ ux2.state.tree.forEach(n=>n.lock=true); renderTree(); });
-  ux2.q("#ux2MarkAll").addEventListener("click", ()=>{ ux2.state.tree.forEach(n=>n.do=true); renderTree(); updateJobsPreview(); });
+  ux2.q("#ux2LockAll").addEventListener("click", function(){ ux2.state.tree.forEach(function(n){ n.lock=true; }); renderTree(); });
+  ux2.q("#ux2MarkAll").addEventListener("click", function(){ ux2.state.tree.forEach(function(n){ n.do=true; }); renderTree(); updateJobsPreview(); });
 
-  // 9) Preview indice
+  // Preview indice
   function buildIndexMarkdown(){
-    const withParts = ux2.q("#ux2Parts").value === "with";
-    const lines = [];
-    lines.push(`**Prefazione**`);
-    lines.push(`**Introduzione**`);
-    let part = 1;
-    ux2.state.tree.forEach(n=>{
-      if(n.id==="1" || (n.title||"").trim().toLowerCase()==="indice") return;
-      const isMain = !String(n.id).includes(".");
-      if(withParts && isMain){ lines.push(\`\\n## Parte \${part} — \${n.title}\`); part++; }
-      else if(isMain){ lines.push(\`\\n\${n.id}. \${n.title}\`); }
-      else { lines.push(\`\${n.id}. \${n.title}\`); }
+    var withParts = ux2.q("#ux2Parts").value === "with";
+    var lines = [];
+    lines.push("**Prefazione**");
+    lines.push("**Introduzione**");
+    var part = 1;
+    ux2.state.tree.forEach(function(n){
+      var title = n.title || "";
+      if (n.id==="1" || title.trim().toLowerCase()==="indice") return;
+      var isMain = String(n.id).indexOf(".") === -1;
+      if (withParts && isMain)       { lines.push("\n## Parte "+part+" — "+title); part++; }
+      else if (isMain)               { lines.push("\n"+n.id+". "+title); }
+      else                           { lines.push(n.id+". "+title); }
     });
-    lines.push(`\n**Ringraziamenti**`);
-    lines.push(`\n**Note bibliografiche**`);
+    lines.push("\n**Ringraziamenti**");
+    lines.push("**Note bibliografiche**");
     return lines.join("\n");
   }
-  ux2.q("#ux2PreviewIndex").addEventListener("click", ()=>{
+  ux2.q("#ux2PreviewIndex").addEventListener("click", function(){
     ux2.q("#ux2IndexPreview").textContent = buildIndexMarkdown();
   });
 
-  // 10) Genera/Inserisci Indice
-  ux2.q("#ux2GenIndex").addEventListener("click", ()=>{
-    ux2.qa("#ux2 .tab").find(t=>t.dataset.mode==="indice")?.click();
+  // GENERA INDICE → usa i tuoi hook se presenti
+  ux2.q("#ux2GenIndex").addEventListener("click", function(){
+    var tabIndice = ux2.qa("#ux2 .tab").find(function(t){ return t.getAttribute("data-mode")==="indice"; });
+    if (tabIndice) tabIndice.click();
     ux2.q("#ux2PreviewIndex").click();
   });
-  ux2.q("#ux2InsertIndex").addEventListener("click", async ()=>{
+
+  ux2.q("#ux2InsertIndex").addEventListener("click", function(){
     try{
-      const bookId    = (window.uiState?.currentBookId) || document.querySelector("#bookIdInput")?.value?.trim();
-      const chapterId = (window.uiState?.currentChapterId) || document.querySelector("#chapterIdInput")?.value?.trim() || (typeof window.nextChapterId==="function" ? window.nextChapterId(window.uiState?.chapters||[]) : "ch_0001");
-      const title     = "Indice";
-      const topic     = buildIndexMarkdown();
+      var bookId    = (window.uiState && window.uiState.currentBookId) || (document.querySelector("#bookIdInput") ? document.querySelector("#bookIdInput").value.trim() : "");
+      var chapterId = (window.uiState && window.uiState.currentChapterId) || (document.querySelector("#chapterIdInput") ? document.querySelector("#chapterIdInput").value.trim() : "");
+      if (!chapterId && window.nextChapterId && window.uiState) {
+        chapterId = window.nextChapterId(window.uiState.chapters||[]);
+      }
+      var title     = "Indice";
+      var topic     = buildIndexMarkdown();
 
       if (!bookId) { if (window.toast) window.toast("Apri un libro prima"); return; }
+      var el1 = document.querySelector("#bookIdInput");    if (el1) el1.value = bookId;
+      var el2 = document.querySelector("#chapterIdInput"); if (el2) el2.value = (chapterId || "");
+      var el3 = document.querySelector("#chapterTitleInput"); if (el3) el3.value = title;
 
-      var b = document.querySelector("#bookIdInput");    if (b) b.value = bookId;
-      var c = document.querySelector("#chapterIdInput"); if (c) c.value = chapterId || "";
-      var t = document.querySelector("#chapterTitleInput"); if (t) t.value = title;
-
-      if (typeof window.handleGenerateChapter === "function") {
-        await window.handleGenerateChapter({ bookId, chapterId, title, topic, language: window.uiState?.currentLanguage||"it" });
+      if (window.handleGenerateChapter) {
+        window.handleGenerateChapter({ bookId:bookId, chapterId:chapterId, title:title, topic:topic, language:(window.uiState&&window.uiState.currentLanguage)||"it" })
+        .then(function(){
+          if (window.toast) window.toast("✅ Indice generato/salvato");
+          if (window.refreshChaptersList) window.refreshChaptersList(bookId);
+        })
+        .catch(function(e){ if (window.toast) window.toast("Errore inserimento indice: " + (e && e.message ? e.message : e)); });
       }
-      if (window.toast) window.toast("✅ Indice generato/salvato");
-      if (typeof window.refreshChaptersList === "function") await window.refreshChaptersList(bookId);
-    }catch(e){ if (window.toast) window.toast("Errore inserimento indice: " + (e?.message||e)); }
+    }catch(e){
+      if (window.toast) window.toast("Errore inserimento indice: " + (e && e.message ? e.message : e));
+    }
   });
 
-  // 11) Autocompose queue
+  // Coda lavori (no `${ … || … }` nei template)
+  var jobsEl = ux2.q("#ux2Jobs");
   function updateJobsPreview(){
-  const todo = ux2.state.tree.filter(n=>n.do && !n.lock);
-  jobsEl.innerHTML = todo.map(n=>{
-    const id    = String(n?.id ?? "");
-    const title = escapeHtml(n?.title ?? "");
-    const st    = (n && n.status) ? String(n.status) : "in coda";
-    const pct   = (n && typeof n.pct === "number") ? n.pct : 0;
-
-    return (
-      '<div class="row" style="gap:8px;margin-bottom:6px">' +
-        '<div style="flex:1">' +
-          '<div><strong>'+id+'</strong> — '+title+'</div>' +
-          '<div class="muted mono">'+st+'</div>' +
-        '</div>' +
-        '<div class="progress" style="width:160px">' +
-          '<div class="bar" style="width:'+pct+'%"></div>' +
-        '</div>' +
-      '</div>'
-    );
-  }).join("");
-}
-
+    var todo = ux2.state.tree.filter(function(n){ return n.do && !n.lock; });
+    jobsEl.innerHTML = todo.map(function(n){
+      var id    = String(n && n.id ? n.id : "");
+      var title = _escapeHtml(n && n.title ? n.title : "");
+      var st    = (n && n.status) ? String(n.status) : "in coda";
+      var pct   = (n && typeof n.pct === "number") ? n.pct : 0;
+      return (
+        '<div class="row" style="gap:8px;margin-bottom:6px">'
+          + '<div style="flex:1">'
+            + '<div><strong>'+id+'</strong> — '+title+'</div>'
+            + '<div class="muted mono">'+st+'</div>'
+          + '</div>'
+          + '<div class="progress" style="width:160px"><div class="bar" style="width:'+pct+'%"></div></div>'
+        + '</div>'
+      );
+    }).join("");
+  }
   updateJobsPreview();
 
-  ux2.q("#ux2Compose").addEventListener("click", async ()=>{
-    const bookId = (window.uiState?.currentBookId) || document.querySelector("#bookIdInput")?.value?.trim();
+  // Autocompose
+  ux2.q("#ux2Compose").addEventListener("click", function(){
+    var bookId = (window.uiState && window.uiState.currentBookId) || (document.querySelector("#bookIdInput") ? document.querySelector("#bookIdInput").value.trim() : "");
     if (!bookId) { if (window.toast) window.toast("Apri un libro prima"); return; }
-    const todo = ux2.state.tree.filter(n=>n.do && !n.lock);
+    var todo = ux2.state.tree.filter(function(n){ return n.do && !n.lock; });
     if (!todo.length) { if (window.toast) window.toast("Seleziona nodi 'da comporre'"); return; }
 
     ux2.state.composing = true; ux2.state.paused = false; ux2.state.bookPct = 0;
-    for (const n of todo) {
-      if (ux2.state.paused) break;
-      let chId = window.uiState?.chapters?.find(c=> (c.title||"").trim()===n.title)?.id;
-      if (!chId && typeof window.apiCreateChapter === "function") {
-        try {
-          const res = await window.apiCreateChapter(bookId, { title:n.title, content:"", language: window.uiState?.currentLanguage||"it" });
-          chId = res?.chapter?.id;
-          if (typeof window.refreshChaptersList === "function") await window.refreshChaptersList(bookId);
-        } catch (e) { console.warn("createChapter fail", e); continue; }
-      }
-      var b = document.querySelector("#bookIdInput");    if (b) b.value = bookId;
-      var c = document.querySelector("#chapterIdInput"); if (c) c.value = chId || "";
 
-      n.status = "generazione…"; n.pct = 10; updateJobsPreview();
-      try{
-        if (typeof window.generateWithAI_auto === "function") await window.generateWithAI_auto();
-        n.status = "composto"; n.pct = 100; updateJobsPreview();
-      }catch(e){
-        n.status = "errore"; n.pct = 0; updateJobsPreview();
+    (function loop(i){
+      if (i >= todo.length) { ux2.state.composing = false; return; }
+      if (ux2.state.paused) { ux2.state.composing = false; return; }
+
+      var n = todo[i];
+      // trova/crea capitolo
+      var chId = null;
+      if (window.uiState && Array.isArray(window.uiState.chapters)) {
+        var found = window.uiState.chapters.find(function(c){ return String(c.title||"").trim()===n.title; });
+        chId = found ? found.id : null;
       }
-      ux2.state.bookPct = Math.min(100, Math.floor(((todo.filter(x=>x.pct===100).length)/todo.length)*100));
-      ux2.q("#ux2BookBar").style.width = ux2.state.bookPct + "%";
-      ux2.q("#ux2BookPct").textContent = ux2.state.bookPct + "%";
-    }
-    ux2.state.composing = false;
+      function afterChapterIdReady(){
+        var elB = document.querySelector("#bookIdInput");    if (elB) elB.value = bookId;
+        var elC = document.querySelector("#chapterIdInput"); if (elC) elC.value = (chId || "");
+
+        n.status = "generazione…"; n.pct = 10; updateJobsPreview();
+
+        var gen = (window.generateWithAI_auto ? window.generateWithAI_auto() : Promise.resolve());
+        gen.then(function(){
+          n.status = "composto"; n.pct = 100; updateJobsPreview();
+        }).catch(function(){
+          n.status = "errore"; n.pct = 0; updateJobsPreview();
+        }).finally(function(){
+          var done = todo.filter(function(x){ return x.pct===100; }).length;
+          ux2.state.bookPct = Math.min(100, Math.floor((done / todo.length) * 100));
+          ux2.q("#ux2BookBar").style.width = ux2.state.bookPct + "%";
+          ux2.q("#ux2BookPct").textContent = ux2.state.bookPct + "%";
+          loop(i+1);
+        });
+      }
+
+      if (!chId) {
+        if (window.apiCreateChapter) {
+          window.apiCreateChapter(bookId, { title:n.title, content:"", language: (window.uiState&&window.uiState.currentLanguage)||"it" })
+          .then(function(res){
+            chId = res && res.chapter ? res.chapter.id : null;
+            if (window.refreshChaptersList) return window.refreshChaptersList(bookId);
+          })
+          .then(function(){ afterChapterIdReady(); })
+          .catch(function(e){ console.warn("createChapter fail", e); loop(i+1); });
+        } else { loop(i+1); }
+      } else {
+        afterChapterIdReady();
+      }
+    })(0);
   });
-  ux2.q("#ux2Pause").addEventListener("click", ()=>{ ux2.state.paused = true; });
-  ux2.q("#ux2Resume").addEventListener("click", ()=>{ ux2.state.paused = false; });
+  ux2.q("#ux2Pause").addEventListener("click", function(){ ux2.state.paused = true; });
+  ux2.q("#ux2Resume").addEventListener("click", function(){ ux2.state.paused = false; });
 
-  // 12) Self-compose mock
-  ux2.q("#ux2Expand") .addEventListener("click", ()=> window.toast && window.toast("Mock: Espandi (hook pronto)"));
-  ux2.q("#ux2Rewrite").addEventListener("click", ()=> window.toast && window.toast("Mock: Riformula (hook pronto)"));
-  ux2.q("#ux2Summ")   .addEventListener("click", ()=> window.toast && window.toast("Mock: Sintetizza (hook pronto)"));
+  // Self tools (placeholder)
+  ux2.q("#ux2Expand").addEventListener("click", function(){ if(window.toast) window.toast("Mock: Espandi (hook pronto)"); });
+  ux2.q("#ux2Rewrite").addEventListener("click", function(){ if(window.toast) window.toast("Mock: Riformula (hook pronto)"); });
+  ux2.q("#ux2Summ").addEventListener("click", function(){ if(window.toast) window.toast("Mock: Sintetizza (hook pronto)"); });
 
-  // 13) Export & Cover
-  ux2.q("#ux2ExportPdf").addEventListener("click", ()=> window.exportBook && window.exportBook(window.uiState?.currentBookId, null, "pdf"));
-  ux2.q("#ux2ExportMd") .addEventListener("click", ()=> window.exportBook && window.exportBook(window.uiState?.currentBookId, null, "md"));
-  ux2.q("#ux2ExportKdp").addEventListener("click", ()=> window.exportBook && window.exportBook(window.uiState?.currentBookId, null, "kdp"));
-  ux2.q("#ux2GenCover") .addEventListener("click", ()=> window.generateCoverFromCurrentBook && window.generateCoverFromCurrentBook());
+  // Export & Cover
+  ux2.q("#ux2ExportPdf").addEventListener("click", function(){ if(window.exportBook) window.exportBook((window.uiState&&window.uiState.currentBookId)||"", null, "pdf"); });
+  ux2.q("#ux2ExportMd") .addEventListener("click", function(){ if(window.exportBook) window.exportBook((window.uiState&&window.uiState.currentBookId)||"", null, "md"); });
+  ux2.q("#ux2ExportKdp").addEventListener("click", function(){ if(window.exportBook) window.exportBook((window.uiState&&window.uiState.currentBookId)||"", null, "kdp"); });
+  ux2.q("#ux2GenCover") .addEventListener("click", function(){ if(window.generateCoverFromCurrentBook) window.generateCoverFromCurrentBook(); });
 
-  // 14) Nome libro
+  // Nome libro
   try{
-    const cur = window.uiState?.books?.find(b=> (b.id||b.book_id) === (window.uiState?.currentBookId||document.querySelector("#bookIdInput")?.value?.trim()));
-    ux2.q("#ux2BookName").textContent = cur?.title || "—";
-  }catch{ ux2.q("#ux2BookName").textContent = "—"; }
+    var cur = (window.uiState && window.uiState.books) ? window.uiState.books.find(function(b){
+      var curId = (window.uiState && window.uiState.currentBookId) || (document.querySelector("#bookIdInput") ? document.querySelector("#bookIdInput").value.trim() : "");
+      return (b.id||b.book_id) === curId;
+    }) : null;
+    ux2.q("#ux2BookName").textContent = (cur && cur.title) ? cur.title : "—";
+  }catch(e){
+    ux2.q("#ux2BookName").textContent = "—";
+  }
 }
-
 /* ===== Fine UX2 Add-on ===== */
-
