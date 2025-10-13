@@ -2217,19 +2217,28 @@ if (UX2_ENABLED) {
   });
 
   // 11) Autocompose queue
-  const jobsEl = ux2.q("#ux2Jobs");
   function updateJobsPreview(){
-    const todo = ux2.state.tree.filter(n=>n.do && !n.lock);
-    jobsEl.innerHTML = todo.map(n=>`
-      <div class="row" style="gap:8px;margin-bottom:6px">
-        <div style="flex:1">
-          <div><strong>${n.id}</strong> — ${escapeHtml(n.title)}</div>
-          <div class="muted mono">${n.status||"in coda"}</div>
-        </div>
-        <div class="progress" style="width:160px"><div class="bar" style="width:${n.pct||0}%"></div></div>
-      </div>
-    `).join("");
-  }
+  const todo = ux2.state.tree.filter(n=>n.do && !n.lock);
+  jobsEl.innerHTML = todo.map(n=>{
+    const id    = String(n?.id ?? "");
+    const title = escapeHtml(n?.title ?? "");
+    const st    = (n && n.status) ? String(n.status) : "in coda";
+    const pct   = (n && typeof n.pct === "number") ? n.pct : 0;
+
+    return (
+      '<div class="row" style="gap:8px;margin-bottom:6px">' +
+        '<div style="flex:1">' +
+          '<div><strong>'+id+'</strong> — '+title+'</div>' +
+          '<div class="muted mono">'+st+'</div>' +
+        '</div>' +
+        '<div class="progress" style="width:160px">' +
+          '<div class="bar" style="width:'+pct+'%"></div>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join("");
+}
+
   updateJobsPreview();
 
   ux2.q("#ux2Compose").addEventListener("click", async ()=>{
