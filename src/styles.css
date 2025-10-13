@@ -309,3 +309,10 @@ body.modal-open .menu-pop{ display:none !important; }
 .pdf-modal__frame {
   width: 100%; height: calc(100% - 48px); border: 0;
 }
+
+/* La barra di stato non deve intercettare i click */
+#backend-status { pointer-events: none; }
+
+/* Tieni la topbar sopra tutto */
+.topbar { position: relative; z-index: 1000; }
+
